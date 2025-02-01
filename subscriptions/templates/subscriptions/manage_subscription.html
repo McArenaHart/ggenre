@@ -1,0 +1,21 @@
+<h1>Manage Your Subscriptions</h1>
+<table>
+    <tr>
+        <th>Plan</th>
+        <th>Start Date</th>
+        <th>End Date</th>
+        <th>Status</th>
+        <th>Upload Limit</th>
+        <th>Vote Limit</th>
+    </tr>
+    {% for subscription in subscriptions %}
+    <tr>
+        <td>{{ subscription.subscription_type }}</td>
+        <td>{{ subscription.start_date }}</td>
+        <td>{{ subscription.end_date }}</td>
+        <td>{{ 'Active' if subscription.is_active else 'Inactive' }}</td>
+        <td>{{ subscription.upload_limit }}</td>
+        <td>{{ subscription.vote_limit }}</td>
+    </tr>
+    {% endfor %}
+</table>

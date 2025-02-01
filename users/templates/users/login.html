@@ -1,0 +1,66 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<section class="login-main-wrapper">
+  <div class="container-fluid pl-0 pr-0">
+    <div class="row no-gutters">
+      <!-- Left Side: Login Form -->
+      <div class="col-md-5 p-5 bg-white full-height">
+        <div class="login-main-left">
+          <div class="text-center mb-5 login-main-left-header pt-4">
+            <h5 class="mt-3 mb-3">Sign In</h5>
+          </div>
+          <form method="POST">
+            {% csrf_token %}
+            <div class="form-group">
+              <label for="username">Username</label>
+              <input type="text" name="username" class="form-control" id="username" placeholder="Enter username" required>
+            </div>
+            <div class="form-group">
+              <label for="password">Password</label>
+              <input type="password" name="password" class="form-control" id="password" placeholder="Password" required>
+            </div>
+            <div class="mt-4">
+              <div class="row">
+                <div class="col-12">
+                  <button type="submit" class="btn btn-outline-primary btn-block btn-lg">Sign In</button>
+                </div>
+              </div>
+            </div>
+          </form>
+          <div class="text-center mt-5">
+            <p class="light-gray">Don’t have an account? <a href="{% url 'register' %}">Sign Up</a></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Side: Carousel -->
+      <div class="col-md-7">
+        <div class="login-main-right bg-white p-5 mt-5 mb-5">
+          <div class="owl-carousel owl-carousel-login">
+            <div class="item">
+              <div class="carousel-login-card text-center">
+                <h5 class="mt-5 mb-3">Discover Hidden Talents</h5>
+                <p class="mb-4">Join a community that recognizes and celebrates unique skills and talents. Connect with like-minded individuals and showcase your abilities.</p>
+              </div>
+            </div>
+            <div class="item">
+              <div class="carousel-login-card text-center">
+                <h5 class="mt-5 mb-3">Empower Your Potential</h5>
+                <p class="mb-4">Find opportunities to grow and shine. Whether you're an artist, developer, or innovator, this is the place to elevate your talent.</p>
+              </div>
+            </div>
+            <div class="item">
+              <div class="carousel-login-card text-center">
+                <h5 class="mt-5 mb-3">Build Meaningful Connections</h5>
+                <p class="mb-4">Collaborate with others who share your passion. Together, we can create a network that fosters creativity and success.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,28 @@
+<h1>Manage Payments</h1>
+<table>
+    <tr>
+        <th>User</th>
+        <th>Amount</th>
+        <th>Transaction ID</th>
+        <th>Status</th>
+        <th>Date</th>
+        <th>Actions</th>
+    </tr>
+    {% for payment in payments %}
+    <tr>
+        <td>{{ payment.user.username }}</td>
+        <td>${{ payment.amount }}</td>
+        <td>{{ payment.transaction_id }}</td>
+        <td>{{ payment.payment_status }}</td>
+        <td>{{ payment.date }}</td>
+        <td>
+            {% if payment.payment_status == 'pending' %}
+            <form method="POST" action="{% url 'subscriptions:approve_payment' payment.id %}">
+                {% csrf_token %}
+                <button type="submit">Approve</button>
+            </form>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>

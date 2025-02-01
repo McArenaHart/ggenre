@@ -1,0 +1,317 @@
+{% extends "includes/base.html" %}
+{% load content_filters %}
+
+{% block title %}Content list{% endblock title %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-md-12" id="main-content">
+            <!-- Tag Filtering -->
+            {% comment %} <div class="mb-3">
+                <form method="GET" action="{% url 'content_list' %}">
+                    <label for="tag" class="form-label">Filter by Tag:</label>
+                    <select name="tag" id="tag" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Tags</option>
+                        {% for tag in all_tags %}
+                            <option value="{{ tag.name }}" {% if tag.name == request.GET.tag %}selected{% endif %}>
+                                {{ tag.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div> {% endcomment %}
+
+            <!-- Content Grid -->
+            <div class="row">
+                {% for content in contents %}
+                <div class="col-md-4 mb-4">  <!-- Adjusted column sizes for smaller cards -->
+                    <div class="card h-100 shadow-sm">
+                        <!-- Clickable Overlay -->
+                        <a href="{% url 'content_detail' content.id %}" class="card-overlay-link" title="View Details">
+                            <div class="card-overlay"></div>
+                        </a>
+
+                        <div class="video-container">
+                            {% include "partials/media_display.html" with content=content %}
+                        </div>
+
+                        <div class="card-body">
+                            <h5 class="card-title">{{ content.title }}</h5>
+                            <p class="text-muted">
+                                <img src="{{ content.artist.get_profile_picture }}" alt="{{ content.artist.username }}" class="rounded-circle" width="30" height="30">
+                                <a href="{% url 'user_profile' content.artist.id %}"  class="pb-0 mb-0"><strong>{{ content.artist.username }}</strong></a> |
+                                Views: <strong class="view-count" data-content-id="{{ content.id }}">{{ content.views }}</strong> |
+                                Votes: <strong>{{ content.votes.count }}</strong> |
+                                Date: <strong>{{ content.upload_date|date:"M d" }}</strong>
+                                <!-- Detail Icon (Linked to content detail) -->
+
+                            </p>
+                            
+                                                            <!-- Voting Section -->
+                            <div class="voting-section mb-0 pb-0 mt-0 mt-0">
+                                <!-- Voting Icon -->
+                                <div class="voting-icon" onclick="toggleVotingOptions(this)">
+                                    <i class="fas fa-star"  style="font-size: 1rem;"></i> <!-- Font Awesome star icon -->
+                                </div>
+                            
+                                <!-- Voting Options (Hidden by Default) -->
+                                <div class="voting-options">
+                                    {% for i in "12345" %}
+                                    <div class="vote-option" data-value="{{ i }}" onclick="submitVote(this, '{% url 'vote_content' content.id %}')"  style="font-size: 1rem;">
+                                        {{ i }}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Voting Section -->
+
+
+                            <!-- Delete Button -->
+                            {% if content.artist == user %}
+                            <form method="post" action="{% url 'delete_content' content.id %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn  bg-white">
+                                    <i class="fas fa-trash "></i> <!-- Font Awesome trash icon -->
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-center">No content available at the moment.</p>
+                {% endfor %}
+            </div>
+
+            <!-- Pagination (Only for List View) -->
+            {% if not single_content %}
+            <nav class="my-4">
+                <ul class="pagination justify-content-center">
+                    {% if contents.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?page={{ contents.previous_page_number }}">Previous</a></li>
+                    {% endif %}
+                    <li class="page-item disabled"><span class="page-link">Page {{ contents.number }} of {{ contents.paginator.num_pages }}</span></li>
+                    {% if contents.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ contents.next_page_number }}">Next</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            <!-- Popular Content -->
+            {% comment %} <h2 class="text-center mt-5">Popular Content</h2> {% endcomment %}
+            <div class="row">
+                {% for popular in popular_contents %}
+                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">  <!-- Adjusted column sizes for smaller cards -->
+                    <div class="card shadow-sm">
+                        <div class="video-container">
+                            {% include "partials/media_display.html" with content=popular %}
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title">{{ popular.title }}</h5>
+                            <p>Votes: <strong>{{ popular.votes.count }}</strong> | Uploaded by: <strong>{{ popular.artist.username }}</strong></p>
+                            <a href="{% url 'content_detail' popular.id %}" class="btn btn-secondary w-100">View & Vote</a>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-center"></p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom CSS for Video Container -->
+<style>
+.card-link {
+    text-decoration: none; /* Remove underline from link */
+    color: inherit; /* Inherit text color */
+    display: block; /* Make the link cover the entire card */
+}
+
+.card-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.1); /* Semi-transparent overlay */
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 1; /* Ensure overlay is above the card content */
+}
+
+.card:hover .card-overlay {
+    opacity: 1; /* Show overlay on hover */
+}
+
+.card {
+    position: relative; /* Ensure overlay is positioned correctly */
+    cursor: pointer; /* Change cursor to pointer on hover */
+}
+
+.card-body, .card-footer {
+    position: relative;
+    z-index: 2; /* Ensure content is above the overlay */
+}
+
+
+    .video-container {
+        position: relative;
+        padding-top: 56.25%; /* 16:9 Aspect Ratio */
+        overflow: hidden;
+    }
+
+    .video-container iframe,
+    .video-container video,
+    .video-container img {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* Ensures the media fills the container */
+    }
+
+    .card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-title {
+        font-size: 0.8 rem;
+        font-weight: bold;
+    }
+
+    .card-text {
+        font-size: 0.8rem;
+        color: #555;
+    }
+
+    .text-muted {
+        font-size: 11px;
+    }
+
+    .card-footer {
+        background-color: #f8f9fa;
+        height: 200px;
+
+    }
+
+    .pagination .page-link {
+        color: #007bff;
+    }
+
+    .pagination .page-item.disabled .page-link {
+        color: #6c757d;
+    }
+
+    /* Sidebar Toggle Styles */
+    #wrapper.toggled #main-content {
+        margin-left: -50px; /* Adjust based on your sidebar width */
+    }
+
+    #main-content {
+        transition: margin-left 0.3s ease;
+    }
+
+    /* Adjust Main Content Margin */
+    #main-content {
+        padding-left: -15px; /* Add some spacing between sidebar and content */
+    }
+
+    /* Limit the height of the comments section and enable scrolling */
+    .card-footer {
+        max-height: 100px; /* Adjust this value as needed */
+        overflow-y: auto; /* Enable vertical scrolling */
+    }
+
+    .card-footer {
+        padding-top: 0 !important;
+        margin-top: -18px; /* Adjust this value as needed */
+    }
+
+    /* Style the scrollbar */
+    .card-footer::-webkit-scrollbar {
+        width: 3px; /* Width of the scrollbar */
+    }
+
+    .card-footer::-webkit-scrollbar-track {
+        background: #f1f1f1; /* Color of the scrollbar track */
+    }
+
+    .card-footer::-webkit-scrollbar-thumb {
+        background: #888; /* Color of the scrollbar thumb */
+        border-radius: 4px; /* Rounded corners for the thumb */
+    }
+
+    .card-footer::-webkit-scrollbar-thumb:hover {
+        background: #555; /* Color of the scrollbar thumb on hover */
+    }
+
+    /* Voting Icon */
+    .voting-icon {
+        cursor: pointer;
+        font-size: 1.5rem;
+        color: #ffc107; /* Yellow color for the star icon */
+        display: inline-block;
+        transition: transform 0.2s;
+    }
+
+    .voting-icon:hover {
+        transform: scale(1.1); /* Slightly enlarge on hover */
+    }
+
+    /* Voting Options (Hidden by Default) */
+    .voting-options {
+        display: none;
+        position: absolute;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        padding: 5px;
+        z-index: 10;
+    }
+
+    .voting-options .vote-option {
+        cursor: pointer;
+        padding: 5px 10px;
+        font-size: 1rem;
+        color: #333;
+        transition: background 0.2s;
+    }
+
+    .voting-options .vote-option:hover {
+        background: #f8f9fa; /* Light background on hover */
+    }
+
+    /* Show Voting Options When Active */
+    .voting-section.active .voting-options {
+        display: flex;
+        gap: 5px;
+    }
+
+    /* Style for the delete button icon */
+.fa-trash {
+    background: white;
+    color: red;
+    font-size: 1rem; /* Adjust the size as needed */
+    vertical-align: middle; /* Align the icon vertically */
+}
+
+</style>
+
+<script>
+
+
+</script>
+{% endblock content %}

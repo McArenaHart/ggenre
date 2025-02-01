@@ -1,0 +1,224 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}{{ profile_user.username }}'s Profile{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Profile Section (75% width) -->
+        <div class="col-lg-9 col-md-8">
+            <div class="card shadow-lg p-4">
+                <div class="d-flex align-items-center">
+                    <!-- Profile Picture -->
+                    <div class="profile-picture">
+                        <img class="rounded-circle profile-preview" width="120" height="120"
+                            src="{{ profile_user.get_profile_picture }}" alt="{{ profile_user.username }}">
+                    </div>
+
+                    <div class="ml-3">
+                        <!-- Username & Role -->
+                        <h2 class="font-weight-bold">{{ profile_user.username }}</h2>
+                        <p class="text-muted">
+                            {% if is_artist %}
+                                <i class="fas fa-music"></i> Artist
+                            {% else %}
+                                <i class="fas fa-user"></i> Fan
+                            {% endif %}
+                        </p>
+
+                        <p><i class="fas fa-envelope"></i> {{ profile_user.email }}</p>
+
+                        <!-- Follow/Unfollow Button -->
+                        {% if request.user != profile_user %}
+                        <form method="post" action="{% url 'user_profile' profile_user.id %}">
+                            {% csrf_token %}
+                            {% if is_following %}
+                                <button type="submit" class="btn btn-outline-danger btn-sm">
+                                    <i class="fas fa-user-minus"></i> Unfollow
+                                </button>
+                            {% else %}
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-user-plus"></i> Follow
+                                </button>
+                            {% endif %}
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Artist Content Section -->
+            {% if is_artist %}
+            <div class="mt-4">
+                <h4 class="font-weight-bold">Uploaded Content</h4>
+                <p><i class="fas fa-star"></i> Subscription Status: {{ subscription_status }}</p>
+                <p><i class="fas fa-upload"></i> Upload Limit: {{ upload_limit }} items</p>
+
+                <div class="row">
+                    {% for content in user_content %}
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <a href="{% url 'content_detail' content.id %}" class="card-link">
+                            <div class="card shadow-sm">
+                                <div class="video-container">
+                                    {% comment %} <img src="{{ content.thumbnail.url }}" class="img-fluid rounded" alt="{{ content.title }}"> {% endcomment %}
+                                </div>
+                                <div class="card-body">
+                                    <h6 class="font-weight-bold">{{ content.title }}</h6>
+                                    <p class="text-muted small">
+                                        <i class="fas fa-eye"></i> {{ content.views }} views
+                                    </p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted">No content uploaded yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% else %}
+            <!-- Fan Followed Artists Section -->
+            <div class="mt-4">
+                <h4 class="font-weight-bold">Followed Artists</h4>
+                <div class="row">
+                    {% for artist in followed_artists %}
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <a href="{% url 'artist_content' artist.id %}" class="card-link text-decoration-none">
+                            <div class="card shadow-sm p-3 d-flex align-items-center">
+                                <!-- Profile Picture -->
+                                <div class="profile-picture-container">
+                                    <img src="{{ artist.get_profile_picture }}" 
+                                         class="rounded-circle mr-3" 
+                                         width="50" 
+                                         height="50" 
+                                         alt="{{ artist.username }}'s profile picture"
+                                         loading="lazy">
+                                </div>
+                                <!-- Username -->
+                                <h6 class="font-weight-bold mb-0">{{ artist.username }}</h6>
+                            </div>
+                        </a>
+                    </div>
+                    {% empty %}
+                        <!-- Display a message if no artists are followed -->
+                        <div class="col-12">
+                            <p class="text-muted text-center">No artists followed yet.</p>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Profile Editing (For Profile Owner) -->
+{% if profile_user == request.user %}
+<div class="mt-4">
+    <h4 class="font-weight-bold">Edit Profile</h4>
+    <form method="post" enctype="multipart/form-data" action="{% url 'user_profile' profile_user.id %}">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="id_username">Username</label>
+            <input type="text" name="username" value="{{ form.username.value }}" class="form-control" id="id_username">
+        </div>
+        <div class="form-group">
+            <label for="id_email">Email</label>
+            <input type="email" name="email" value="{{ form.email.value }}" class="form-control" id="id_email">
+        </div>
+        <div class="form-group">
+            <label for="id_profile_picture">Profile Picture</label>
+            <input type="file" name="profile_picture" class="form-control" id="id_profile_picture">
+        </div>
+        <div class="form-group">
+            <label for="id_bio">Bio</label>
+            <textarea name="bio" class="form-control" id="id_bio">{{ form.bio.value }}</textarea>
+        </div>
+        <button type="submit" name="update_profile" class="btn btn-primary mt-2">Update Profile</button>
+    </form>
+</div>
+{% endif %}
+        </div>
+
+        <!-- Sidebar (Up Next) -->
+        <div class="col-lg-3 col-md-4">
+            <div class="p-3">
+                <h5 class="font-weight-bold">Up Next</h5>
+                <div class="scrollable-list">
+                    {% for related in user_content|slice:":4" %}
+                    <a href="{% url 'content_detail' related.id %}" class="video-card d-flex align-items-center p-2 border rounded mb-2 text-decoration-none">
+                        {% comment %} <img class="img-fluid rounded" width="80" src="{{ related.thumbnail.url }}" alt="{{ related.title }}"> {% endcomment %}
+                        <div class="ml-2">
+                            <p class="text-dark font-weight-bold small mb-1">{{ related.title }}</p>
+                            <small class="text-muted d-block">{{ related.views }} views • {{ related.upload_date|timesince }} ago</small>
+                        </div>
+                    </a>
+                    {% empty %}
+                    <p class="text-muted">No upcoming content.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom Styles -->
+<style>
+    /* Video Container */
+    .video-container {
+        position: relative;
+        width: 100%;
+        padding-top: 56.25%;
+        overflow: hidden;
+    }
+    .video-container img {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* Profile Picture */
+    .profile-picture {
+        position: relative;
+        width: 120px;
+        height: 120px;
+    }
+
+    /* Card Styling */
+    .card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Scrollable "Up Next" List */
+    .scrollable-list {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .scrollable-list::-webkit-scrollbar {
+        width: 5px;
+    }
+    .scrollable-list::-webkit-scrollbar-thumb {
+        background: #ccc;
+        border-radius: 4px;
+    }
+</style>
+
+<script>
+    document.getElementById('id_profile_picture').addEventListener('change', function(e) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.querySelector('.profile-preview').src = e.target.result;
+        };
+        reader.readAsDataURL(this.files[0]);
+    });
+</script>
+
+{% endblock %}

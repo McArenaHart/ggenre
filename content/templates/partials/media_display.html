@@ -1,0 +1,30 @@
+{% load content_filters %}
+
+{% if content.file.url|endswith:".mp4" or content.file.url|endswith:".mpeg" %}
+<video controls width="640" height="360" class="media-video">
+    <source src="{{ content.file.url }}" type="video/mp4">
+    Your browser does not support the video tag.
+</video>
+{% elif content.file.url|endswith:".mp3" %}
+<div class="audio-thumbnail">
+    {% if content.thumbnail %}
+    <img src="{{ content.thumbnail.url }}" alt="Thumbnail" class="thumbnail-frame">
+    {% else %}
+    <div class="placeholder-thumbnail">Audio</div>
+    {% endif %}
+    <audio controls class="media-audio">
+        <source src="{{ content.file.url }}" type="audio/mpeg">
+        Your browser does not support the audio tag.
+    </audio>
+</div>
+{% endif %}
+
+<!-- media_display.html -->
+{% if content.media_type == 'video' %}
+<video controls>
+    <source src="{{ content.media_file.url }}" type="video/mp4">
+    Your browser does not support the video tag.
+</video>
+{% elif content.media_type == 'image' %}
+<img src="{{ content.media_file.url }}" alt="{{ content.title }}">
+{% endif %}

@@ -1,0 +1,1 @@
+web gunicorn ggenre.wsgi.application --log-file -

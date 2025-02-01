@@ -1,0 +1,11 @@
+
+  <h1>Available Subscription Plans</h1>
+  <ul>
+    {% for plan in plans %}
+      <li>
+        <strong>{{ plan.name }}</strong> - {{ plan.description }} <br>
+        Price: ${{ plan.price }} for {{ plan.duration }} days
+        <a href="{% url 'subscriptions:subscribe' plan.id %}">Subscribe</a>
+      </li>
+    {% endfor %}
+  </ul>

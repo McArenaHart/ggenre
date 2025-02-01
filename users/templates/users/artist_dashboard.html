@@ -1,0 +1,41 @@
+{% extends "includes/base.html" %}
+
+{% block content %}
+<!-- Main Content -->
+<div class="right_col" role="main">
+  <!-- Mini Table for Statistics -->
+  <div class="row">
+    <div class="col-md-12 col-sm-12 col-xs-12">
+      <div class="x_panel">
+        <div class="x_title">
+          <h2>Artist Dashboard</h2>
+          <div class="clearfix"></div>
+        </div>
+        <div class="x_content">
+          <table class="table table-bordered">
+            <thead>
+              <tr>
+                <th><i class="fa fa-upload"></i> Total Uploads</th>
+                <th><i class="fa fa-check"></i> Approved Content</th>
+                <th><i class="fa fa-hourglass"></i> Pending Content</th>
+                <th><i class="fa fa-tasks"></i> Remaining Upload Slots</th>
+                <th><i class="fa fa-tasks"></i> Upload Limit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{{ total_uploads }}</td>
+                <td>{{ approved_content }}</td>
+                <td>{{ pending_content }}</td>
+                <td>{{ remaining_slots }}</td>
+                <td>{{ upload_limit }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+{% endblock %}

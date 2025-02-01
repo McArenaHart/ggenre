@@ -1,0 +1,37 @@
+{% extends "includes/base.html" %}
+
+{% block content %}
+<div class="right_col" role="main">
+  <div class="row">
+    <div class="col-md-12 col-sm-12 col-xs-12">
+      <div class="x_panel">
+        <div class="x_title">
+          <h2>Confirm Action</h2>
+          <div class="clearfix"></div>
+        </div>
+        <div class="x_content">
+          {% if user %}
+            <p>
+              Are you sure you want to 
+              <strong>{% if user_limit.suspended_by_admin %}reinstate{% else %}suspend{% endif %}</strong> 
+              the subscription limits for 
+              <strong>{{ user.username }}</strong> ({{ target|title }})?
+            </p>
+            <form method="POST" action="{% url 'subscriptions:toggle_limit_suspension' user.id target %}">
+              {% csrf_token %}
+              <div class="form-group">
+                <button type="submit" class="btn btn-danger">
+                  {% if user_limit.suspended_by_admin %}Reinstate{% else %}Suspend{% endif %}
+                </button>
+                <a href="{% url 'admin_dashboard' %}" class="btn btn-default">Cancel</a>
+              </div>
+            </form>
+          {% else %}
+            <p class="text-danger">Invalid user data.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

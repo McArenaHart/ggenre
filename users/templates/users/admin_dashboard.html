@@ -1,0 +1,286 @@
+{% extends "includes/base.html" %}
+
+{% block content %}
+
+<!-- Main Content -->
+<div class="right_col" role="main">
+  <!-- Mini Table for Statistics -->
+  <div class="row">
+    <div class="col-md-12 col-sm-12 col-xs-12">
+      <div class="x_panel">
+        <div class="x_title">
+          <h2>Statistics Overview</h2>
+          <div class="clearfix"></div>
+        </div>
+        <div class="x_content">
+          <table class="table table-bordered">
+            <thead>
+              <tr>
+                <th><i class="fa fa-users"></i> Total Users</th>
+                <th><i class="fa fa-file"></i> Total Content</th>
+                <th><i class="fa fa-check"></i> Approved Content</th>
+                <th><i class="fa fa-hourglass"></i> Pending Content</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{{ statistics.total_users }}</td>
+                <td>{{ statistics.total_content }}</td>
+                <td>{{ statistics.approved_content }}</td>
+                <td>{{ statistics.pending_content }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search and Filter Section -->
+  <div class="row">
+    <div class="col-md-12 col-sm-12 col-xs-12">
+      <div class="x_panel">
+        <div class="x_title">
+          <h2>Content Management</h2>
+          <div class="clearfix"></div>
+        </div>
+        <div class="x_content">
+          <!-- Search Input -->
+          <input 
+            type="text" 
+            id="searchInput" 
+            placeholder="Search content or artist..." 
+            class="form-control mb-3" 
+            oninput="filterContent()"
+          />
+
+          <!-- Filter Options -->
+          <div class="btn-group" role="group" aria-label="Content Filters">
+            <button 
+              type="button" 
+              class="btn btn-default filter-btn" 
+              data-status="all"
+              onclick="filterContent('all')"
+            >
+              All
+            </button>
+            <button 
+              type="button" 
+              class="btn btn-default filter-btn" 
+              data-status="approved"
+              onclick="filterContent('approved')"
+            >
+              Approved
+            </button>
+            <button 
+              type="button" 
+              class="btn btn-default filter-btn" 
+              data-status="pending"
+              onclick="filterContent('pending')"
+            >
+              Pending
+            </button>
+          </div>
+
+          <!-- Content Table -->
+          <table class="table table-striped" id="contentTable">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Artist</th>
+                <th>Status</th>
+                <th>Uploaded On</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for content in recent_uploads %}
+                <tr data-status="{% if content.is_approved %}approved{% else %}pending{% endif %}">
+                  <td>{{ content.title }}</td>
+                  <td>{{ content.artist.username }}</td>
+                  <td>
+                    {% if content.is_approved %}
+                      <span class="label label-success">Approved</span>
+                    {% else %}
+                      <span class="label label-warning">Pending</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ content.upload_date }}</td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="4" class="text-center">No content found.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Artist Management Section -->
+  <div class="row">
+    <div class="col-md-12 col-sm-12 col-xs-12">
+      <div class="x_panel">
+        <div class="x_title">
+          <h2>Artist Upload Limits</h2>
+          <div class="clearfix"></div>
+        </div>
+        <div class="x_content">
+          <form method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="reset_limit">
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="select-all-artists"></th>
+                  <th>Artist</th>
+                  <th>Uploads Used</th>
+                  <th>Upload Limit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for artist in artists %}
+                  <tr>
+                    <td><input type="checkbox" name="artist_ids" value="{{ artist.artist.id }}"></td>
+                    <td>{{ artist.artist.username }}</td>
+                    <td>{{ artist.uploads_used }}</td>
+                    <td>{{ artist.upload_limit }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            <button type="submit" class="btn btn-primary">Reset Selected Limits</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<!-- Suspension Controls -->
+<div class="row">
+    <div class="col-md-12 col-sm-12 col-xs-12">
+      <div class="x_panel">
+        <div class="x_title">
+          <h2>Manage User Limits</h2>
+          <div class="clearfix"></div>
+        </div>
+        <div class="x_content">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>Limit Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for artist in artists %}
+                {% if artist.artist.id %}
+                  <tr>
+                    <td>{{ artist.artist.username }}</td>
+                    <td>Artist</td>
+                    <td>
+                      {% if artist.suspended_by_admin %}
+                        <span class="label label-danger">Suspended</span>
+                      {% else %}
+                        <span class="label label-success">Active</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <a 
+                        href="{% url 'subscriptions:toggle_limit_suspension' artist.artist.id 'artist' %}" 
+                        class="btn btn-sm btn-primary"
+                      >
+                        {% if artist.suspended_by_admin %} Reinstate {% else %} Suspend {% endif %}
+                      </a>
+                    </td>
+                  </tr>
+                {% else %}
+                  <tr>
+                    <td colspan="4" class="text-danger">Invalid artist data.</td>
+                  </tr>
+                {% endif %}
+              {% endfor %}
+              {% for fan in fans %}
+                {% if fan.user.id %}
+                  <tr>
+                    <td>{{ fan.user.username }}</td>
+                    <td>Fan</td>
+                    <td>
+                      {% if fan.suspended_by_admin %}
+                        <span class="label label-danger">Suspended</span>
+                      {% else %}
+                        <span class="label label-success">Active</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <a 
+                        href="{% url 'subscriptions:toggle_limit_suspension' fan.user.id 'fan' %}" 
+                        class="btn btn-sm btn-primary"
+                      >
+                        {% if fan.suspended_by_admin %} Reinstate {% else %} Suspend {% endif %}
+                      </a>
+                    </td>
+                  </tr>
+                {% else %}
+                  <tr>
+                    <td colspan="4" class="text-danger">Invalid fan data.</td>
+                  </tr>
+                {% endif %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div><!-- Sidebar Footer -->
+<div class="sidebar-footer hidden-small">
+  <a data-toggle="tooltip" data-placement="top" title="Settings">
+    <span class="glyphicon glyphicon-cog" aria-hidden="true"></span>
+  </a>
+  <a data-toggle="tooltip" data-placement="top" title="FullScreen">
+    <span class="glyphicon glyphicon-fullscreen" aria-hidden="true"></span>
+  </a>
+  <a data-toggle="tooltip" data-placement="top" title="Lock">
+    <span class="glyphicon glyphicon-eye-close" aria-hidden="true"></span>
+  </a>
+  <a data-toggle="tooltip" data-placement="top" title="Logout" href="{% url 'logout' %}">
+    <span class="glyphicon glyphicon-off" aria-hidden="true"></span>
+  </a>
+</div>
+
+<!-- JavaScript for Filtering -->
+<script>
+  function filterContent(status = 'all') {
+    const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+    const rows = document.querySelectorAll('#contentTable tbody tr');
+
+    rows.forEach(row => {
+      const title = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
+      const artist = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+      const rowStatus = row.getAttribute('data-status');
+
+      // Check if the row matches the search query and filter status
+      const matchesSearch = title.includes(searchQuery) || artist.includes(searchQuery);
+      const matchesStatus = status === 'all' || rowStatus === status;
+
+      if (matchesSearch && matchesStatus) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+
+  // Highlight the active filter button
+  document.querySelectorAll('.filter-btn').forEach(button => {
+    button.addEventListener('click', function () {
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+</script>
+
+{% endblock %}

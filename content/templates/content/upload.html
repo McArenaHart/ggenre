@@ -1,0 +1,196 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Upload Content{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Main Content Area (75% width) -->
+        <div class="col-lg-9 col-md-8">
+            <div class="card shadow-lg p-4">
+                <h2 class="font-weight-bold mb-4">Upload Content</h2>
+
+                <!-- Display messages -->
+                {% if messages %}
+                <div class="mb-4">
+                    {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Upload form -->
+                <form method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+                    {% csrf_token %}
+
+                    <!-- Form fields -->
+                    <div class="mb-3">
+                        <label for="id_title" class="form-label">Title</label>
+                        {{ form.title }}
+                        <div class="invalid-feedback">
+                            Please provide a title.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_description" class="form-label">Description</label>
+                        {{ form.description }}
+                        <div class="invalid-feedback">
+                            Please provide a description.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_file" class="form-label">File</label>
+                        {{ form.file }}
+                        <div class="invalid-feedback">
+                            Please upload a file.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_thumbnail" class="form-label">Thumbnail</label>
+                        {{ form.thumbnail }}
+                        <div class="invalid-feedback">
+                            Please upload a thumbnail.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_tags" class="form-label">Tags</label>
+                        {{ form.tags }}
+                        <div class="invalid-feedback">
+                            Please provide tags.
+                        </div>
+                    </div>
+
+                    <!-- Submit button -->
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-cloud-upload-alt me-2"></i> Upload
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sidebar (25% width) -->
+        <div class="col-lg-3 col-md-4">
+            <div class="p-3">
+                <h5 class="font-weight-bold">Tips for Uploading</h5>
+                <div class="scrollable-list">
+                    <p class="text-muted small">
+                        <i class="fas fa-info-circle me-2"></i> Ensure your file is in a supported format (e.g., MP4, AVI).
+                    </p>
+                    <p class="text-muted small">
+                        <i class="fas fa-info-circle me-2"></i> Use a high-quality thumbnail to attract viewers.
+                    </p>
+                    <p class="text-muted small">
+                        <i class="fas fa-info-circle me-2"></i> Keep your title and description clear and concise.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom Styles -->
+<style>
+    /* Custom styling for form fields */
+    .form-control {
+        border-radius: 8px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .form-control:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 5px rgba(13, 110, 253, 0.5);
+    }
+
+    /* Custom styling for the card */
+    .card {
+        border-radius: 12px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Custom styling for the submit button */
+    .btn-primary {
+        background-color: #0d6efd;
+        border: none;
+        padding: 12px;
+        font-size: 1.1rem;
+        transition: background-color 0.3s ease, transform 0.3s ease;
+    }
+
+    .btn-primary:hover {
+        background-color: #0b5ed7;
+        transform: translateY(-2px);
+    }
+
+    /* Scrollable "Tips" List */
+    .scrollable-list {
+        max-height: 200px;
+        overflow-y: auto;
+        padding-right: 10px;
+    }
+
+    .scrollable-list::-webkit-scrollbar {
+        width: 5px;
+    }
+
+    .scrollable-list::-webkit-scrollbar-thumb {
+        background: #ccc;
+        border-radius: 4px;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .col-lg-9, .col-lg-3 {
+            width: 100%;
+        }
+
+        .card {
+            margin-bottom: 20px;
+        }
+
+        .scrollable-list {
+            max-height: 150px;
+        }
+    }
+</style>
+
+<!-- Bootstrap Validation Script -->
+<script>
+    // Example starter JavaScript for disabling form submissions if there are invalid fields
+    (function () {
+        'use strict'
+
+        // Fetch all the forms we want to apply custom Bootstrap validation styles to
+        var forms = document.querySelectorAll('.needs-validation')
+
+        // Loop over them and prevent submission
+        Array.prototype.slice.call(forms)
+            .forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    if (!form.checkValidity()) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                    }
+
+                    form.classList.add('was-validated')
+                }, false)
+            })
+    })()
+</script>
+{% endblock %}

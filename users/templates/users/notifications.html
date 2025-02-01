@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2>Notifications</h2>
+    <ul class="list-group">
+        {% for notification in notifications %}
+        <li class="list-group-item">
+            <p>{{ notification.message }}</p>
+            <small class="text-muted">{{ notification.created_at }}</small>
+        </li>
+        {% empty %}
+        <li class="list-group-item">No new notifications.</li>
+        {% endfor %}
+    </ul>
+</div>
+<button id="mark-as-read" class="btn btn-primary mb-3">Mark All as Read</button>
+
+<script>
+    document.getElementById('mark-as-read').addEventListener('click', function() {
+        fetch("{% url 'mark_notifications_as_read' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            }
+        }).then(response => response.json())
+          .then(data => {
+              if (data.status === 'success') {
+                  location.reload();  // Refresh the page to reflect changes
+              }
+          });
+    });
+</script>
+{% endblock %}

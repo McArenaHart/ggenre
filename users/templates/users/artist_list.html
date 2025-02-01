@@ -1,0 +1,61 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Artists{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2 class="font-weight-bold mb-4">Artists</h2>
+    <div class="row">
+        {% for artist in artists %}
+        <div class="col-lg-4 col-md-6 mb-3">
+            <a href="{% url 'artist_content' artist.id %}" class="card-link text-decoration-none">
+                <div class="card shadow-sm p-3 d-flex align-items-center">
+                    <!-- Profile Picture -->
+                    <div class="profile-picture-container">
+                        <img src="{{ artist.get_profile_picture }}" 
+                             class="rounded-circle mr-3" 
+                             width="50" 
+                             height="50" 
+                             alt="{{ artist.username }}'s profile picture"
+                             loading="lazy">
+                    </div>
+                    <!-- Username -->
+                    <h6 class="font-weight-bold mb-0">{{ artist.username }}</h6>
+                </div>
+            </a>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <p class="text-muted text-center">No artists found.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Custom Styles -->
+<style>
+    /* Card Styling */
+    .card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Profile Picture Container */
+    .profile-picture-container {
+        position: relative;
+        width: 50px;
+        height: 50px;
+    }
+
+    /* Artist Name */
+    .font-weight-bold {
+        font-size: 1.1rem;
+    }
+</style>
+{% endblock %}

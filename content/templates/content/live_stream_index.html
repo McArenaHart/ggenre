@@ -1,0 +1,19 @@
+<!-- content/templates/content/live_stream_index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live Streams</title>
+</head>
+<body>
+    <h1>Live Streams</h1>
+    <ul>
+        {% for performance in performances %}
+        <li>
+            <a href="{% url 'live_stream_room' room_name=performance.stream_key %}">
+                {{ performance.title }} by {{ performance.artist.username }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
