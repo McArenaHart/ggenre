@@ -30,14 +30,12 @@ DEBUG = False
 
 
 
-ALLOWED_HOSTS = ['genre_genuis.com', '147.93.95.1']
+ALLOWED_HOSTS = ['147.93.95.1']
 
 
 # Application definition
 
 INSTALLED_APPS = [
-
-    'widget_tweaks',
     'taggit', 
     'django.contrib.admin',
     'django.contrib.auth',
