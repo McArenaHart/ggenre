@@ -30,7 +30,7 @@ DEBUG = False
 
 
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['genre_genuis.com', '147.93.95.1']
 
 
 # Application definition
