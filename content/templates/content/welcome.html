@@ -8,23 +8,24 @@
         <!-- Main Content -->
         <div class="col-md-12 text-center" id="main-content">
             <!-- Welcome Message and Logo -->
-            <h1 class="display-4" style="display: flex; align-items: center; justify-content: center;">
-                Welcome to
-                <span style="margin-left: 10px;  padding-top: 0;">
-                    <a class="navbar-brand" href="{% url 'content_list' %}" style="font-family: 'Pacifico', cursive; font-size: 2.6rem; font-weight: 400; color: #333; position: relative;">
-                        <span style="background: linear-gradient(90deg, rgba(150, 138, 8, 0.64), #ffa500); -webkit-background-clip: text; color: transparent;">Genre</span>
-                        <span style="color: #333; font-weight: 700; margin-left: 5px;">Genius</span>
-                        <span style="position: absolute; bottom: -5px; left: 0; width: 100%; height: 3px; background: linear-gradient(90deg, #ffcc00, #ffa500);"></span>
-                    </a>
-                </span>
-            </h1>
-
-            <p class="lead">
-                Discover, share, and engage with amazing content from talented artists around the world.
-            </p>
+            <div class="welcome-section">
+                <h1 class="display-4 welcome-heading">
+                    Welcome to
+                    <span class="logo">
+                        <a class="navbar-brand" href="{% url 'content_list' %}" style="font-family: 'Pacifico', cursive; font-size: 2.6rem; font-weight: 400; color: #333; position: relative;">
+                            <span style="background: linear-gradient(90deg, rgba(150, 138, 8, 0.64), #ffa500); -webkit-background-clip: text; color: transparent;">Genre</span>
+                            <span style="color: #333; font-weight: 700; margin-left: 5px;">Genius</span>
+                            <span style="position: absolute; bottom: -5px; left: 0; width: 100%; height: 3px; background: linear-gradient(90deg, #ffcc00, #ffa500);"></span>
+                        </a>
+                    </span>
+                </h1>
+                <p class="lead welcome-text">
+                    Discover, share, and engage with amazing content from talented artists around the world.
+                </p>
+            </div>
 
             <!-- Call to Action Buttons -->
-            <div class="mt-5">
+            <div class="cta-buttons mt-5">
                 <a href="{% url 'login' %}" class="btn btn-primary btn-lg mr-3">
                     <i class="fas fa-sign-in-alt"></i> Login
                 </a>
@@ -37,36 +38,181 @@
             </div>
 
             <!-- Featured Content Section -->
-            <h2 class="mt-5">Featured Content</h2>
-            <div class="row mt-3">
-                {% for content in featured_contents %}
-                <div class="col-md-4 mb-4">
-                    <div class="card h-100 shadow-sm">
-                        <a href="{% url 'content_detail' content.id %}" class="card-overlay-link" title="View Details">
-                            <div class="card-overlay"></div>
-                        </a>
+            <div class="featured-content-section mt-5">
+                <h2 class="section-title">Featured Content</h2>
+                <div class="row mt-3">
+                    {% for content in featured_contents %}
+                    <div class="col-md-4 mb-4">
+                        <div class="card h-100 shadow-sm">
+                            <a href="{% url 'content_detail' content.id %}" class="card-overlay-link" title="View Details">
+                                <div class="card-overlay"></div>
+                            </a>
 
-                        <div class="video-container">
-                            {% include "partials/media_display.html" with content=content %}
-                        </div>
+                            <div class="video-container">
+                                {% include "partials/media_display.html" with content=content %}
+                            </div>
 
-                        <div class="card-body">
-                            <h5 class="card-title">{{ content.title }}</h5>
-                            <p class="text-muted">
-                                <img src="{{ content.artist.get_profile_picture }}" alt="{{ content.artist.username }}" class="rounded-circle" width="30" height="30">
-                                <a href="{% url 'user_profile' content.artist.id %}" class="pb-0 mb-0"><strong>{{ content.artist.username }}</strong></a> |
-                                Views: <strong class="view-count" data-content-id="{{ content.id }}">{{ content.views }}</strong> |
-                                Votes: <strong>{{ content.votes.count }}</strong> |
-                                Date: <strong>{{ content.upload_date|date:"M d" }}</strong>
-                            </p>
+                            <div class="card-body">
+                                <h5 class="card-title">{{ content.title }}</h5>
+                                <p class="text-muted">
+                                    <img src="{{ content.artist.get_profile_picture }}" alt="{{ content.artist.username }}" class="rounded-circle" width="30" height="30">
+                                    <a href="{% url 'user_profile' content.artist.id %}" class="pb-0 mb-0"><strong>{{ content.artist.username }}</strong></a> |
+                                    Views: <strong class="view-count" data-content-id="{{ content.id }}">{{ content.views }}</strong> |
+                                    Votes: <strong>{{ content.votes.count }}</strong> |
+                                    Date: <strong>{{ content.upload_date|date:"M d" }}</strong>
+                                </p>
+                            </div>
                         </div>
                     </div>
+                    {% empty %}
+                    <p class="text-center no-content">No featured content available at the moment.</p>
+                    {% endfor %}
                 </div>
-                {% empty %}
-                <p class="text-center">No featured content available at the moment.</p>
-                {% endfor %}
             </div>
         </div>
     </div>
 </div>
+
+<!-- Custom CSS for Styling -->
+<style>
+    /* Welcome Section */
+    .welcome-section {
+        padding: 40px 20px;
+        background: linear-gradient(135deg, #f9f9f9, #ffffff);
+        border-radius: 10px;
+        margin-bottom: 40px;
+    }
+
+    .welcome-heading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        font-size: 2.5rem;
+        color: #333;
+    }
+
+    .logo {
+        margin-left: 10px;
+    }
+
+    .welcome-text {
+        font-size: 1.2rem;
+        color: #555;
+        margin-top: 20px;
+    }
+
+    /* Call to Action Buttons */
+    .cta-buttons {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .cta-buttons .btn {
+        font-size: 1.1rem;
+        padding: 10px 20px;
+        border-radius: 25px;
+    }
+
+    /* Featured Content Section */
+    .featured-content-section {
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 10px;
+    }
+
+    .section-title {
+        font-size: 2rem;
+        color: #333;
+        margin-bottom: 20px;
+    }
+
+    .card {
+        border: none;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-overlay-link {
+        position: relative;
+        display: block;
+    }
+
+    .card-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.3);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .card-overlay-link:hover .card-overlay {
+        opacity: 1;
+    }
+
+    .video-container {
+        position: relative;
+        padding-top: 56.25%; /* 16:9 Aspect Ratio */
+        overflow: hidden;
+    }
+
+    .video-container iframe,
+    .video-container video {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    .card-title {
+        font-size: 1.25rem;
+        color: #333;
+        margin-bottom: 10px;
+    }
+
+    .text-muted {
+        font-size: 0.9rem;
+    }
+
+    .no-content {
+        font-size: 1.1rem;
+        color: #777;
+    }
+
+    /* Mobile Responsiveness */
+    @media (max-width: 768px) {
+        .welcome-heading {
+            font-size: 2rem;
+            flex-direction: column;
+        }
+
+        .logo {
+            margin-left: 0;
+            margin-top: 10px;
+        }
+
+        .cta-buttons .btn {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .card {
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+        }
+    }
+</style>
 {% endblock content %}
