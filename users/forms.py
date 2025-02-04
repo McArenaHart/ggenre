@@ -8,11 +8,16 @@ from django.core.exceptions import ValidationError
 
 
 class UserRegistrationForm(UserCreationForm):
-    role = forms.ChoiceField(choices=Role.CHOICES)  # Reference Role.CHOICES here
+    role = forms.ChoiceField(choices=[])  # Initialize with empty choices
 
     class Meta:
         model = CustomUser
         fields = ['username', 'email', 'password1', 'password2', 'role']
+
+    def __init__(self, *args, **kwargs):
+        super(UserRegistrationForm, self).__init__(*args, **kwargs)
+        # Filter out the 'admin' role from the choices
+        self.fields['role'].choices = [choice for choice in Role.CHOICES if choice[0] != Role.ADMIN]
 
 
 class LoginForm(AuthenticationForm):

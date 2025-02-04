@@ -14,7 +14,7 @@ from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .models import  Notification
-from content.models import Vote, ArtistSubscription
+from content.models import Vote
 from django.http import JsonResponse
 
 
@@ -95,7 +95,7 @@ def admin_dashboard(request):
         elif action == 'reset_limit' and artist_ids:
             artist_limits = ArtistUploadLimit.objects.filter(artist_id__in=artist_ids)
             for limit in artist_limits:
-                limit.reset_limit()
+                limit.reset_limit()  # Calling the reset_limit method
             messages.success(request, f"Reset upload limits for {len(artist_limits)} artist(s).")
 
     context = {
@@ -318,17 +318,17 @@ def notify_artist_on_comment(sender, instance, **kwargs):
 
 
 
-@receiver(post_save, sender=Content)
-def notify_subscribers_on_new_content(sender, instance, **kwargs):
-    """
-    Send a notification to all subscribers when an artist uploads new content.
-    """
-    artist = instance.artist
-    subscribers = ArtistSubscription.objects.filter(artist=artist)
+# @receiver(post_save, sender=Content)
+# def notify_subscribers_on_new_content(sender, instance, **kwargs):
+#     """
+#     Send a notification to all subscribers when an artist uploads new content.
+#     """
+#     artist = instance.artist
+#     subscribers = ArtistSubscription.objects.filter(artist=artist)
 
-    for subscription in subscribers:
-        message = f"{artist.username} uploaded new content: {instance.title}"
-        Notification.objects.create(user=subscription.fan, message=message)
+#     for subscription in subscribers:
+#         message = f"{artist.username} uploaded new content: {instance.title}"
+#         Notification.objects.create(user=subscription.fan, message=message)
 
 
 

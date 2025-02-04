@@ -1,11 +1,24 @@
 from django.contrib import admin
 from .models import Content, Vote, Comment, LivePerformance, ArtistUploadLimit
 
-@admin.register(Content)
+from django.contrib import admin
+from .models import Content
+
 class ContentAdmin(admin.ModelAdmin):
-    list_display = ['title', 'artist', 'is_approved', 'upload_date']
-    list_filter = ['is_approved', 'upload_date']
-    search_fields = ['title', 'artist__username']
+    list_display = ('title', 'artist', 'is_approved', 'upload_date')
+    list_filter = ('is_approved', 'upload_date')
+    search_fields = ('title', 'artist__username')
+    actions = ['approve_content', 'disapprove_content']
+
+    def approve_content(self, request, queryset):
+        queryset.update(is_approved=True)
+    approve_content.short_description = "Approve selected content"
+
+    def disapprove_content(self, request, queryset):
+        queryset.update(is_approved=False)
+    disapprove_content.short_description = "Disapprove selected content"
+
+admin.site.register(Content, ContentAdmin)
 
 @admin.register(Vote)
 class VoteAdmin(admin.ModelAdmin):

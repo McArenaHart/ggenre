@@ -21,7 +21,7 @@ from django.conf.urls.static import static
 from content.views import home  # Import the home view
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('support/', admin.site.urls),
     path('', home, name='home'),  # Home page at the root URL
     path('users/', include('users.urls')),
     path('content/', include('content.urls')),

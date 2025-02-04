@@ -142,6 +142,8 @@ class LivePerformance(models.Model):
         return self.title
     
 
+from django.conf import settings
+from django.db import models
 
 class ArtistUploadLimit(models.Model): 
     artist = models.OneToOneField(
@@ -150,32 +152,43 @@ class ArtistUploadLimit(models.Model):
         related_name='content_upload_limit'  # Unique related name
     )
     uploads_used = models.PositiveIntegerField(default=0)
-    upload_limit = models.PositiveIntegerField(default=10)
+    upload_limit = models.PositiveIntegerField(default=20)
     reset_on_payment = models.BooleanField(default=False)
     suspended_by_admin = models.BooleanField(default=False)
 
     def has_upload_quota(self):
-        """Check if the user has upload quota, considering admin suspension."""
+        """
+        Check if the user has upload quota, considering admin suspension.
+        Artists who are suspended by an admin cannot upload.
+        """
         if self.suspended_by_admin:
             return False  # Suspended artists cannot upload
         return self.upload_limit > self.uploads_used  # Check remaining quota
 
     def reset_limit(self):
-        """Reset the upload limit manually."""
+        """
+        Reset the upload limit manually to 0 and reset the payment flag.
+        This can be used to reset the artist's upload limit when necessary (e.g., after payment).
+        """
         self.uploads_used = 0
-        self.reset_on_payment = False
+        self.reset_on_payment = False  # Optionally reset this field as well
         self.save()
 
     def __str__(self):
+        """
+        Return a human-readable representation of the upload limit for an artist.
+        Includes the artist's username and the number of uploads they've used.
+        """
         return f"{self.artist.username} - {self.uploads_used} uploads used"
 
-    
-class ArtistSubscription(models.Model):
-    fan = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='artist_subscriptions')  # Updated related_name
-    artist = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='subscribed_artists')  # Updated related_name
-    subscribed_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f"{self.fan.username} subscribed to {self.artist.username}"
+    
+# class ArtistSubscription(models.Model):
+#     fan = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='artist_subscriptions')  # Updated related_name
+#     artist = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='subscribed_artists')  # Updated related_name
+#     subscribed_at = models.DateTimeField(auto_now_add=True)
+
+#     def __str__(self):
+#         return f"{self.fan.username} subscribed to {self.artist.username}"
 
 

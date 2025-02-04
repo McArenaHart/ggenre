@@ -117,22 +117,19 @@ def add_comment(request, content_id):
 
 @login_required
 def reset_artist_upload_limit(request, artist_id):
-    if not hasattr(request.user, 'is_admin') or not request.user.is_admin:
+    if not request.user.is_admin:  # Ensure only admins can reset
         messages.error(request, "You don't have permission to reset upload limits.")
         return redirect('dashboard')
 
-    # Reset artist upload limit (Assuming 'UserSubscription' has upload_limit)
-    from subscriptions.models import UserSubscription
-    subscription = get_object_or_404(UserSubscription, user_id=artist_id)
+    upload_limit = get_object_or_404(ArtistUploadLimit, artist_id=artist_id)
     
-    # Assuming the model has 'upload_limit' and 'free_uploads_used'
-    subscription.upload_limit = 5  # Reset to the default limit, change as required
-    subscription.free_uploads_used = 0  # Reset free uploads
-    subscription.save()
+    # ✅ Reset upload count and limit
+    upload_limit.uploads_used = 0  
+    upload_limit.save()
 
-    send_upload_reset_notification(subscription.user)
+    send_upload_reset_notification(upload_limit.artist)
 
-    messages.success(request, f"{subscription.user.username}'s upload limit has been reset.")
+    messages.success(request, f"{upload_limit.artist.username}'s upload limit has been reset.")
     return redirect('dashboard')
 
 
@@ -352,33 +349,26 @@ def delete_content(request, pk):
 
 @login_required
 def toggle_content_approval(request, content_id, action):
-    """
-    View to approve or disapprove content. Only accessible by admins for now.
-    """
-    if not request.user.is_admin():  # Ensure only admins can manage approval
+    if not request.user.is_admin():
         messages.error(request, "You do not have permission to manage content approval.")
         return redirect('dashboard')
 
     content = get_object_or_404(Content, id=content_id)
 
     if action == "approve":
-        if content.is_approved:
-            messages.info(request, f'Content "{content.title}" is already approved.')
-        else:
+        if not content.is_approved:
             content.is_approved = True
             content.save()
             messages.success(request, f'Content "{content.title}" has been approved.')
     elif action == "disapprove":
-        if not content.is_approved:
-            messages.info(request, f'Content "{content.title}" is already disapproved.')
-        else:
+        if content.is_approved:
             content.is_approved = False
             content.save()
             messages.success(request, f'Content "{content.title}" has been disapproved.')
     else:
         messages.error(request, "Invalid action.")
     
-    return redirect('dashboard')  # Redirect back to the admin dashboard
+    return redirect('dashboard')
 
 
 
@@ -391,14 +381,14 @@ def recommend_content(request):
         return JsonResponse([])
 
     user_tags = request.user.tags.values_list('name', flat=True)
-    following_artists = request.user.subscriptions.values_list('artist_id', flat=True)
 
     recommendations = (
-        Content.objects.filter(is_approved=True)
-        .filter(Q(tags__name__in=user_tags) | Q(artist_id__in=following_artists))
-        .annotate(vote_count=Count('votes'))
-        .order_by('-vote_count')[:10]
+    Content.objects.filter(is_approved=True)
+    .filter(Q(tags__name__in=user_tags))
+    .annotate(vote_count=Count('votes'))
+    .order_by('-vote_count')[:10]
     )
+
 
     return render(request, 'content/recommendations.html', {'contents': recommendations})
 
