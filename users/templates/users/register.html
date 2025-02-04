@@ -16,21 +16,33 @@
             <div class="form-group">
               <label for="username">Username</label>
               <input type="text" class="form-control" id="username" name="username" placeholder="Enter your username">
+              {% for error in form.username.errors %}
+                    <div class="invalid-feedback">{{ error }}</div>
+                {% endfor %}
             </div>
 
             <div class="form-group">
               <label for="email">Email</label>
               <input type="email" class="form-control" id="email" name="email" placeholder="Enter your email">
+              {% for error in form.email.errors %}
+                    <div class="invalid-feedback">{{ error }}</div>
+                {% endfor %}
             </div>
 
             <div class="form-group">
               <label for="password1">Password</label>
               <input type="password" class="form-control" id="password1" name="password1" placeholder="Enter your password">
+              {% for error in form.password1.errors %}
+                    <div class="invalid-feedback">{{ error }}</div>
+                {% endfor %}
             </div>
 
             <div class="form-group">
               <label for="password2">Confirm Password</label>
               <input type="password" class="form-control" id="password2" name="password2" placeholder="Confirm your password">
+              {% for error in form.password2.errors %}
+                    <div class="invalid-feedback">{{ error }}</div>
+                {% endfor %}
             </div>
 
             <div class="form-group">
@@ -42,6 +54,9 @@
                     <label class="form-check-label" for="role_{{ forloop.counter }}">
                       {{ choice.1 }}
                     </label>
+                    {% for error in form.role.errors %}
+                    <div class="invalid-feedback">{{ error }}</div>
+                {% endfor %}
                   </div>
                 {% endfor %}
               </div>

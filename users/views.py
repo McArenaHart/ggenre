@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import login, authenticate, logout
+from django.contrib.auth import login, authenticate, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.contrib import messages
@@ -30,16 +30,19 @@ def role_based_redirect(user):
     return redirect('dashboard')
 
 
-# User Registration View
+
+CustomUser = get_user_model()  # Ensure correct user model
+
 def register(request):
     if request.method == 'POST':
         form = UserRegistrationForm(request.POST)
         if form.is_valid():
-            user = form.save()
+            user = form.save()  # No need for `commit=False`, as UserCreationForm hashes password
             login(request, user)
-            return role_based_redirect(user)  # Redirect to role-specific dashboard
+            return role_based_redirect(user)  # Ensure this function works
     else:
         form = UserRegistrationForm()
+    
     return render(request, 'users/register.html', {'form': form})
 
 
