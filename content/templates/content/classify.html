@@ -1,0 +1,19 @@
+{% extends "includes/base.html" %}
+{% block content %}
+
+<section class="container mt-5">
+    <h2>Classify Content</h2>
+    <p>Assign a category to the content: <strong>{{ content.title }}</strong></p>
+
+    <form method="POST">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="id_category">Category</label>
+            {{ form.category }}
+        </div>
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a href="{% url 'content_list' %}" class="btn btn-secondary">Cancel</a>
+    </form>
+</section>
+
+{% endblock %}

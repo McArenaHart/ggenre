@@ -1556,3 +1556,32 @@
     justify-content: center;
     height: 100%;
   }
+
+
+
+  .announcement-popup {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 15px;
+    border: 1px solid #ccc;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+    z-index: 9999;
+    max-width: 300px;
+    border-radius: 8px;
+}
+
+.announcement-content {
+    text-align: left;
+}
+
+.announcement-popup button {
+    margin-top: 10px;
+    background: red;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 5px;
+}

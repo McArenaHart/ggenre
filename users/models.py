@@ -4,6 +4,10 @@ from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils.timezone import now
+from datetime import timedelta
+from django.core.exceptions import ValidationError
+
+
 
 class Notification(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
@@ -25,11 +29,24 @@ class Role:
 class CustomUser(AbstractUser):
     # Role definition: Each user can have one of the roles - Admin, Artist, or Fan
     role = models.CharField(max_length=10, choices=Role.CHOICES, default=Role.FAN)
+    phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
 
     # Additional profile information
     profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
     bio = models.TextField(null=True, blank=True)
     subscription_expiry = models.DateField(null=True, blank=True)
+    wants_to_participate = models.BooleanField(default=False)
+
+    def notify_admin(self):
+        """
+        Notify admin when an artist wants to participate.
+        """
+        if self.is_artist():
+            Notification.objects.create(
+                user=CustomUser.objects.filter(role=Role.ADMIN).first(),
+                message=f"Artist {self.username} wants to participate."
+            )
+
 
     # Check if the user has a specific role
     def has_role(self, role):
@@ -66,6 +83,50 @@ class Follow(models.Model):
 
     def __str__(self):
         return f"{self.follower.username} follows {self.following.username}"
+    
 
 
+class OTP(models.Model):
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
+    otp_code = models.CharField(max_length=6)
+    remaining_votes = models.IntegerField(default=0)  # ✅ Allow multiple uses
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+    def use_vote(self):
+        """
+        Deduct a vote if available.
+        """
+        if self.remaining_votes > 0:
+            self.remaining_votes -= 1
+            self.save()
+            return True
+        return False
+
+    def is_expired(self):
+        return now() > self.created_at + timedelta(minutes=5)  # OTP expires in 5 minutes
+    
+    def clean(self):
+        if self.remaining_votes < 0:
+            raise ValidationError("Remaining votes cannot be negative")
+            
+    def __str__(self):
+        return f"OTP for {self.user.username} ({self.remaining_votes} votes left)"
+
+
+class Announcement(models.Model):
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.title
+
+class DismissedAnnouncement(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    announcement = models.ForeignKey(Announcement, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"{self.user.username} dismissed {self.announcement.title}"
 

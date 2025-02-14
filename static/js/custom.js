@@ -67,46 +67,6 @@
 
 
 
-
-    // Function to toggle voting options
-    function toggleVotingOptions(element) {
-      console.log('Toggle voting options');
-      const votingSection = element.closest('.voting-section');
-      votingSection.classList.toggle('active');
-  }
-  async function submitVote(element, voteUrl) {
-      const voteValue = element.getAttribute('data-value');
-      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-      const voteCountElement = element.closest(".card-body").querySelector(".vote-count");
-  
-      try {
-          const response = await fetch(voteUrl, {
-              method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json',
-                  'X-CSRFToken': csrfToken,
-              },
-              body: JSON.stringify({ vote_value: voteValue }),
-          });
-  
-          const data = await response.json();
-  
-          if (data.status === 'success') {
-              alert('Vote submitted successfully!');
-              
-              // Update the vote count dynamically
-              if (voteCountElement) {
-                  voteCountElement.textContent = data.new_vote_count; // Update vote count dynamically
-              }
-          } else {
-              alert(data.message || 'Failed to submit vote.');
-          }
-      } catch (error) {
-          console.error('Error:', error);
-          alert('An error occurred while submitting the vote.');
-      }
-  }
-  
   
   document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.add-comment-form').forEach((form) => {
@@ -243,3 +203,44 @@
       dots: true
     });
   });
+
+
+
+  function filterContent() {
+    const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
+    const selectedCategory = document.getElementById('categoryFilter').value.toLowerCase().trim();
+    const items = document.querySelectorAll('.content-item');
+    
+    items.forEach(item => {
+        const title = item.getAttribute('data-title') || "";
+        const artist = item.getAttribute('data-artist') || "";
+        const category = item.getAttribute('data-category') || "";
+        const votes = parseInt(item.getAttribute('data-votes')) || 0;
+        
+        const matchesSearch = title.includes(searchQuery) || artist.includes(searchQuery);
+        const matchesCategory = selectedCategory === "" || category === selectedCategory;
+        const matchesVotes = votes >= 5;  // Show only content with 5+ votes
+
+        item.style.display = matchesSearch && matchesCategory && matchesVotes ? "" : "none";
+    });
+}
+
+
+
+function fetchAnnouncements() {
+    fetch('/api/announcements/')
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json(); // Parse JSON
+    })
+    .then(data => {
+        if (data.announcements && data.announcements.length > 0) {
+            showPopup(data.announcements);
+        }
+    })
+    .catch(error => {
+        console.error("Error fetching announcements:", error);
+    });
+}

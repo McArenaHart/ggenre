@@ -1,9 +1,11 @@
 from django.db import models
 from django.conf import settings
 import uuid
-from django.db.models import Avg
+from django.utils.timezone import now
+from django.db.models import Avg, Sum
 from taggit.managers import TaggableManager  # For tagging support
 from PIL import Image
+from datetime import timedelta
 from io import BytesIO
 from django.core.files.base import ContentFile
 
@@ -49,12 +51,24 @@ def save(self, *args, **kwargs):
     super().save(*args, **kwargs)
 
 
+class Genre(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+
 class Content(models.Model):
     """
     Model for artist-uploaded content.
     Tracks metadata, approval status, views, and the associated artist.
     """
+    CATEGORY_CHOICES = [
+        ('music', 'Music'),
+        ('video', 'Video'),
+        ('art', 'Art'),
+        ('fashion', 'Fashion'),
+        ('other', 'Other'),
+    ]
+
     title = models.CharField(max_length=255)
+    genre = models.ForeignKey(Genre, on_delete=models.CASCADE, related_name="contents", null=True, blank=True)
     description = models.TextField(blank=True, null=True)
     file = models.FileField(upload_to='content/')
     thumbnail = models.ImageField(upload_to='thumbnails/', blank=True, null=True)  # New field
@@ -64,6 +78,7 @@ class Content(models.Model):
         on_delete=models.CASCADE, 
         related_name='content'
     )
+    is_approved_for_voting = models.BooleanField(default=False)  # New field for voting approval
     is_approved = models.BooleanField(default=False)  # Approval status for admin
     views = models.PositiveIntegerField(default=0)  # Tracks view count
     tags = TaggableManager()  # Tags for content (e.g., music, dance, drama)
@@ -72,12 +87,8 @@ class Content(models.Model):
         return self.title
 
     def calculate_popularity(self):
-        """
-        Calculates content popularity based on views and votes.
-        Popularity can be customized as a weighted score.
-        """
-        avg_vote = self.votes.aggregate(average=Avg('value'))['average'] or 0
-        return self.views + avg_vote * 10  # Example: 1 vote counts as 10 views
+        total_votes = self.votes.aggregate(total=Sum('value'))['total'] or 0
+        return self.views + total_votes
 
     def get_average_vote(self):
         """
@@ -86,20 +97,58 @@ class Content(models.Model):
         return self.votes.aggregate(average=Avg('value'))['average'] or 0
 
 
-class Vote(models.Model):
-    """
-    Model for fan votes on content.
-    """
-    content = models.ForeignKey(Content, on_delete=models.CASCADE, related_name='votes')
-    fan = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='user_votes')
-    value = models.IntegerField()  # e.g., 1-5 ranking
-    timestamp = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        unique_together = ('content', 'fan')  # Prevent duplicate votes by the same fan
+class ParticipationRequest(models.Model):
+    artist = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    content = models.ForeignKey('Content', on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=[('pending', 'Pending'), ('approved', 'Approved')], default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.fan.username} - {self.value} for {self.content.title}"
+        return f"{self.artist.username} requested to participate with {self.content.title}"
+
+
+
+class Vote(models.Model):
+    content = models.ForeignKey(Content, on_delete=models.CASCADE, related_name='votes')
+    fan = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='user_votes')
+    base_value = models.IntegerField()  # Original vote (1-8)
+    value = models.IntegerField()  # base_value * multiplier
+    timestamp = models.DateTimeField(auto_now_add=True)
+    otp_code = models.CharField(max_length=6)
+    tag = models.CharField(max_length=255, blank=True, null=True)
+    is_badge_vote = models.BooleanField(default=False)  # New field to track badge votes
+
+    class Meta:
+        unique_together = ('content', 'fan')
+
+
+    def __str__(self):
+        return f"{self.fan.username} - {self.base_value} for {self.content.title}"
+
+
+
+
+
+
+class Badge(models.Model):
+    """
+    Represents user badges that increase vote power.
+    """
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="badge")
+    level = models.IntegerField(default=1)  # Badge levels increase vote weight
+
+    def vote_multiplier(self):
+        """
+        Returns a multiplier based on badge level.
+        Example: Level 1 = x10, Level 2 = x20, etc.
+        """
+        return 10 * self.level  # Example: Level 1 = x10, Level 2 = x20
+
+    def __str__(self):
+        return f"Badge for {self.user.username} (Level {self.level}, x{self.vote_multiplier()})"
+
+
 
 
 class Comment(models.Model):
@@ -142,8 +191,6 @@ class LivePerformance(models.Model):
         return self.title
     
 
-from django.conf import settings
-from django.db import models
 
 class ArtistUploadLimit(models.Model): 
     artist = models.OneToOneField(
@@ -166,13 +213,8 @@ class ArtistUploadLimit(models.Model):
         return self.upload_limit > self.uploads_used  # Check remaining quota
 
     def reset_limit(self):
-        """
-        Reset the upload limit manually to 0 and reset the payment flag.
-        This can be used to reset the artist's upload limit when necessary (e.g., after payment).
-        """
         self.uploads_used = 0
-        self.reset_on_payment = False  # Optionally reset this field as well
-        self.save()
+        self.save(update_fields=['uploads_used'])
 
     def __str__(self):
         """
@@ -180,15 +222,5 @@ class ArtistUploadLimit(models.Model):
         Includes the artist's username and the number of uploads they've used.
         """
         return f"{self.artist.username} - {self.uploads_used} uploads used"
-
-
-    
-# class ArtistSubscription(models.Model):
-#     fan = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='artist_subscriptions')  # Updated related_name
-#     artist = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='subscribed_artists')  # Updated related_name
-#     subscribed_at = models.DateTimeField(auto_now_add=True)
-
-#     def __str__(self):
-#         return f"{self.fan.username} subscribed to {self.artist.username}"
 
 

@@ -1,11 +1,11 @@
 # users/admin.py
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser
+from .models import CustomUser, Announcement
 
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
-    list_display = ('username', 'email', 'role', 'is_active', 'is_staff', 'subscription_expiry')
+    list_display = ('username', 'email', 'phone_number', 'role', 'is_active', 'is_staff', 'subscription_expiry')
     search_fields = ('username', 'email', 'role')
     ordering = ('-date_joined',)
     
@@ -25,3 +25,8 @@ class CustomUserAdmin(UserAdmin):
     
 # Register your custom user model in the admin
 admin.site.register(CustomUser, CustomUserAdmin)
+
+
+@admin.register(Announcement)
+class AnnouncementAdmin(admin.ModelAdmin):
+    list_display = ('title', 'created_by', 'created_at')

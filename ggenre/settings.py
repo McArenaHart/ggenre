@@ -25,12 +25,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-+p2ameub_oesk6t4ok9&*e&4tbq&ts@=q02%@x(m4t0cw@-8z@'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 
 
 
-ALLOWED_HOSTS = ['147.93.95.1', '127.0.0.1']
+ALLOWED_HOSTS = ['ggenre.com', 'www.ggenre.com', '147.93.95.1']
 
 
 # Application definition
@@ -128,8 +128,15 @@ LOGIN_URL = '/users/login/'  # Example for custom login
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # Logout user when the browser is closed
 SESSION_COOKIE_AGE = 3600  # Session expires after 1 hour (in seconds)
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-    
+
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'mightycareen@gmail.com'
+EMAIL_HOST_PASSWORD = 'dhba ynnf itpb fqjg'  # Use an App Password, NOT your real Gmail password
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/

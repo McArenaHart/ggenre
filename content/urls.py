@@ -16,5 +16,6 @@ urlpatterns = [
     path('live/<str:room_name>/', views.live_stream_room, name="live_stream_room"),
     path('upload/reset/<int:artist_id>/', views.reset_artist_upload_limit, name='reset_upload_limit'),
     path('comment/add/<int:content_id>/', views.add_comment, name='add_comment'),
+    path('classify/<int:content_id>/', views.classify_content, name='classify_content'),
  
 ]

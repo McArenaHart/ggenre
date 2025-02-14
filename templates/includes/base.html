@@ -1,255 +1,370 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
-
-
-<style>
-
-
-
-    
-
-   /* Ensure Sidebar Doesn't Overlap Content */
-#wrapper {
-    display: flex;
-}
-
-/* Sidebar */
-.sidebar {
-    width: 250px;
-    position: fixed;
-    top: 0;
-    left: 0;
-    height: 100vh;
-    z-index: 1000;
-    background: #343a40;
-}
-
-/* Adjust Main Content */
-.content-wrapper {
-    margin-left: 250px; /* Matches sidebar width */
-    width: calc(100% - 250px);
-    padding: 20px;
-    transition: 0.3s;
-}
-
-/* Hide sidebar on mobile and make content full width */
-@media (max-width: 768px) {
-    .sidebar {
-        display: none !important;
+  <style>
+    /* Ensure Sidebar Doesn't Overlap Content */
+    #wrapper {
+      display: flex;
     }
 
+    /* Sidebar */
+    .sidebar {
+      width: 250px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      z-index: 1000;
+      background: #343a40;
+    }
+
+    /* Adjust Main Content */
     .content-wrapper {
+      margin-left: 250px; /* Matches sidebar width */
+      width: calc(100% - 250px);
+      padding: 20px;
+      transition: 0.3s;
+    }
+
+    /* Hide sidebar on mobile and make content full width */
+    @media (max-width: 768px) {
+      .sidebar {
+        display: none !important;
+      }
+
+      .content-wrapper {
         margin-left: 0 !important; /* Remove sidebar margin */
         width: 100% !important; /* Ensure full width */
-    }
+      }
 
-    /* Mobile Sidebar Wrapper */
-    #mobile-wrapper {
+      /* Mobile Sidebar Wrapper */
+      #mobile-wrapper {
         display: block; /* Show only in mobile */
         padding: 10px 0;
-    }
+      }
 
-    .navbar-nav {
+      .navbar-nav {
         width: 100%;
-    }
+      }
 
-    .navbar-nav .nav-item {
+      .navbar-nav .nav-item {
         border-bottom: 1px solid #ddd;
         padding: 10px 15px;
-    }
+      }
 
-    .navbar-nav .nav-link {
+      .navbar-nav .nav-link {
         font-size: 16px;
         font-weight: 500;
         color: #333;
         text-align: center;
-    }
+      }
 
-    .navbar-nav .nav-link i {
+      .navbar-nav .nav-link i {
         margin-right: 8px;
+      }
     }
-}
- 
-</style>
 
-   
-<head>
-      <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="description" content="Askbootstrap">
-    <meta name="author" content="Askbootstrap">
+
+    .badge {
+        font-size: 14px;
+        font-weight: bold;
+        border-radius: 5px;
+    }
+    
+    .badge-warning {
+        background: linear-gradient(45deg, #ffa500, #ffcc00);
+        color: black;
+    }
+    
+  </style>
+
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no"
+    />
+    <meta name="description" content="Askbootstrap" />
+    <meta name="author" content="Askbootstrap" />
     <title>{% block title %}GGENRE |{% endblock %}</title>
-    <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}">
-    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
-    <link href="{% static 'vendor/fontawesome-free/css/all.min.css' %}" rel="stylesheet">
-    <link href="{% static 'css/styles.css' %}" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.carousel.css' %}">
-    <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.theme.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}" />
+    <link
+      href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}"
+      rel="stylesheet"
+    />
+    <link
+      href="{% static 'vendor/fontawesome-free/css/all.min.css' %}"
+      rel="stylesheet"
+    />
+    <link href="{% static 'css/styles.css' %}" rel="stylesheet" />
+    <link
+      rel="stylesheet"
+      href="{% static 'vendor/owl-carousel/owl.carousel.css' %}"
+    />
+    <link
+      rel="stylesheet"
+      href="{% static 'vendor/owl-carousel/owl.theme.css' %}"
+    />
     {% block extra_css %}{% endblock %}
-   </head>
-   <body id="page-top">
+  </head>
+  <body id="page-top">
     {% if user.is_authenticated %}
-    <nav class="navbar navbar-expand-lg navbar-light bg-white static-top osahan-nav sticky-top">
-        &nbsp;&nbsp;
-    
-        <a class="navbar-brand mr-1" href="{% url 'content_list' %}" style="font-family: 'Pacifico', cursive; font-size: 0.8rem; font-weight: 400; color: #333; position: relative;">
-            <span style="background: linear-gradient(90deg,rgba(150, 138, 8, 0.64), #ffa500); -webkit-background-clip: text; color: transparent;">Genre</span>
-            <span style="color: #333; font-weight: 700; margin-left: 5px;">Genius</span>
-            <span style="position: absolute; bottom: -5px; left: 0; width: 100%; height: 3px; background: linear-gradient(90deg, #ffcc00, #ffa500);"></span>
-        </a>
-    
-        <!-- Navbar Toggler (Mobile) -->
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav"
-            aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    
-        <!-- Navbar Collapse Wrapper -->
-        <div class="collapse navbar-collapse" id="navbarNav">
-    
-            <!-- Mobile Sidebar (Only for Mobile View) -->
-            <div id="mobile-wrapper" class="d-lg-none">
-                <ul class="navbar-nav pt-5">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'content_list' %}">
-                            <i class="fas fa-fw fa-home"></i>
-                            <span>Home</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'artist_list' %}">
-                            <i class="fas fa-fw fa-users"></i>
-                            <span>Artists</span>
-                        </a>
-                    </li>
-    
-                    {% if user.is_authenticated and user.role == 'artist' %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'upload_content' %}">
-                            <i class="fas fa-fw fa-cloud-upload-alt"></i>
-                            <span>Upload Content</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'start_live_stream' %}">
-                            <i class="fas fa-fw fa-video"></i>
-                            <span>Start Live</span>
-                        </a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </div>
-    
-            <!-- User Profile Dropdown -->
-            <ul class="navbar-nav ml-auto osahan-right-navbar">
-                <li class="nav-item dropdown no-arrow osahan-right-navbar-user">
-                    <a class="nav-link dropdown-toggle user-dropdown-link" href="#" id="userDropdown" role="button"
-                        data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                        <img alt="Avatar"
-                            src="{% if user.profile_picture %}{{ user.profile_picture.url }}{% else %}{% static 'img/default-profile.png' %}{% endif %}"
-                            class="rounded-circle" width="30" height="30" />
-                        {{ user.username }}
-                    </a>
-                    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="userDropdown">
-                        <a class="dropdown-item" href="{% url 'user_profile' user.id %}">
-                            <i class="fas fa-fw fa-user-circle"></i> &nbsp; My Account
-                        </a>
-                        <div class="dropdown-divider"></div>
-                        <a class="dropdown-item" href="{% url 'logout' %}">
-                            <i class="fas fa-fw fa-sign-out-alt"></i> &nbsp; Logout
-                        </a>
-                    </div>
-                </li>
-            </ul>
-        </div>
-    </nav>
-    
-    
-      <div id="wrapper">
-        <!-- Sidebar (Desktop Only) -->
-        <ul class="sidebar navbar-nav pt-5 d-none d-lg-block">
+    <nav
+      class="navbar navbar-expand-lg navbar-light bg-white static-top osahan-nav sticky-top"
+    >
+      &nbsp;&nbsp;
+
+      <a
+        class="navbar-brand mr-1"
+        href="{% url 'content_list' %}"
+        style="
+          font-family: 'Pacifico', cursive;
+          font-size: 0.8rem;
+          font-weight: 400;
+          color: #333;
+          position: relative;
+        "
+      >
+        <span
+          style="
+            background: linear-gradient(
+              90deg,
+              rgba(150, 138, 8, 0.64),
+              #ffa500
+            );
+            -webkit-background-clip: text;
+            color: transparent;
+          "
+          >Genre</span
+        >
+        <span style="color: #333; font-weight: 700; margin-left: 5px"
+          >Genius</span
+        >
+        <span
+          style="
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, #ffcc00, #ffa500);
+          "
+        ></span>
+      </a>
+
+      <!-- Navbar Toggler (Mobile) -->
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-toggle="collapse"
+        data-target="#navbarNav"
+        aria-controls="navbarNav"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <!-- Navbar Collapse Wrapper -->
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <!-- Mobile Sidebar (Only for Mobile View) -->
+<!-- Search Form (Centered) -->
+<form class="form-inline my-2 my-lg-0 mx-auto" method="GET" action="{% url 'search_results' %}">
+  <input class="form-control mr-sm-2 w-90 w-md-75 w-lg-100" type="search" name="q" placeholder="Search..." aria-label="Search" required>
+  <button class="btn btn-outline-success my-2 my-sm-0" type="submit">
+      <i class="fas fa-search"></i>
+  </button>
+</form>
+
+        <div id="mobile-wrapper" class="d-lg-none">
+          <ul class="navbar-nav pt-5">
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'content_list' %}">
-                    <i class="fas fa-fw fa-home"></i>
-                    <span>Home</span>
-                </a>
+              <a class="nav-link" href="{% url 'content_list' %}">
+                <i class="fas fa-fw fa-home"></i>
+                <span>Home</span>
+              </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'artist_list' %}">
-                    <i class="fas fa-fw fa-users"></i>
-                    <span>Artists</span>
-                </a>
+              <a class="nav-link" href="{% url 'artist_list' %}">
+                <i class="fas fa-fw fa-users"></i>
+                <span>Artists</span>
+              </a>
             </li>
 
             {% if user.is_authenticated and user.role == 'artist' %}
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'upload_content' %}">
-                    <i class="fas fa-fw fa-cloud-upload-alt"></i>
-                    <span>Upload Content</span>
-                </a>
+              <a class="nav-link" href="{% url 'upload_content' %}">
+                <i class="fas fa-fw fa-cloud-upload-alt"></i>
+                <span>Upload Content</span>
+              </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'start_live_stream' %}">
-                    <i class="fas fa-fw fa-video"></i>
-                    <span>Start Live</span>
-                </a>
+              <a class="nav-link" href="{% url 'start_live_stream' %}">
+                <i class="fas fa-fw fa-video"></i>
+                <span>Start Live</span>
+              </a>
             </li>
             {% endif %}
-        </ul>
+          </ul>
+        </div>
 
+        <!-- User Profile Dropdown -->
+        <ul class="navbar-nav ml-auto osahan-right-navbar">
+          <li class="nav-item dropdown no-arrow osahan-right-navbar-user">
+            <a
+              class="nav-link dropdown-toggle user-dropdown-link"
+              href="#"
+              id="userDropdown"
+              role="button"
+              data-toggle="dropdown"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              <img
+                alt="Avatar"
+                src="{% if user.profile_picture %}{{ user.profile_picture.url }}{% else %}{% static 'img/default-profile.png' %}{% endif %}"
+                class="rounded-circle"
+                width="30"
+                height="30"
+              />
+              {{ user.username }}
+            </a>
+            <div
+              class="dropdown-menu dropdown-menu-right"
+              aria-labelledby="userDropdown"
+            >
+              <a class="dropdown-item" href="{% url 'user_profile' user.id %}">
+                <i class="fas fa-fw fa-user-circle"></i> &nbsp; My Account
+              </a>
+              <!-- Badge Display -->
+              {% if user.badge %}
+              <div class="dropdown-item text-center">
+                <span class="badge badge-warning p-2">
+                  <i class="fas fa-award"></i> Level {{ user.badge.level }} |
+                  x{{ user.badge.multiplier }} Votes
+                </span>
+              </div>
+              {% else %}
+              <div class="dropdown-item text-center">
+                <span class="badge badge-secondary p-2">No Badge Earned</span>
+              </div>
+              {% endif %}
+              <div class="dropdown-divider"></div>
+              <a class="dropdown-item" href="{% url 'logout' %}">
+                <i class="fas fa-fw fa-sign-out-alt"></i> &nbsp; Logout
+              </a>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </nav>
+
+    <div id="wrapper">
+      <!-- Sidebar (Desktop Only) -->
+      <ul class="sidebar navbar-nav pt-5 d-none d-lg-block">
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'content_list' %}">
+            <i class="fas fa-fw fa-home"></i>
+            <span>Home</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'artist_list' %}">
+            <i class="fas fa-fw fa-users"></i>
+            <span>Artists</span>
+          </a>
+        </li>
+
+        {% if user.is_authenticated and user.role == 'artist' %}
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'upload_content' %}">
+            <i class="fas fa-fw fa-cloud-upload-alt"></i>
+            <span>Upload Content</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'start_live_stream' %}">
+            <i class="fas fa-fw fa-video"></i>
+            <span>Start Live</span>
+          </a>
+        </li>
         {% endif %}
-         <!-- /.content-wrapper -->
-         <div class="content-wrapper">
-            {% block content %}{% endblock %}
+      </ul>
+
+      {% endif %}
+      <!-- /.content-wrapper -->
+      <div class="content-wrapper">{% block content %}{% endblock %}</div>
+    </div>
+    <!-- /#wrapper -->
+    <!-- Scroll to Top Button-->
+    <a class="scroll-to-top rounded" href="#page-top">
+      <i class="fas fa-angle-up"></i>
+    </a>
+    <!-- Logout Modal-->
+    <div
+      class="modal fade"
+      id="logoutModal"
+      tabindex="-1"
+      role="dialog"
+      aria-labelledby="exampleModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="exampleModalLabel">Ready to Leave?</h5>
+            <button
+              class="close"
+              type="button"
+              data-dismiss="modal"
+              aria-label="Close"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            Select "Logout" below if you are ready to end your current session.
+          </div>
+          <div class="modal-footer">
+            <button
+              class="btn btn-secondary"
+              type="button"
+              data-dismiss="modal"
+            >
+              Cancel
+            </button>
+            <a class="btn btn-primary" href="login.html">Logout</a>
+          </div>
         </div>
       </div>
-      <!-- /#wrapper -->
-      <!-- Scroll to Top Button-->
-      <a class="scroll-to-top rounded" href="#page-top">
-      <i class="fas fa-angle-up"></i>
-      </a>
-      <!-- Logout Modal-->
-      <div class="modal fade" id="logoutModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
-         <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
-            <div class="modal-content">
-               <div class="modal-header">
-                  <h5 class="modal-title" id="exampleModalLabel">Ready to Leave?</h5>
-                  <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                  <span aria-hidden="true">×</span>
-                  </button>
-               </div>
-               <div class="modal-body">Select "Logout" below if you are ready to end your current session.</div>
-               <div class="modal-footer">
-                  <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
-                  <a class="btn btn-primary" href="login.html">Logout</a>
-               </div>
-            </div>
-         </div>
-      </div>
+    </div>
     <script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
     <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
     <script src="{% static 'vendor/jquery-easing/jquery.easing.min.js' %}"></script>
     <script src="{% static 'vendor/owl-carousel/owl.carousel.js' %}"></script>
     <script src="{% static 'js/custom.js' %}"></script>
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            let navbarToggler = document.querySelector(".navbar-toggler");
-            let navbarCollapse = document.querySelector(".navbar-collapse");
-    
-            // Close navbar when clicking outside
-            document.addEventListener("click", function (event) {
-                let isClickInsideNavbar = navbarCollapse.contains(event.target) || navbarToggler.contains(event.target);
-                
-                if (!isClickInsideNavbar && navbarCollapse.classList.contains("show")) {
-                    $(".navbar-collapse").collapse("hide"); // Bootstrap's collapse function
-                }
-            });
-        });
-    </script>
-    
-    {% block extra_js %}{% endblock %}
-   </body>
+      document.addEventListener("DOMContentLoaded", function () {
+        let navbarToggler = document.querySelector(".navbar-toggler");
+        let navbarCollapse = document.querySelector(".navbar-collapse");
 
+        // Close navbar when clicking outside
+        document.addEventListener("click", function (event) {
+          let isClickInsideNavbar =
+            navbarCollapse.contains(event.target) ||
+            navbarToggler.contains(event.target);
+
+          if (
+            !isClickInsideNavbar &&
+            navbarCollapse.classList.contains("show")
+          ) {
+            $(".navbar-collapse").collapse("hide"); // Bootstrap's collapse function
+          }
+        });
+      });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+  </body>
 </html>

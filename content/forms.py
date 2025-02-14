@@ -7,7 +7,7 @@ class ContentUploadForm(forms.ModelForm):
     """
     class Meta:
         model = Content
-        fields = ['title', 'description', 'file','thumbnail', 'tags']  # Include all required fields
+        fields = ['title', 'description', 'file','thumbnail', 'tags', 'genre']  # Include all required fields
         widgets = {
             'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter content title'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'placeholder': 'Enter a description', 'rows': 5}),

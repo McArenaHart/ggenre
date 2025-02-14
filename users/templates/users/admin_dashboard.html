@@ -4,6 +4,72 @@
 
 <!-- Main Content -->
 <div class="right_col" role="main">
+  {% comment %} <!-- Announcements Management Section -->
+<div class="row">
+  <div class="col-md-12 col-sm-12 col-xs-12">
+    <div class="x_panel">
+      <div class="x_title">
+        <h2>Announcements</h2>
+        <div class="clearfix"></div>
+      </div>
+      <div class="x_content">
+        <form method="POST">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="create_announcement">
+
+          <!-- Announcement Form -->
+          <div class="form-group">
+            <label for="announcement_title">Title</label>
+            <input type="text" name="title" id="announcement_title" class="form-control" required>
+          </div>
+
+          <div class="form-group">
+            <label for="announcement_message">Message</label>
+            <textarea name="message" id="announcement_message" class="form-control" rows="3" required></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Post Announcement</button>
+        </form>
+
+        <hr>
+
+        <!-- Announcement List -->
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Message</th>
+              <th>Created By</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for announcement in announcements %}
+              <tr>
+                <td>{{ announcement.title }}</td>
+                <td>{{ announcement.message }}</td>
+                <td>{{ announcement.created_by.username }}</td>
+                <td>{{ announcement.created_at|date:"M d, Y H:i" }}</td>
+                <td>
+                  <form method="POST" action="{% url 'delete_announcement' announcement.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                  </form>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5" class="text-center">No announcements available.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div> {% endcomment %}
+
   <!-- Mini Table for Statistics -->
   <div class="row">
     <div class="col-md-12 col-sm-12 col-xs-12">
@@ -35,6 +101,50 @@
       </div>
     </div>
   </div>
+
+
+
+
+ <!-- Voting Statistics Section -->
+ <div class="row">
+  <div class="col-md-12 col-sm-12 col-xs-12">
+    <div class="x_panel">
+      <div class="x_title">
+        <h2><i class="fa fa-bar-chart"></i> Voting Statistics</h2>
+        <div class="clearfix"></div>
+      </div>
+      <div class="x_content">
+        <table class="table table-bordered table-hover">
+          <thead class="thead">
+            <tr>
+              <th><i class="fa fa-trophy"></i> Rank</th>
+              <th><i class="fa fa-music"></i> Content</th>
+              <th><i class="fa fa-star"></i> Total Points</th>
+              <th><i class="fa fa-thumbs-up"></i> Total Votes</th>
+              <th><i class="fa fa-certificate"></i> Badge Votes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for content in content_ranking %}
+            <tr>
+              <td><strong>#{{ forloop.counter }}</strong></td>
+              <td>{{ content.title }}</td>
+              <td>{{ content.total_points|default_if_none:"0" }}</td>
+              <td>{{ content.total_votes|default_if_none:"0" }}</td>
+              <td>{{ content.badge_votes|default_if_none:"0" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" class="text-center text-muted">No voting data available.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 
   <!-- Search and Filter Section -->
   <div class="row">
@@ -82,6 +192,14 @@
             </button>
           </div>
 
+          <!-- Category Filter -->
+          <select id="categoryFilter" class="form-control mt-3" onchange="filterContent()">
+            <option value="">All Categories</option>
+            {% for category in all_categories %}
+                <option value="{{ category.0 }}">{{ category.1 }}</option>
+            {% endfor %}
+          </select>
+
           <!-- Content Table -->
           <table class="table table-striped" id="contentTable">
             <thead>
@@ -89,13 +207,14 @@
                 <th>Title</th>
                 <th>Artist</th>
                 <th>Status</th>
+                <th>Category</th>
                 <th>Uploaded On</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {% for content in recent_uploads %}
-                <tr data-status="{% if content.is_approved %}approved{% else %}pending{% endif %}">
+                <tr data-status="{% if content.is_approved %}approved{% else %}pending{% endif %}" data-category="{{ content.category }}">
                   <td>{{ content.title }}</td>
                   <td>{{ content.artist.username }}</td>
                   <td>
@@ -105,25 +224,46 @@
                       <span class="label label-warning">Pending</span>
                     {% endif %}
                   </td>
+                  <td>{{ content.category }}</td>
                   <td>{{ content.upload_date }}</td>
-                  <td>
-                    <a 
-                      href="{% url 'toggle_content_approval' content.id 'approve' %}" 
-                      class="btn btn-sm btn-success"
-                    >
-                      Approve
-                    </a>
-                    <a 
-                      href="{% url 'toggle_content_approval' content.id 'disapprove' %}" 
-                      class="btn btn-sm btn-danger"
-                    >
-                      Disapprove
-                    </a>
-                  </td>
+                  <!-- Updated Actions Dropdown -->
+<td>
+  <div class="btn-group">
+    <button type="button" class="btn btn-sm btn-default dropdown-toggle" data-toggle="dropdown">
+      Actions <span class="caret"></span>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-right custom-dropdown">
+      <li>
+        <a href="{% url 'toggle_content_approval' content.id 'approve' %}" class="approve">
+          <i class="fa fa-check text-success"></i> Approve Content
+        </a>
+      </li>
+      <li>
+        <a href="{% url 'toggle_content_approval' content.id 'disapprove' %}" class="disapprove">
+          <i class="fa fa-times text-danger"></i> Disapprove Content
+        </a>
+      </li>
+      <li class="divider"></li>
+
+      <li>
+        <a href="{% url 'toggle_content_voting' content.id 'approve' %}" class="vote-approve">
+          <i class="fa fa-thumbs-up text-primary"></i> Approve Voting
+        </a>
+      </li>
+      <li>
+        <a href="{% url 'toggle_content_voting' content.id 'disapprove' %}" class="vote-disapprove">
+          <i class="fa fa-thumbs-down text-warning"></i> Disapprove Voting
+        </a>
+      </li>
+    </ul>
+  </div>
+</td>
+
+                  
                 </tr>
               {% empty %}
                 <tr>
-                  <td colspan="5" class="text-center">No content found.</td>
+                  <td colspan="6" class="text-center">No content found.</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -172,85 +312,87 @@
     </div>
   </div>
 
-  <!-- Suspension Controls -->
-  <div class="row">
-    <div class="col-md-12 col-sm-12 col-xs-12">
+  <!-- OTP Generation Form -->
+<div class="row">
+  <div class="col-md-12 col-sm-12 col-xs-12">
       <div class="x_panel">
-        <div class="x_title">
-          <h2>Manage User Limits</h2>
-          <div class="clearfix"></div>
-        </div>
-        <div class="x_content">
-          <table class="table table-striped">
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Role</th>
-                <th>Limit Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for artist in artists %}
-                {% if artist.artist.id %}
-                  <tr>
-                    <td>{{ artist.artist.username }}</td>
-                    <td>Artist</td>
-                    <td>
-                      {% if artist.suspended_by_admin %}
-                        <span class="label label-danger">Suspended</span>
-                      {% else %}
-                        <span class="label label-success">Active</span>
-                      {% endif %}
-                    </td>
-                    <td>
-                      <a 
-                        href="{% url 'subscriptions:toggle_limit_suspension' artist.artist.id 'artist' %}" 
-                        class="btn btn-sm btn-primary"
-                      >
-                        {% if artist.suspended_by_admin %} Reinstate {% else %} Suspend {% endif %}
-                      </a>
-                    </td>
-                  </tr>
-                {% else %}
-                  <tr>
-                    <td colspan="4" class="text-danger">Invalid artist data.</td>
-                  </tr>
-                {% endif %}
-              {% endfor %}
+          <div class="x_title">
+              <h2>Generate OTP for Fan</h2>
+              <div class="clearfix"></div>
+          </div>
+          <div class="x_content">
+              <form method="POST">
+                  {% csrf_token %}
+                  <input type="hidden" name="generate_otp" value="1">
+
+                  <div class="form-group">
+                    <label>Select Fan:</label>
+                    <select name="user_id" class="form-control" required>
+                        {% for fan in fans %}
+                        <option value="{{ fan.id }}">{{ fan.username }}</option>
+                        {% endfor %}
+                    </select>
+                  </div>
+                
+
+                  <div class="form-group">
+                      <label>Number of Votes:</label>
+                      <input type="number" name="remaining_votes" class="form-control" required min="1">
+                  </div>
+
+                  <button type="submit" class="btn btn-primary">Generate OTP</button>
+              </form>
+
+              {% if generated_otp %}
+              <div class="alert alert-success mt-3">
+                  <strong>OTP Generated:</strong> {{ generated_otp }}
+              </div>
+              {% endif %}
+          </div>
+      </div>
+  </div>
+</div>
+<!-- Assign or Remove Badges Section -->
+<div class="row">
+  <div class="col-md-12 col-sm-12 col-xs-12">
+    <div class="x_panel">
+      <div class="x_title">
+        <h2>Manage Fan Badges</h2>
+        <div class="clearfix"></div>
+      </div>
+      <div class="x_content">
+        <form method="POST">
+          {% csrf_token %}
+
+          <div class="form-group">
+            <label>Select Fan:</label>
+            <select name="user_id" class="form-control" required>
               {% for fan in fans %}
-                {% if fan.user.id %}
-                  <tr>
-                    <td>{{ fan.user.username }}</td>
-                    <td>Fan</td>
-                    <td>
-                      {% if fan.suspended_by_admin %}
-                        <span class="label label-danger">Suspended</span>
-                      {% else %}
-                        <span class="label label-success">Active</span>
-                      {% endif %}
-                    </td>
-                    <td>
-                      <a 
-                        href="{% url 'subscriptions:toggle_limit_suspension' fan.user.id 'fan' %}" 
-                        class="btn btn-sm btn-primary"
-                      >
-                        {% if fan.suspended_by_admin %} Reinstate {% else %} Suspend {% endif %}
-                      </a>
-                    </td>
-                  </tr>
-                {% else %}
-                  <tr>
-                    <td colspan="4" class="text-danger">Invalid fan data.</td>
-                  </tr>
-                {% endif %}
+              <option value="{{ fan.id }}">{{ fan.username }}</option>
               {% endfor %}
-            </tbody>
-          </table>
-        </div>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Badge Level:</label>
+            <select name="badge_level" class="form-control">
+              <option value="1">Level 1</option>
+              <option value="2">Level 2</option>
+              <option value="3">Level 3</option>
+            </select>
+          </div>
+
+          <!-- Separate Forms for Assign and Remove -->
+          <button type="submit" name="assign_badge" value="1" class="btn btn-primary">Assign Badge</button>
+          <button type="submit" name="remove_badge" value="1" class="btn btn-danger">Remove Badge</button>
+        </form>
       </div>
     </div>
   </div>
+</div>
+
+
+
 
   <!-- Sidebar Footer -->
   <div class="sidebar-footer hidden-small">
@@ -272,24 +414,26 @@
   <script>
     function filterContent(status = 'all') {
       const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+      const categoryFilter = document.getElementById('categoryFilter').value.toLowerCase();
       const rows = document.querySelectorAll('#contentTable tbody tr');
-
+  
       rows.forEach(row => {
-        const title = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
-        const artist = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
-        const rowStatus = row.getAttribute('data-status');
-
-        // Check if the row matches the search query and filter status
-        const matchesSearch = title.includes(searchQuery) || artist.includes(searchQuery);
-        const matchesStatus = status === 'all' || rowStatus === status;
-
-        if (matchesSearch && matchesStatus) {
-          row.style.display = '';
-        } else {
-          row.style.display = 'none';
-        }
+          const title = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
+          const artist = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+          const rowStatus = row.getAttribute('data-status');
+          const rowCategory = row.getAttribute('data-category').toLowerCase();
+  
+          const matchesSearch = title.includes(searchQuery) || artist.includes(searchQuery);
+          const matchesStatus = status === 'all' || rowStatus === status;
+          const matchesCategory = categoryFilter === '' || rowCategory === categoryFilter;
+  
+          if (matchesSearch && matchesStatus && matchesCategory) {
+              row.style.display = '';
+          } else {
+              row.style.display = 'none';
+          }
       });
-    }
+  }
 
     // Highlight the active filter button
     document.querySelectorAll('.filter-btn').forEach(button => {

@@ -3,20 +3,33 @@ from django.contrib.auth import login, authenticate, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.contrib import messages
-from .forms import UserRegistrationForm, LoginForm, ProfileUpdateForm
+from .forms import UserRegistrationForm, LoginForm, ProfileUpdateForm, AnnouncementForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import UpdateView
-from django.urls import reverse_lazy
-from .models import CustomUser, Role, Follow
-from content.models import Content, Comment
-from subscriptions.models import UserSubscription, ArtistUploadLimit
+from django.urls import reverse_lazy, reverse
+from django.contrib.auth.tokens import default_token_generator
+import random
+from django.http import JsonResponse
+from .models import Announcement, DismissedAnnouncement
+import logging
+from django.db.models import Avg, Sum, Count, When, IntegerField, Case
+from django.core.mail import send_mail, BadHeaderError
+from django.utils.timezone import now
+from datetime import timedelta
+from .models import CustomUser, Role, Follow, OTP
+from content.models import Content, Comment, Badge
+from subscriptions.models import UserSubscription
+from content.models import ArtistUploadLimit
 from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .models import  Notification
 from content.models import Vote
+from django.http import HttpResponseForbidden
 from django.http import JsonResponse
+from content.views import calculate_final_ranking
 
+logger = logging.getLogger(__name__)
 
 
 # Utility function for role-based redirection
@@ -33,18 +46,78 @@ def role_based_redirect(user):
 
 CustomUser = get_user_model()  # Ensure correct user model
 
+# Generate OTP
+def generate_otp():
+    return str(random.randint(100000, 999999))
+
+
+
+def send_otp_email(user, otp):
+    subject = "Your OTP Code"
+    message = f"Hello {user.username},\n\nYour OTP code is: {otp}\n\nUse this code to verify your account. It expires in 5 minutes."
+    
+    try:
+        send_mail(subject, message, settings.EMAIL_HOST_USER, [user.email])
+        logger.info(f"✅ OTP {otp} sent to {user.email}")
+    except BadHeaderError:
+        logger.error("❌ Invalid header found while sending OTP email.")
+    except Exception as e:
+        logger.error(f"❌ Failed to send OTP email: {e}")
+
+
+# Register with OTP Verification (via Email)
 def register(request):
     if request.method == 'POST':
         form = UserRegistrationForm(request.POST)
         if form.is_valid():
-            user = form.save()  # No need for `commit=False`, as UserCreationForm hashes password
-            login(request, user)
-            return role_based_redirect(user)  # Ensure this function works
+            user = form.save(commit=False)
+            user.is_active = False  # User inactive until OTP verification
+            user.save()
+
+            otp_code = generate_otp()
+            OTP.objects.create(user=user, otp_code=otp_code)
+            send_otp_email(user, otp_code)
+
+            messages.info(request, "OTP sent to your email. Verify to activate your account.")
+            return redirect(reverse('verify_otp', args=[user.id]))  # ✅ FIXED
     else:
         form = UserRegistrationForm()
     
     return render(request, 'users/register.html', {'form': form})
 
+# OTP Verification
+def verify_otp(request, user_id):
+    user = get_object_or_404(CustomUser, id=user_id)  # ✅ FIXED
+
+    if request.method == 'POST':
+        entered_otp = request.POST.get('otp')
+        otp_record = OTP.objects.filter(user=user).first()
+
+        if otp_record and otp_record.otp_code == entered_otp and not otp_record.is_expired():  # ✅ FIXED
+            user.is_active = True
+            user.save()
+            otp_record.delete()
+            messages.success(request, "OTP verified! You can now log in.")
+            return redirect('login')
+        else:
+            messages.error(request, "Invalid or expired OTP.")
+
+    return render(request, 'users/verify_otp.html', {'user_id': user.id})
+
+# Resend OTP (via Email)
+def resend_otp(request, user_id):
+    user = get_object_or_404(CustomUser, id=user_id)  # ✅ FIXED
+    otp_record = OTP.objects.filter(user=user).first()
+    
+    if otp_record:
+        otp_record.delete()
+    
+    otp_code = generate_otp()
+    OTP.objects.create(user=user, otp_code=otp_code)
+    send_otp_email(user, otp_code)
+    
+    messages.info(request, "A new OTP has been sent to your email.")
+    return redirect(reverse('verify_otp', args=[user.id]))
 
 # User Login View
 def login_view(request):
@@ -64,30 +137,84 @@ def logout_view(request):
     messages.success(request, "You have been logged out successfully.")
     return redirect('login')
 
-# Admin Dashboard
 @login_required
 def admin_dashboard(request):
     if not request.user.has_role(Role.ADMIN):
         return redirect('dashboard')
 
     # Admin-specific data
+    fans = CustomUser.objects.filter(role='fan')  # Fetch only fans
+    generated_otp = None  # Store OTP to display in template
+
+
+
+    # Fetch announcements for admin review
+    announcements = Announcement.objects.all().order_by('-created_at')
+
+    # Handle Announcement POST request
+    if request.method == "POST" and request.POST.get("action") == "create_announcement":
+        form = AnnouncementForm(request.POST)
+        if form.is_valid():
+            announcement = form.save(commit=False)
+            announcement.created_by = request.user
+            announcement.save()
+            messages.success(request, "Announcement posted successfully!")
+            return redirect('admin_dashboard')
+        else:
+            messages.error(request, "Failed to create announcement.")
+    else:
+        form = AnnouncementForm()
+
+    # Initialize content_ranking with an empty queryset
+    content_ranking = Content.objects.none()
+
+    # Calculate voting statistics for display, even if no form is submitted
+    try:
+        content_ranking = Content.objects.annotate(
+            total_points=Sum('votes__value'),
+            total_votes=Count('votes'),
+            badge_votes=Count(
+                Case(
+                    When(votes__is_badge_vote=True, then=1),
+                    output_field=IntegerField()
+                )
+            )
+        ).order_by('-total_points')
+    except Exception as e:
+        logger.error(f"Error calculating voting statistics: {str(e)}")
+        messages.error(request, "An error occurred while calculating voting statistics.")
+
+    # Fetch artists and recent uploads
     artists = ArtistUploadLimit.objects.select_related('artist').all()
-    fans = UserSubscription.objects.select_related('user').all()
-    content_query = Content.objects.all()
+    recent_uploads = Content.objects.all()
+
+    # Apply filters for recent_uploads
     query = request.GET.get('q', '')
     filter_status = request.GET.get('status', 'all')
+    category_filter = request.GET.get('category', '')
 
     if query:
-        content_query = content_query.filter(Q(title__icontains=query) | Q(artist__username__icontains=query))
+        recent_uploads = recent_uploads.filter(Q(title__icontains=query) | Q(artist__username__icontains=query))
     if filter_status == 'approved':
-        content_query = content_query.filter(is_approved=True)
+        recent_uploads = recent_uploads.filter(is_approved=True)
     elif filter_status == 'pending':
-        content_query = content_query.filter(is_approved=False)
+        recent_uploads = recent_uploads.filter(is_approved=False)
+    if category_filter:
+        recent_uploads = recent_uploads.filter(category=category_filter)
 
+    # Handle POST requests
     if request.method == "POST":
         action = request.POST.get('action')
         content_ids = request.POST.getlist('content_ids')
         artist_ids = request.POST.getlist('artist_ids')
+        category = request.POST.get('category')
+
+        if action == 'approve_for_voting' and content_ids:
+            Content.objects.filter(id__in=content_ids).update(is_approved_for_voting=True)
+            messages.success(request, f"Approved {len(content_ids)} content items for voting.")
+        elif action == 'disapprove_for_voting' and content_ids:
+            Content.objects.filter(id__in=content_ids).update(is_approved_for_voting=False)
+            messages.success(request, f"Disapproved {len(content_ids)} content items for voting.")
 
         if action == 'approve' and content_ids:
             Content.objects.filter(id__in=content_ids).update(is_approved=True)
@@ -98,24 +225,70 @@ def admin_dashboard(request):
         elif action == 'reset_limit' and artist_ids:
             artist_limits = ArtistUploadLimit.objects.filter(artist_id__in=artist_ids)
             for limit in artist_limits:
-                limit.reset_limit()  # Calling the reset_limit method
+                limit.reset_limit()  # This will now work
             messages.success(request, f"Reset upload limits for {len(artist_limits)} artist(s).")
+        elif action == 'assign_category' and content_ids and category:
+            Content.objects.filter(id__in=content_ids).update(category=category)
+            messages.success(request, f"Assigned category '{category}' to {len(content_ids)} content items.")
 
+    # Handle OTP generation
+    if request.method == "POST" and 'generate_otp' in request.POST:
+        user_id = request.POST.get('user_id')
+        remaining_votes = int(request.POST.get('remaining_votes', 0))
+        user = get_object_or_404(CustomUser, id=user_id, role='fan')  # Ensure only fans can get OTPs
+        # Generate a new OTP
+        otp_code = generate_otp()
+        # Update or create OTP for the fan
+        otp, created = OTP.objects.update_or_create(
+            user=user,
+            defaults={'otp_code': otp_code, 'remaining_votes': remaining_votes}
+        )
+        messages.success(request, f"OTP generated for {user.username}: {otp.otp_code}")
+        generated_otp = otp.otp_code
+
+    # Handle Badge Assignment and Removal
+    if request.method == "POST" and ("assign_badge" in request.POST or "remove_badge" in request.POST):
+        user_id = request.POST.get('user_id')
+
+        if not user_id:
+            messages.error(request, "No user selected.")
+            return redirect('admin_dashboard')
+
+        fan = get_object_or_404(CustomUser, id=user_id)
+
+        if "assign_badge" in request.POST:
+            badge_level = int(request.POST.get('badge_level', 1))
+            badge, created = Badge.objects.get_or_create(user=fan)
+            badge.level = badge_level
+            badge.save()
+            messages.success(request, f"Badge level {badge_level} assigned to {fan.username}.")
+
+        elif "remove_badge" in request.POST:
+            deleted, _ = Badge.objects.filter(user=fan).delete()
+            if deleted:
+                messages.success(request, f"Badge removed from {fan.username}.")
+            else:
+                messages.warning(request, f"{fan.username} does not have a badge to remove.")   
+
+    # Prepare context
     context = {
         'artists': artists,
         'fans': fans,
-        'recent_uploads': content_query.order_by('-upload_date')[:10],
+        'generated_otp': generated_otp,
+        'recent_uploads': recent_uploads.order_by('-upload_date')[:10],
         'query': query,
         'filter_status': filter_status,
+        'category_filter': category_filter,
+        'all_categories': Content.CATEGORY_CHOICES,  # Pass category choices to template
         'statistics': {
             'total_users': CustomUser.objects.count(),
             'total_content': Content.objects.count(),
             'approved_content': Content.objects.filter(is_approved=True).count(),
             'pending_content': Content.objects.filter(is_approved=False).count(),
         },
+        'content_ranking': content_ranking,  # Add voting statistics to context
     }
     return render(request, 'users/admin_dashboard.html', context)
-
 
 # Artist Dashboard
 @login_required
@@ -203,6 +376,8 @@ def profile(request):
         upload_limit = user_subscription.upload_limit
         vote_limit = user_subscription.vote_limit
 
+    badge = Badge.objects.filter(user=request.user).first()
+
     if request.method == 'POST':
         form = ProfileUpdateForm(request.POST, request.FILES, instance=request.user)
         if form.is_valid():
@@ -217,6 +392,7 @@ def profile(request):
         'subscription_status': subscription_status,
         'upload_limit': upload_limit,
         'vote_limit': vote_limit,
+        'badge': badge,
     }
     return render(request, 'users/profile.html', context)
 
@@ -246,11 +422,23 @@ def user_profile(request, user_id):
     else:
         form = ProfileUpdateForm(instance=user)
 
+    # Get follower/following counts
+    followers_count = Follow.objects.filter(following=user).count()
+    following_count = Follow.objects.filter(follower=user).count()
+
+    # Get followers and following users
+    followers = user.followers.all().select_related('follower')  # Users following this user
+    following = user.following.all().select_related('following')  # Users this user follows
+
     # Prepare context data
     context = {
         'profile_user': user,
         'is_following': is_following,
         'form': form,
+        'followers_count': followers_count,
+        'following_count': following_count,
+        'followers': followers,
+        'following': following,
     }
 
     # Add artist-specific data if the user is an artist
@@ -268,6 +456,7 @@ def user_profile(request, user_id):
         })
 
     return render(request, 'users/profile.html', context)
+
 
 
 @login_required
@@ -364,3 +553,85 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
         return self.request.user  # Ensure the logged-in user is the one being updated
 
 
+@login_required
+def toggle_content_voting(request, content_id, action):
+    if not request.user.has_role(Role.ADMIN):
+        return HttpResponseForbidden()
+    
+    content = get_object_or_404(Content, id=content_id)
+    content.is_approved_for_voting = (action == 'approve')
+    content.save()
+    return redirect('admin_dashboard')
+
+
+def voting_statistics(request):
+    if not request.user.has_role(Role.ADMIN):
+        return redirect('dashboard')
+
+    content_ranking = Content.objects.annotate(
+        total_points=Sum('votes__value'),
+        total_votes=Count('votes'),
+        badge_votes=Count('votes', filter=Q(votes__is_badge_vote=True))
+    ).order_by('-total_points')
+
+    context = {
+        'content_ranking': content_ranking,
+    }
+    return render(request, 'users/voting_statistics.html', context)
+
+
+
+def search_results(request):
+    query = request.GET.get('q', '').strip()
+    
+    users, content = [], []
+
+    if query:
+        # Search for users (Check if users exist)
+        users = CustomUser.objects.filter(
+            Q(username__icontains=query) | 
+            Q(email__icontains=query)
+        )
+        
+        # Debugging output
+        print("Query:", query)
+        print("Users found:", users)  # Check if users are being retrieved
+        
+        # Search for content
+        content = Content.objects.filter(
+            Q(title__icontains=query) | 
+            Q(description__icontains=query)
+        )
+
+    return render(request, 'users/search_results.html', {
+        'query': query,
+        'users': users,
+        'content': content,
+    })
+
+
+@login_required
+def get_announcements(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "User not authenticated"}, status=401)  # Return JSON instead of redirecting
+
+    dismissed = DismissedAnnouncement.objects.filter(user=request.user).values_list('announcement_id', flat=True)
+    announcements = Announcement.objects.exclude(id__in=dismissed).order_by('-created_at')
+
+    return JsonResponse({"announcements": list(announcements.values("id", "title", "message"))})
+
+@login_required
+def dismiss_announcement(request, announcement_id):
+    announcement = Announcement.objects.get(id=announcement_id)
+    DismissedAnnouncement.objects.get_or_create(user=request.user, announcement=announcement)
+    return JsonResponse({"status": "dismissed"})
+
+@login_required
+def delete_announcement(request, announcement_id):
+    if not request.user.has_role(Role.ADMIN):
+        return redirect('dashboard')
+
+    announcement = get_object_or_404(Announcement, id=announcement_id)
+    announcement.delete()
+    messages.success(request, "Announcement deleted successfully.")
+    return redirect('admin_dashboard')

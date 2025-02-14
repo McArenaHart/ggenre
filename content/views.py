@@ -1,10 +1,14 @@
 # content/views.py
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from .models import Content, Vote, LivePerformance, ArtistUploadLimit, Comment
+from django.contrib.admin.views.decorators import staff_member_required
+from django.forms import modelform_factory
+from .models import Content, Vote, LivePerformance, ArtistUploadLimit, Comment, Badge
+from users.models import  OTP
 from .forms import ContentUploadForm, CommentForm
-from django.db.models import Avg
+from django.db.models import Avg, Sum, Max
 from django.views import View
+from django.contrib.auth.models import User
 from django.utils.timezone import now
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
@@ -25,8 +29,11 @@ from .forms import ContentUploadForm
 from taggit.models import Tag
 from subscriptions.models import UserSubscription
 from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_POST
+from django.middleware.csrf import get_token
 import logging
 import json
+import uuid
 
 # Set up logging configuration
 logger = logging.getLogger(__name__)
@@ -202,7 +209,7 @@ def list_content(request, content_id=None):
 
 
 
-
+@login_required
 def content_detail(request, content_id):
     """
     Display a single content item with detailed information.
@@ -303,34 +310,120 @@ def live_stream_room(request, room_name):
     })
 
 
+import logging
+from django.db.models import Max
 
-@csrf_exempt
+logger = logging.getLogger(__name__)
+
+@require_POST
 def vote_content(request, content_id):
     if not request.user.is_authenticated:
-        return JsonResponse({'status': 'error', 'message': 'You must be logged in to vote.'}, status=403)
+        return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=403)
 
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            vote_value = data.get('vote_value')
+    try:
+        data = json.loads(request.body)
+        vote_value = int(data.get('vote_value'))
+        otp_code = data.get('otp_code', '').strip()
+        voter_tag = data.get('voter_tag', '').strip()
+        content = get_object_or_404(Content, id=content_id)
 
-            if not vote_value or not (1 <= int(vote_value) <= 5):
-                return JsonResponse({'status': 'error', 'message': 'Invalid vote value.'}, status=400)
+        # Validate vote value
+        if vote_value not in range(1, 9):
+            return JsonResponse({'status': 'error', 'message': 'Invalid rank (1-8 only)'}, status=400)
 
-            content = Content.objects.get(id=content_id)
-            Vote.objects.update_or_create(
-                content=content,
+        # Validate OTP
+        otp = OTP.objects.filter(user=request.user, otp_code=otp_code, remaining_votes__gt=0).first()
+        if not otp:
+            logger.warning(f'Invalid OTP attempt by {request.user}')
+            return JsonResponse({'status': 'error', 'message': 'Invalid/expired OTP'}, status=403)
+
+        # Ensure unique ranks per genre
+        content_genre = content.genre
+        if content_genre:
+            logger.info(f'Checking votes for genre: {content_genre.name}')  # Debugging
+
+            # Check if the voter has already used this rank in the same genre
+            existing_vote_with_same_rank = Vote.objects.filter(
                 fan=request.user,
-                defaults={'value': int(vote_value), 'timestamp': now()},
-            )
+                content__genre=content_genre,
+                base_value=vote_value
+            ).exists()
 
-            return JsonResponse({'status': 'success', 'message': 'Vote submitted successfully!'})
-        except Content.DoesNotExist:
-            return JsonResponse({'status': 'error', 'message': 'Content not found.'}, status=404)
-        except Exception as e:
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
-    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=400)
+            logger.info(f'Existing vote with same rank: {existing_vote_with_same_rank}')  # Debugging
 
+            if existing_vote_with_same_rank:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Rank {vote_value} already used in this genre'
+                }, status=409)
+
+            # Check if the voter is assigning a rank higher than their previous highest rank
+            highest_previous_vote = Vote.objects.filter(
+                fan=request.user,
+                content__genre=content_genre
+            ).aggregate(Max('base_value'))['base_value__max'] or 0
+
+            logger.info(f'Highest previous vote: {highest_previous_vote}')  # Debugging
+
+            if vote_value > highest_previous_vote:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'You must rank lower than or equal to {highest_previous_vote}'
+                }, status=409)
+
+        # Apply badge multiplier
+        badge = getattr(request.user, 'badge', None)
+        vote_multiplier = badge.vote_multiplier() if badge else 1
+        calculated_value = vote_value * vote_multiplier
+
+        # Create or update the vote
+        vote, created = Vote.objects.update_or_create(
+            content=content,
+            fan=request.user,
+            defaults={
+                'base_value': vote_value,
+                'value': calculated_value,
+                'otp_code': otp_code,
+                'tag': voter_tag,
+                'is_badge_vote': bool(badge)
+            }
+        )
+
+        # Deduct OTP votes
+        otp.use_vote()
+
+        # Update badge if necessary
+        assign_or_upgrade_badge(request.user)
+
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Vote {vote_value} recorded!',
+        })
+
+    except Exception as e:
+        logger.error(f"Error in vote_content: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': 'Something went wrong'}, status=500)
+
+
+@staff_member_required
+def assign_or_upgrade_badge(request, user_id, level):
+    user = get_object_or_404(User, id=user_id)
+    badge, created = Badge.objects.get_or_create(user=user)
+    badge.level = level
+    badge.save()
+    return JsonResponse({"status": "success", "message": f"Badge level {level} assigned to {user.username}"})
+
+def calculate_final_ranking():
+    # Calculate total points for each content item
+    content_ranking = Content.objects.annotate(
+        total_points=Sum('votes__value')
+    ).order_by('-total_points')
+
+    # Assign badges to fans whose votes match the final ranking
+    for rank, content in enumerate(content_ranking, start=1):
+        matching_votes = Vote.objects.filter(content=content, base_value=rank)
+        for vote in matching_votes:
+            assign_or_upgrade_badge(vote.fan)  # Upgrade badge for matching votes
 
 @login_required
 def delete_content(request, pk):
@@ -369,6 +462,8 @@ def toggle_content_approval(request, content_id, action):
         messages.error(request, "Invalid action.")
     
     return redirect('dashboard')
+
+
 
 
 
@@ -429,3 +524,29 @@ def home(request):
         'featured_contents': Content.objects.filter(is_approved=True).order_by('-upload_date')[:6]  # Example: Show 6 featured contents
     }
     return render(request, 'content/welcome.html', context)
+
+
+
+@login_required
+@staff_member_required
+def classify_content(request, content_id):
+    content = get_object_or_404(Content, id=content_id)
+    
+    ContentClassificationForm = modelform_factory(Content, fields=['category'])
+    
+    if request.method == 'POST':
+        form = ContentClassificationForm(request.POST, instance=content)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Content classified successfully.")
+            return redirect('content_list')
+    else:
+        form = ContentClassificationForm(instance=content)
+
+    return render(request, 'users/classify.html', {'form': form, 'content': content})
+
+
+
+
+
+
