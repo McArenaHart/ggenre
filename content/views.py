@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.forms import modelform_factory
 from .models import Content, Vote, LivePerformance, ArtistUploadLimit, Comment, Badge
-from users.models import  OTP
+from users.models import  OTP, CustomUser
 from .forms import ContentUploadForm, CommentForm
 from django.db.models import Avg, Sum, Max
 from django.views import View
@@ -310,11 +310,6 @@ def live_stream_room(request, room_name):
     })
 
 
-import logging
-from django.db.models import Max
-
-logger = logging.getLogger(__name__)
-
 @require_POST
 def vote_content(request, content_id):
     if not request.user.is_authenticated:
@@ -327,59 +322,28 @@ def vote_content(request, content_id):
         voter_tag = data.get('voter_tag', '').strip()
         content = get_object_or_404(Content, id=content_id)
 
-        # Validate vote value
         if vote_value not in range(1, 9):
             return JsonResponse({'status': 'error', 'message': 'Invalid rank (1-8 only)'}, status=400)
 
-        # Validate OTP
         otp = OTP.objects.filter(user=request.user, otp_code=otp_code, remaining_votes__gt=0).first()
         if not otp:
-            logger.warning(f'Invalid OTP attempt by {request.user}')
             return JsonResponse({'status': 'error', 'message': 'Invalid/expired OTP'}, status=403)
 
-        # Ensure unique ranks per genre
-        content_genre = content.genre
-        if content_genre:
-            logger.info(f'Checking votes for genre: {content_genre.name}')  # Debugging
+        existing_vote = Vote.objects.filter(fan=request.user, content__genre=content.genre, base_value=vote_value).exists()
+        if existing_vote:
+            return JsonResponse({'status': 'error', 'message': f'Rank {vote_value} already used in this genre'}, status=409)
 
-            # Check if the voter has already used this rank in the same genre
-            existing_vote_with_same_rank = Vote.objects.filter(
-                fan=request.user,
-                content__genre=content_genre,
-                base_value=vote_value
-            ).exists()
+        highest_previous_vote = Vote.objects.filter(fan=request.user, content__genre=content.genre).aggregate(Max('base_value'))['base_value__max'] or 9
+        if vote_value > highest_previous_vote:
+            return JsonResponse({'status': 'error', 'message': f'You must rank lower than or equal to {highest_previous_vote}'}, status=409)
 
-            logger.info(f'Existing vote with same rank: {existing_vote_with_same_rank}')  # Debugging
-
-            if existing_vote_with_same_rank:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'Rank {vote_value} already used in this genre'
-                }, status=409)
-
-            # Check if the voter is assigning a rank higher than their previous highest rank
-            highest_previous_vote = Vote.objects.filter(
-                fan=request.user,
-                content__genre=content_genre
-            ).aggregate(Max('base_value'))['base_value__max'] or 0
-
-            logger.info(f'Highest previous vote: {highest_previous_vote}')  # Debugging
-
-            if vote_value > highest_previous_vote:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'You must rank lower than or equal to {highest_previous_vote}'
-                }, status=409)
-
-        # Apply badge multiplier
         badge = getattr(request.user, 'badge', None)
         vote_multiplier = badge.vote_multiplier() if badge else 1
         calculated_value = vote_value * vote_multiplier
 
-        # Create or update the vote
         vote, created = Vote.objects.update_or_create(
             content=content,
-            fan=request.user,
+            fan=request.user,  
             defaults={
                 'base_value': vote_value,
                 'value': calculated_value,
@@ -389,29 +353,32 @@ def vote_content(request, content_id):
             }
         )
 
-        # Deduct OTP votes
         otp.use_vote()
+        assign_or_upgrade_badge(request, request.user.id)  # ✅ FIXED CALL
 
-        # Update badge if necessary
-        assign_or_upgrade_badge(request.user)
-
-        return JsonResponse({
-            'status': 'success',
-            'message': f'Vote {vote_value} recorded!',
-        })
+        return JsonResponse({'status': 'success', 'message': f'Vote {vote_value} recorded!'})
 
     except Exception as e:
-        logger.error(f"Error in vote_content: {str(e)}")
-        return JsonResponse({'status': 'error', 'message': 'Something went wrong'}, status=500)
+        logger.error(f"Error in vote_content: {str(e)}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': f'Something went wrong: {str(e)}'}, status=500)
+
 
 
 @staff_member_required
-def assign_or_upgrade_badge(request, user_id, level):
-    user = get_object_or_404(User, id=user_id)
+def assign_or_upgrade_badge(request, user_id, level=None):
+    user = get_object_or_404(CustomUser, id=user_id)  # ✅ FIXED MODEL
     badge, created = Badge.objects.get_or_create(user=user)
-    badge.level = level
-    badge.save()
-    return JsonResponse({"status": "success", "message": f"Badge level {level} assigned to {user.username}"})
+
+    if level is not None:
+        badge.level = level
+        badge.save()
+
+    return JsonResponse({
+        "status": "success",
+        "message": f"Badge updated for {user.username}"
+    })
+
+
 
 def calculate_final_ranking():
     # Calculate total points for each content item
@@ -505,13 +472,6 @@ def watermark_video(video_file, username):
     except Exception as e:
         raise ValueError(f"Watermarking failed: {e}")
 
-
-
-
-@login_required
-def notifications(request):
-    user_notifications = request.user.notifications.order_by('-created_at')
-    return render(request, "users/notifications.html", {"notifications": user_notifications})
 
 
 

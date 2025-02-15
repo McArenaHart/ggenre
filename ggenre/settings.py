@@ -28,8 +28,6 @@ SECRET_KEY = 'django-insecure-+p2ameub_oesk6t4ok9&*e&4tbq&ts@=q02%@x(m4t0cw@-8z@
 DEBUG = False
 
 
-
-
 ALLOWED_HOSTS = ['ggenre.com', 'www.ggenre.com', '147.93.95.1']
 
 

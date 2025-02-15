@@ -147,16 +147,10 @@
   }
 
 
-  .voting-options {
-    z-index: 1050 !important; /* Ensure it's above other content */
-    position: absolute; /* Keep it floating above */
-  }
-  
-
   /* Voting Options (Hidden by Default) */
   .voting-options {
     display: none;
-    position: absolute;
+    position: relative; /* Make sure it stays in the flow */
     background: white;
     border: 1px solid #ddd;
     border-radius: 5px;
@@ -214,6 +208,40 @@
     font-size: 1rem; /* Adjust the size as needed */
     vertical-align: middle; /* Align the icon vertically */
   }
+
+  .voting-options {
+    display: block;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-in-out, padding 0.4s ease-in-out;
+    background: white;
+    border: 1px solid #ddd;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    padding: 0; /* Initially no padding */
+    position: relative; /* Make sure it stays in the flow */
+}
+
+.voting-section {
+    transition: all 0.4s ease-in-out;
+}
+
+.voting-section.active .voting-options {
+    max-height: 250px; /* Adjust height based on content */
+    padding: 15px 10px 20px; /* Add padding-bottom for better spacing */
+}
+
+/* Ensure space between buttons */
+.vote-option {
+    margin: 5px; /* Adds space around buttons */
+    padding-bottom: 15px;
+}
+
+.mt-2{
+  padding-bottom: 25px;
+  padding-left: 10px;
+}
+
+
   
 
 </style>
@@ -418,7 +446,7 @@
 <script>
 
   function toggleVotingOptions(element) {
-    console.log("Voting icon clicked", element);  // Debugging
+    console.log("Voting icon clicked", element);
 
     const votingSection = element.closest('.voting-section');
     if (!votingSection) {
@@ -426,71 +454,71 @@
         return;
     }
 
-    votingSection.classList.toggle('active');
-
     const votingOptions = votingSection.querySelector('.voting-options');
-    if (votingOptions) {
-        console.log("Toggling visibility of voting options", votingOptions);
+
+    if (votingSection.classList.contains('active')) {
+        // Collapse the voting options
+        votingOptions.style.maxHeight = "0px";
+        votingOptions.style.paddingBottom = "0px";
     } else {
-        console.log("Voting options not found inside section!");
+        // Expand the voting options
+        votingOptions.style.maxHeight = votingOptions.scrollHeight + "px";
+        votingOptions.style.paddingBottom = "10px";
     }
 
-    
+    votingSection.classList.toggle('active');
 }
 
 
-function submitVote(element) {
-  console.log("Submit Vote Clicked", element);  // Ensure function is called
-  const voteValue = element.dataset.value;
-  const voteUrl = element.dataset.url;  // Extract URL
-  console.log("Submitting to URL:", voteUrl);  // Check URL in Console
-
-  const contentId = voteUrl.split('/').slice(-2, -1)[0];  // Extract content_id
-  const otpInput = document.getElementById(`otpCode_${contentId}`);
-  const voterTagInput = document.getElementById(`voter_tag_${contentId}`);
-  const otpCode = otpInput ? otpInput.value.trim() : "";
-  const voterTag = voterTagInput ? voterTagInput.value.trim() : "";
-  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+async function submitVote(button) {
+  const voteValue = parseInt(button.dataset.value);
+  const voteUrl = button.dataset.url;
+  const contentId = button.closest('.voting-section').querySelector('.otp-input').id.split('_')[1];
+  const otpCode = document.getElementById(`otpCode_${contentId}`).value.trim();
+  const voterTag = document.getElementById(`voter_tag_${contentId}`).value.trim();
 
   if (!otpCode || !voterTag) {
-      alert('Please enter your OTP code');
+      alert("Please enter OTP and voter tag.");
       return;
   }
 
-  fetch(voteUrl, {
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrfToken
-      },
-      body: JSON.stringify({
-          vote_value: voteValue,
-          otp_code: otpCode,
-          voter_tag: voterTag
-      })
-  })
-  .then(response => response.json())
-  .then(data => {
-      console.log("Server Response:", data);  // Log Response
+  try {
+      const response = await fetch(voteUrl, {
+          method: "POST",
+          headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value
+          },
+          body: JSON.stringify({
+              vote_value: voteValue,
+              otp_code: otpCode,
+              voter_tag: voterTag
+          })
+      });
+
+      const data = await response.json();
+      console.log("Server Response:", data);
+
       const messageElem = document.getElementById(`voteMessage_${contentId}`);
-      messageElem.style.display = 'block';
+      messageElem.style.display = "block";
       messageElem.textContent = data.message;
 
-      if (data.status === 'success') {
-          messageElem.classList.add('text-success');
-          messageElem.classList.remove('text-danger');
-          setTimeout(() => window.location.reload(), 1500);
-      } else {
-          messageElem.classList.add('text-danger');
-          messageElem.classList.remove('text-success');
-      }
-  })
-  .catch(error => {
-      console.error('Error:', error);
-      alert('Failed to submit vote. Please try again.');
-  });
-}
+      if (data.status === "success") {
+          messageElem.classList.add("text-success");
+          messageElem.classList.remove("text-danger");
 
+          // Refresh page only after 2 seconds
+          setTimeout(() => window.location.reload(), 2000);
+      } else {
+          messageElem.classList.add("text-danger");
+          messageElem.classList.remove("text-success");
+          alert(data.message);
+      }
+  } catch (error) {
+      console.error("Error submitting vote:", error);
+      alert("An error occurred while submitting your vote.");
+  }
+}
 
   </script>
   
