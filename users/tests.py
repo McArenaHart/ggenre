@@ -124,3 +124,55 @@ class UsersAppTests(TestCase):
         # Ensure profile is restricted for unauthenticated users
         response = self.client.get(self.profile_url)
         self.assertEqual(response.status_code, 302)  # Redirect to login
+
+
+# users/tests.py
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.urls import reverse
+from .models import Announcement, DismissedAnnouncement, Role
+
+CustomUser = get_user_model()
+
+class AnnouncementTests(TestCase):
+    def setUp(self):
+        self.user = CustomUser.objects.create_user(username='testuser', password='testpass', role=Role.FAN)
+        self.admin = CustomUser.objects.create_user(username='admin', password='adminpass', role=Role.ADMIN, is_staff=True)
+        self.announcement = Announcement.objects.create(title='Test', message='Test message', created_by=self.admin)
+
+    def test_get_announcements(self):
+        self.client.login(username='testuser', password='testpass')
+        response = self.client.get(reverse('get_announcements'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('announcements', response.json())
+
+    def test_dismiss_announcement(self):
+        self.client.login(username='testuser', password='testpass')
+        response = self.client.post(reverse('dismiss_announcement', args=[self.announcement.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(DismissedAnnouncement.objects.filter(user=self.user, announcement=self.announcement).exists())
+
+class UsersAppTests(TestCase):
+    def setUp(self):
+        self.user = CustomUser.objects.create_user(username='testuser', password='testpass', role=Role.FAN)
+        self.admin = CustomUser.objects.create_user(username='admin', password='adminpass', role=Role.ADMIN, is_staff=True)
+
+    def test_dashboard_access(self):
+        self.client.login(username='testuser', password='testpass')
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_dashboard_roles(self):
+        self.client.login(username='admin', password='adminpass')
+        response = self.client.get(reverse('admin_dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'users/admin_dashboard.html')
+
+    def test_register_view(self):
+        response = self.client.post(reverse('register'), data={
+            'username': 'newuser',
+            'password1': 'complexpassword123',
+            'password2': 'complexpassword123',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse('verify_otp', args=[CustomUser.objects.latest('id').id]))

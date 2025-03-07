@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
 from django.contrib.auth import login, authenticate, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -28,6 +28,13 @@ from content.models import Vote
 from django.http import HttpResponseForbidden
 from django.http import JsonResponse
 from content.views import calculate_final_ranking
+from django.utils import timezone
+import csv
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from io import BytesIO
+
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +91,10 @@ def register(request):
         form = UserRegistrationForm()
     
     return render(request, 'users/register.html', {'form': form})
+
+
+def terms_and_conditions(request):
+    return render(request, 'users/terms_and_conditions.html')
 
 # OTP Verification
 def verify_otp(request, user_id):
@@ -272,6 +283,7 @@ def admin_dashboard(request):
 
     # Prepare context
     context = {
+        'announcements': announcements,
         'artists': artists,
         'fans': fans,
         'generated_otp': generated_otp,
@@ -289,6 +301,55 @@ def admin_dashboard(request):
         'content_ranking': content_ranking,  # Add voting statistics to context
     }
     return render(request, 'users/admin_dashboard.html', context)
+
+
+
+def export_data(request):
+    format_type = request.GET.get("format")  # Get format from request
+
+    if format_type == "csv":
+        return generate_csv()
+    elif format_type == "pdf":
+        return generate_pdf()
+    else:
+        return HttpResponse("Invalid format", status=400)
+
+
+def generate_csv():
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="data.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['Column1', 'Column2', 'Column3'])  # Header
+    writer.writerow(['Data1', 'Data2', 'Data3'])  # Example row
+
+    return response
+
+
+def generate_pdf():
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="data.pdf"'
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    # Generate logo as text with styling
+    pdf.setFont("Helvetica-Bold", 20)
+    pdf.drawCentredString(width / 2, height - 50, "Genre Genius")
+    
+    pdf.setFillColorRGB(1, 0.8, 0)  # Orange Gradient effect simulation
+    pdf.rect((width / 2) - 50, height - 55, 100, 5, fill=True, stroke=False)  # Underline effect
+
+    pdf.setFont("Helvetica", 12)
+    pdf.drawString(100, height - 100, "Sample Data")
+    
+    pdf.save()
+    buffer.seek(0)
+
+    response.write(buffer.read())
+    return response
+
 
 # Artist Dashboard
 @login_required
@@ -317,9 +378,21 @@ def artist_list(request):
     # Fetch all users with the role of 'artist'
     artists = CustomUser.objects.filter(role=Role.ARTIST)
 
+    # Fetch content uploaded by each artist
+    artists_with_content = []
+    for artist in artists:
+        content = Content.objects.filter(artist=artist)  # Fetch content for the artist
+        artists_with_content.append({
+            'artist': artist,
+            'content': content,
+        })
+
+
     # Pass the artists to the template
     context = {
+        'content': content,
         'artists': artists,
+
     }
     return render(request, 'users/artist_list.html', context)
 
@@ -610,15 +683,21 @@ def search_results(request):
     })
 
 
+
+from django.core.paginator import Paginator
+
 @login_required
 def get_announcements(request):
     if not request.user.is_authenticated:
-        return JsonResponse({"error": "User not authenticated"}, status=401)  # Return JSON instead of redirecting
+        return JsonResponse({"error": "User not authenticated"}, status=401)
 
-    dismissed = DismissedAnnouncement.objects.filter(user=request.user).values_list('announcement_id', flat=True)
-    announcements = Announcement.objects.exclude(id__in=dismissed).order_by('-created_at')
+    dismissed = DismissedAnnouncement.objects.filter(user=request.user).values_list("announcement_id", flat=True)
+    announcements = Announcement.objects.exclude(id__in=dismissed).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+    ).order_by("-created_at").values("id", "title", "message")
 
-    return JsonResponse({"announcements": list(announcements.values("id", "title", "message"))})
+    return JsonResponse({"announcements": list(announcements)})
+
 
 @login_required
 def dismiss_announcement(request, announcement_id):

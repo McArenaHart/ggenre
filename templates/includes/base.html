@@ -76,6 +76,44 @@
         color: black;
     }
     
+
+  .announcement-popup {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 15px;
+      border: 1px solid #ccc;
+      box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+      z-index: 9999;
+      max-width: 450px;
+      border-radius: 2px;
+  }
+
+  .announcement-popup h4 {
+      margin: 0;
+      font-size: 16px;
+  }
+
+  .announcement-popup p {
+      font-size: 14px;
+      margin: 5px 0;
+  }
+
+  .announcement-popup button {
+    border-color: transparent !important;
+    background: #ff516b;
+   /* Old browsers */
+    background: -moz-linear-gradient(-45deg, #ff516b 0%, #826cfd 100%);
+   /* FF3.6-15 */
+    background: -webkit-linear-gradient(-45deg, #ff516b 0%,#826cfd 100%);
+   /* Chrome10-25,Safari5.1-6 */
+    background: linear-gradient(135deg, #ff516b 0%,#826cfd 100%);
+   /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+    filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#ff516b', endColorstr='#826cfd',GradientType=1 );
+   /* IE6-9 fallback on horizontal gradient */
+  }
+
   </style>
 
   <head>
@@ -110,6 +148,7 @@
   </head>
   <body id="page-top">
     {% if user.is_authenticated %}
+    <div id="announcement-container"></div>
     <nav
       class="navbar navbar-expand-lg navbar-light bg-white static-top osahan-nav sticky-top"
     >
@@ -365,6 +404,77 @@
       });
     </script>
 
+
+
+    <div id="announcement-container"></div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+          fetch("{% url 'get_announcements' %}")
+              .then(response => response.json())
+              .then(data => {
+                  if (data.announcements && data.announcements.length > 0) {
+                      showPopup(data.announcements);
+                  }
+              })
+              .catch(error => console.error("Error loading announcements:", error));
+      });
+  
+      function showPopup(announcements) {
+          const popup = document.createElement("div");
+          popup.className = "announcement-popup";
+  
+          announcements.forEach(announcement => {
+              if (!announcement.id) return; // Ensure ID is valid
+  
+              const content = document.createElement("div");
+              content.className = "announcement-content";
+              content.innerHTML = `
+                  <h4>${announcement.title}</h4>
+                  <p>${announcement.message}</p>
+                  <button onclick="dismissAnnouncement(${announcement.id})">Dismiss</button>
+              `;
+              popup.appendChild(content);
+          });
+  
+          document.body.appendChild(popup);
+      }
+  
+      function dismissAnnouncement(announcementId) {
+          if (!announcementId) {
+              console.error("Invalid announcement ID:", announcementId);
+              return;
+          }
+  
+          fetch("{% url 'dismiss_announcement' 0 %}".replace("0", encodeURIComponent(announcementId)), {
+              method: "POST",
+              headers: {
+                  "X-CSRFToken": getCookie("csrftoken"),
+                  "Content-Type": "application/json",
+              },
+              credentials: "include",
+          })
+          .then(response => {
+              if (response.ok) {
+                  document.querySelector(".announcement-popup").remove();
+              }
+          })
+          .catch(error => console.error("Error dismissing announcement:", error));
+      }
+  
+      function getCookie(name) {
+          let cookieValue = null;
+          if (document.cookie && document.cookie !== "") {
+              document.cookie.split(";").forEach(cookie => {
+                  if (cookie.trim().startsWith(name + "=")) {
+                      cookieValue = decodeURIComponent(cookie.split("=")[1]);
+                  }
+              });
+          }
+          return cookieValue;
+      }
+  </script>
+  
     {% block extra_js %}{% endblock %}
   </body>
 </html>

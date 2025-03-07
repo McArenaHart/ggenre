@@ -21,9 +21,9 @@ class ContentUploadForm(forms.ModelForm):
         if upload_file:
             if upload_file.size > 50 * 1024 * 1024:  # 50 MB size limit
                 raise forms.ValidationError("File size must not exceed 50 MB.")
-            allowed_file_types = ['video/mp4', 'video/mpeg', 'audio/mpeg', 'audio/mp3']
+            allowed_file_types = ['video/mp4', 'video/mpeg', 'audio/mpeg', 'audio/mp3', 'image/jpeg', 'image/png', 'image/gif']
             if upload_file.content_type not in allowed_file_types:
-                raise forms.ValidationError("Unsupported file type. Allowed types: MP4, MPEG, MP3.")
+                raise forms.ValidationError("Unsupported file type. Allowed types: MP4, MPEG, MP3, JPEG, PNG, GIF.")
         return upload_file
     
 

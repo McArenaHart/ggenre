@@ -214,7 +214,7 @@ def content_detail(request, content_id):
     """
     Display a single content item with detailed information.
     """
-    content = get_object_or_404(Content, id=content_id, is_approved=True)
+    content = get_object_or_404(Content, id=content_id)
     related_contents = Content.objects.filter(is_approved=True).exclude(id=content_id)[:4]  # Show 4 related items
     comments = Comment.objects.filter(content=content).order_by('-timestamp')  # Fetch comments for the content
     average_vote = Vote.objects.filter(content=content).aggregate(Avg('value'))['value__avg'] or 0  # Calculate average vote

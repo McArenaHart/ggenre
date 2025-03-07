@@ -2,9 +2,40 @@
 
 {% block content %}
 
+<style>
+  .btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: #fff;
+  }
+  
+  .btn-success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+  }
+
+  /* Match existing button styles */
+.btn-group select {
+  border: 1px solid #ccc;
+  padding: 6px 12px;
+  height: 34px;
+  background: #fff;
+}
+
+/* Ensure spacing aligns with the layout */
+form .btn-group {
+  display: flex;
+  gap: 8px;
+}
+
+.btn i {
+  margin-right: 5px;
+}
+</style>
+
 <!-- Main Content -->
 <div class="right_col" role="main">
-  {% comment %} <!-- Announcements Management Section -->
+
 <div class="row">
   <div class="col-md-12 col-sm-12 col-xs-12">
     <div class="x_panel">
@@ -68,7 +99,7 @@
       </div>
     </div>
   </div>
-</div> {% endcomment %}
+</div> 
 
   <!-- Mini Table for Statistics -->
   <div class="row">
@@ -114,6 +145,18 @@
         <div class="clearfix"></div>
       </div>
       <div class="x_content">
+        <form method="get" action="{% url 'export_data' %}" class="mt-3">
+          <div class="btn-group" role="group" aria-label="Export Options">
+            <select name="format" id="format" class="form-control btn btn-default">
+              <option value="csv">CSV</option>
+              <option value="pdf">PDF</option>
+            </select>
+            <button type="submit" class="btn btn-success">
+              <i class="fa fa-download"></i> Download
+            </button>
+          </div>
+        </form>
+             
         <table class="table table-bordered table-hover">
           <thead class="thead">
             <tr>

@@ -16,6 +16,7 @@ class UserRegistrationForm(UserCreationForm):
     password2 = forms.CharField(widget=forms.PasswordInput, label="Confirm Password")
     
     role = forms.ChoiceField(choices=[choice for choice in Role.CHOICES if choice[0] != Role.ADMIN])
+    terms_accepted = forms.BooleanField(required=True, label="I agree to the Terms and Conditions")
 
     class Meta:
         model = CustomUser
@@ -33,6 +34,12 @@ class UserRegistrationForm(UserCreationForm):
         if CustomUser.objects.filter(username=username).exists():
             raise forms.ValidationError("This username is already taken. Please choose another.")
         return username
+    
+    def clean_terms_accepted(self):
+        terms_accepted = self.cleaned_data.get('terms_accepted')
+        if not terms_accepted:
+            raise ValidationError("You must agree to the Terms and Conditions to sign up.")
+        return terms_accepted
 
     def clean(self):
         cleaned_data = super().clean()

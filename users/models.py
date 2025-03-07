@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils.timezone import now
+from django.utils import timezone
 from datetime import timedelta
 from django.core.exceptions import ValidationError
 
@@ -119,6 +120,10 @@ class Announcement(models.Model):
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    expires_at = models.DateTimeField(null=True, blank=True)  # Add expiry field
+
+    def is_active(self):
+        return self.expires_at is None or self.expires_at > timezone.now()
 
     def __str__(self):
         return self.title

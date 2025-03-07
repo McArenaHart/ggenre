@@ -22,7 +22,10 @@
             <tbody>
               {% for content in artist_content %}
                 <tr>
-                  <td>{{ content.title }}</td>
+                  <td>
+                    <!-- Make the title clickable -->
+                    <a href="{% url 'content_detail' content.id %}">{{ content.title }}</a>
+                  </td>
                   <td>
                     {% if content.is_approved %}
                       <span class="label label-success">Approved</span>
