@@ -39,3 +39,12 @@ class CommentForm(forms.ModelForm):
             }),
         }
 
+class StartLiveStreamForm(forms.Form):
+    title = forms.CharField(max_length=255)
+    restrict_access = forms.BooleanField(required=False, label="Restrict access (voucher-only)")
+
+
+class VoucherEntryForm(forms.Form):
+    code = forms.CharField(label="Enter Voucher Code", max_length=20)
+    
+

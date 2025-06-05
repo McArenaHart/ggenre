@@ -395,6 +395,55 @@ form .btn-group {
       </div>
   </div>
 </div>
+
+
+<!-- Voucher Generation Form -->
+<div class="row mt-5">
+  <div class="col-md-12 col-sm-12 col-xs-12">
+    <div class="x_panel">
+      <div class="x_title">
+        <h2>Generate Voucher for Live Performance</h2>
+        <div class="clearfix"></div>
+      </div>
+      <div class="x_content">
+        <form method="POST">
+          {% csrf_token %}
+          <input type="hidden" name="generate_voucher" value="1">
+
+          <div class="form-group">
+            <label>Select Fan:</label>
+            <select name="user_id" class="form-control" required>
+              {% for fan in fans %}
+                <option value="{{ fan.id }}">{{ fan.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Select Performance:</label>
+            <select name="performance_id" class="form-control" required>
+              {% for perf in live_performances %}
+                <option value="{{ perf.id }}">
+                  {{ perf.title }} — {{ perf.artist.username }} — {{ perf.start_time }} — {{ perf.is_restricted|yesno:"Restricted,Public" }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Generate Voucher</button>
+        </form>
+
+        {% if generated_voucher %}
+          <div class="alert alert-success mt-3">
+            <strong>Voucher Generated:</strong> {{ generated_voucher }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <!-- Assign or Remove Badges Section -->
 <div class="row">
   <div class="col-md-12 col-sm-12 col-xs-12">

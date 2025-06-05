@@ -3,6 +3,7 @@ from .models import Content, Vote, Comment, LivePerformance, ArtistUploadLimit
 from django.contrib import admin
 from .models import Content, Badge, ParticipationRequest
 from users.models import OTP
+from .models import Voucher
 
 class ContentAdmin(admin.ModelAdmin):
     list_display = ('title', 'artist', 'is_approved', 'upload_date', 'genre')
@@ -69,3 +70,9 @@ class ParticipationRequestAdmin(admin.ModelAdmin):
 @admin.register(Badge)
 class BadgeAdmin(admin.ModelAdmin):
     list_display = ('user', 'level')
+
+@admin.register(Voucher)
+class VoucherAdmin(admin.ModelAdmin):
+    list_display = ['code', 'performance', 'is_used', 'created_by', 'used_by']
+    search_fields = ['code', 'performance__title']
+    list_filter = ['is_used', 'created_at']

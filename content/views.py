@@ -3,9 +3,9 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.forms import modelform_factory
-from .models import Content, Vote, LivePerformance, ArtistUploadLimit, Comment, Badge
+from .models import Content, Vote, LivePerformance, ArtistUploadLimit, Comment, Badge, Voucher
 from users.models import  OTP, CustomUser
-from .forms import ContentUploadForm, CommentForm
+from .forms import ContentUploadForm, CommentForm, StartLiveStreamForm, VoucherEntryForm
 from django.db.models import Avg, Sum, Max
 from django.views import View
 from django.contrib.auth.models import User
@@ -17,6 +17,7 @@ from users.utils import send_notification  # Ensure this is correctly imported
 import random
 from django.db.models import F
 import string
+from django.urls import reverse
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.core.mail import send_mail
@@ -268,46 +269,106 @@ def live_stream_index(request):
 
 @login_required
 def start_live_stream(request):
-    """
-    Starts a live stream and redirects the artist directly to the live room.
-    """
     if not request.user.is_artist():
         messages.error(request, "You don't have permission to start a live stream.")
         return redirect('dashboard')
 
-    # Automatically create a new live performance
-    stream_key = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-    performance = LivePerformance.objects.create(
-        title=f"{request.user.username}'s Live Stream",
-        artist=request.user,
-        start_time=now(),
-        stream_key=stream_key,
-        use_camera=True,
-        is_active=True,
-    )
+    if request.method == "POST":
+        form = StartLiveStreamForm(request.POST)
+        if form.is_valid():
+            stream_key = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+            performance = LivePerformance.objects.create(
+            title=form.cleaned_data['title'],
+            artist=request.user,
+            start_time=now(),
+            stream_key=stream_key,
+            use_camera=True,
+            is_active=True,
+            is_restricted=form.cleaned_data['restrict_access'] 
+        )
 
-    # Redirect directly to the live room
-    return redirect('live_stream_room', room_name=performance.stream_key)
+
+            # If restricted, admin will generate vouchers manually via dashboard
+            if form.cleaned_data['restrict_access']:
+                messages.info(request, "This stream is now voucher-restricted. Don't forget to generate vouchers!")
+
+            return redirect('live_stream_room', room_name=performance.stream_key)
+    else:
+        form = StartLiveStreamForm()
+
+    return render(request, "content/start_live_stream.html", {"form": form})
+
 
 
 @login_required
 def live_stream_room(request, room_name):
     """
     Render the live stream room with ZegoCloud integration.
+    Enforces voucher if required.
     """
     performance = get_object_or_404(LivePerformance, stream_key=room_name, is_active=True)
+    voucher_code = request.GET.get("voucher")
 
-    # Ensure only fans or the artist can join
-    if not request.user.is_fan() and request.user != performance.artist:
-        messages.error(request, "You do not have permission to join this live stream.")
-        return redirect('dashboard')
+    # Artist always allowed
+    if request.user == performance.artist:
+        role = 'Host'
+        return render(request, 'content/live_stream_room.html', {
+            'room_name': room_name,
+            'role': role,
+        })
 
-    # Determine the user's role for ZegoCloud
-    role = 'Host' if request.user == performance.artist else 'Audience'
+    # Check if stream is restricted (any active vouchers exist)
+    is_restricted = performance.is_restricted
+
+
+    # Restricted: enforce valid voucher
+    if is_restricted:
+        if voucher_code:
+            try:
+                voucher = Voucher.objects.get(code=voucher_code, performance=performance, is_used=False)
+                # Optionally mark as used
+                voucher.is_used = True
+                voucher.used_by = request.user
+                voucher.used_at = now()
+                voucher.save()
+            except Voucher.DoesNotExist:
+                messages.error(request, "Invalid or expired voucher.")
+                return redirect('voucher_entry', room_name=room_name)
+        else:
+            messages.error(request, "This stream requires a valid voucher.")
+            return redirect('voucher_entry', room_name=room_name)
+    else:
+        # Public: only fans allowed
+        if not request.user.is_fan():
+            messages.error(request, "Only fans can join this live stream.")
+            return redirect('dashboard')
+
+    role = 'Audience'
     return render(request, 'content/live_stream_room.html', {
         'room_name': room_name,
         'role': role,
     })
+
+
+@login_required
+def voucher_entry(request, room_name):
+    performance = get_object_or_404(LivePerformance, stream_key=room_name, is_active=True)
+    form = VoucherEntryForm(request.POST or None)
+
+    if request.method == "POST" and form.is_valid():
+        code = form.cleaned_data['code']
+        return redirect(f"{reverse('live_stream_room', args=[room_name])}?voucher={code}")
+
+    return render(request, 'content/voucher_entry.html', {
+        'form': form,
+        'room_name': room_name,
+        'performance': performance
+    })
+
+
+    
+
+
 
 
 @require_POST

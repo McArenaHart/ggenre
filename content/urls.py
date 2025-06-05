@@ -14,6 +14,7 @@ urlpatterns = [
     path('live/', views.live_stream_index, name="live_stream_index"),
     path('live/start/', views.start_live_stream, name='start_live_stream'),
     path('live/<str:room_name>/', views.live_stream_room, name="live_stream_room"),
+    path('live/voucher/<str:room_name>/', views.voucher_entry, name='voucher_entry'),
     path('upload/reset/<int:artist_id>/', views.reset_artist_upload_limit, name='reset_upload_limit'),
     path('comment/add/<int:content_id>/', views.add_comment, name='add_comment'),
     path('classify/<int:content_id>/', views.classify_content, name='classify_content'),

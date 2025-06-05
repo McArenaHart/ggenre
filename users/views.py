@@ -17,9 +17,9 @@ from django.core.mail import send_mail, BadHeaderError
 from django.utils.timezone import now
 from datetime import timedelta
 from .models import CustomUser, Role, Follow, OTP
-from content.models import Content, Comment, Badge
+from content.models import Content, Comment, Badge, Voucher
 from subscriptions.models import UserSubscription
-from content.models import ArtistUploadLimit
+from content.models import ArtistUploadLimit, LivePerformance
 from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -156,6 +156,8 @@ def admin_dashboard(request):
     # Admin-specific data
     fans = CustomUser.objects.filter(role='fan')  # Fetch only fans
     generated_otp = None  # Store OTP to display in template
+    generated_voucher = None #Store OTP to display in template
+
 
 
 
@@ -198,6 +200,7 @@ def admin_dashboard(request):
     # Fetch artists and recent uploads
     artists = ArtistUploadLimit.objects.select_related('artist').all()
     recent_uploads = Content.objects.all()
+    live_performances = LivePerformance.objects.all().order_by('-start_time')
 
     # Apply filters for recent_uploads
     query = request.GET.get('q', '')
@@ -257,6 +260,21 @@ def admin_dashboard(request):
         messages.success(request, f"OTP generated for {user.username}: {otp.otp_code}")
         generated_otp = otp.otp_code
 
+
+    if request.method == "POST" and 'generate_voucher' in request.POST:
+         user_id = request.POST.get('user_id')
+         performance_id = request.POST.get('performance_id')
+         user = get_object_or_404(CustomUser, id=user_id)
+         performance = get_object_or_404(LivePerformance, id=performance_id)
+         code = generate_otp()
+         Voucher.objects.create(
+             code=code,
+             performance=performance,
+             created_by=request.user
+         )
+         messages.success(request, f"Voucher generated for {user.username}: {code}")
+         generated_voucher = code
+
     # Handle Badge Assignment and Removal
     if request.method == "POST" and ("assign_badge" in request.POST or "remove_badge" in request.POST):
         user_id = request.POST.get('user_id')
@@ -287,6 +305,7 @@ def admin_dashboard(request):
         'artists': artists,
         'fans': fans,
         'generated_otp': generated_otp,
+        'generated_voucher': generated_voucher,
         'recent_uploads': recent_uploads.order_by('-upload_date')[:10],
         'query': query,
         'filter_status': filter_status,
@@ -299,7 +318,13 @@ def admin_dashboard(request):
             'pending_content': Content.objects.filter(is_approved=False).count(),
         },
         'content_ranking': content_ranking,  # Add voting statistics to context
+        'performances': LivePerformance.objects.all(),
+        'live_performances': live_performances,
+        'vouchers_by_perf': {
+            perf.id: perf.vouchers.all() for perf in LivePerformance.objects.all()
+        },
     }
+
     return render(request, 'users/admin_dashboard.html', context)
 
 

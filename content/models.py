@@ -171,6 +171,9 @@ class LivePerformance(models.Model):
     """
     Model for live performances hosted by artists.
     """
+
+    is_restricted = models.BooleanField(default=False)  # 🔒 Restriction toggle
+
     title = models.CharField(max_length=255)
     artist = models.ForeignKey(
         settings.AUTH_USER_MODEL, 
@@ -224,3 +227,29 @@ class ArtistUploadLimit(models.Model):
         return f"{self.artist.username} - {self.uploads_used} uploads used"
 
 
+class Voucher(models.Model):
+    """
+    Voucher model to control access to restricted live streams.
+    """
+    code = models.CharField(max_length=16, unique=True)
+    performance = models.ForeignKey(LivePerformance, on_delete=models.CASCADE, related_name='vouchers')
+    is_used = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='created_vouchers'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    used_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='used_vouchers'
+    )
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Voucher {self.code} for {self.performance.title}"
