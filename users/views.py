@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
 from django.contrib.auth import login, authenticate, logout, get_user_model
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.db.models import Q
 from django.contrib import messages
 from .forms import UserRegistrationForm, LoginForm, ProfileUpdateForm, AnnouncementForm
@@ -16,7 +16,7 @@ from django.db.models import Avg, Sum, Count, When, IntegerField, Case
 from django.core.mail import send_mail, BadHeaderError
 from django.utils.timezone import now
 from datetime import timedelta
-from .models import CustomUser, Role, Follow, OTP
+from .models import CustomUser, Role, Follow, OTP, TermsAndConditions
 from content.models import Content, Comment, Badge, Voucher
 from subscriptions.models import UserSubscription
 from content.models import ArtistUploadLimit, LivePerformance
@@ -34,6 +34,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from io import BytesIO
+
+
 
 
 logger = logging.getLogger(__name__)
@@ -739,3 +741,28 @@ def delete_announcement(request, announcement_id):
     announcement.delete()
     messages.success(request, "Announcement deleted successfully.")
     return redirect('admin_dashboard')
+
+
+
+def terms_and_conditions(request):
+    terms = TermsAndConditions.objects.filter(is_active=True).first()
+    
+    # Safely check permissions for authenticated users
+    can_manage = False
+    if request.user.is_authenticated:
+        can_manage = (request.user.has_perm('users.manage_terms') or 
+                     (hasattr(request.user, 'is_admin') and request.user.is_admin()))
+    
+    context = {
+        'terms': terms,
+        'can_manage_terms': can_manage
+    }
+    return render(request, 'users/terms_and_conditions.html', context)
+
+@login_required
+@permission_required('app_name.manage_terms', raise_exception=True)
+def manage_terms(request):
+    # Add view for managing terms if needed
+    pass
+
+

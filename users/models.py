@@ -135,3 +135,29 @@ class DismissedAnnouncement(models.Model):
     def __str__(self):
         return f"{self.user.username} dismissed {self.announcement.title}"
 
+
+
+class TermsAndConditions(models.Model):
+    content = models.TextField()
+    version = models.CharField(max_length=20)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, 
+                                 on_delete=models.SET_NULL, 
+                                 null=True, 
+                                 related_name='created_terms')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, 
+                                 on_delete=models.SET_NULL, 
+                                 null=True, 
+                                 related_name='updated_terms')
+
+    class Meta:
+        verbose_name_plural = "Terms and Conditions"
+        ordering = ['-created_at']
+        permissions = [
+            ("manage_terms", "Can create, edit, and delete terms and conditions"),
+        ]
+
+    def __str__(self):
+        return f"Terms v{self.version} ({'Active' if self.is_active else 'Inactive'})"

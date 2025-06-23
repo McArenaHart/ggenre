@@ -35,6 +35,10 @@ from django.middleware.csrf import get_token
 import logging
 import json
 import uuid
+from django.db import transaction
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_POST
 
 # Set up logging configuration
 logger = logging.getLogger(__name__)
@@ -228,21 +232,42 @@ def content_detail(request, content_id):
     })
 
 
+@require_POST
+@never_cache
 def increment_views(request, content_id):
     """
     Increments the view count of a content item.
+    Returns JSON response with status and new view count.
     """
-    if request.method == "POST":
-        logger.info(f"Incrementing views for content ID: {content_id}")
-        content = get_object_or_404(Content, id=content_id)
-        content.views = F('views') + 1
-        content.save()
-        content.refresh_from_db()  # Ensure updated value is fetched
-        logger.info(f"Updated views for content ID: {content_id}. New views: {content.views}")
-        return JsonResponse({"status": "success", "new_views": content.views})
-    
-    logger.error(f"Invalid request method for content ID: {content_id}")
-    return JsonResponse({"status": "error", "message": "Invalid request method"}, status=400)
+    try:
+        with transaction.atomic():
+            content = get_object_or_404(Content, id=content_id)
+            content.views = F('views') + 1
+            content.save(update_fields=['views'])
+            
+            # Refresh and get the actual value
+            content.refresh_from_db(fields=['views'])
+            
+            logger.info(
+                f"View incremented - Content: {content_id}, "
+                f"New views: {content.views}, "
+                f"User: {request.user.id if request.user.is_authenticated else 'anonymous'}"
+            )
+            
+            return JsonResponse({
+                "status": "success", 
+                "new_views": content.views
+            })
+            
+    except Exception as e:
+        logger.error(
+            f"View increment failed - Content: {content_id}, "
+            f"Error: {str(e)}"
+        )
+        return JsonResponse(
+            {"status": "error", "message": "Internal server error"},
+            status=500
+        )
 
 # Content Detail View
 class ContentDetailView(View):
