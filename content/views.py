@@ -68,6 +68,8 @@ def upload_content(request):
         if form.is_valid():
             content = form.save(commit=False)
             content.artist = request.user
+            content.is_approved = False  # Needs admin approval
+            content.is_visible = True    # Visible to artist immediately
             content.save()
             form.save_m2m()  # Save tags or other many-to-many fields
 
@@ -77,7 +79,7 @@ def upload_content(request):
                 upload_limit.save()
 
             messages.success(request, "Content uploaded successfully!")
-            return redirect('content_list')
+            return redirect('artist_content', artist_id=request.user.id)
 
     else:
         form = ContentUploadForm()
@@ -236,32 +238,38 @@ def content_detail(request, content_id):
 @never_cache
 def increment_views(request, content_id):
     """
-    Increments the view count of a content item.
-    Returns JSON response with status and new view count.
+    Tracks unique viewers of a content item.
+    Returns JSON response with status and new viewer count.
     """
     try:
+        if not request.user.is_authenticated:
+            return JsonResponse({
+                "status": "error",
+                "message": "Authentication required to track viewers"
+            }, status=401)
+
         with transaction.atomic():
             content = get_object_or_404(Content, id=content_id)
-            content.views = F('views') + 1
-            content.save(update_fields=['views'])
             
-            # Refresh and get the actual value
-            content.refresh_from_db(fields=['views'])
+            # Add user to viewers if not already there
+            content.viewers.add(request.user)
+            
+            viewer_count = content.viewers.count()
             
             logger.info(
-                f"View incremented - Content: {content_id}, "
-                f"New views: {content.views}, "
-                f"User: {request.user.id if request.user.is_authenticated else 'anonymous'}"
+                f"Viewer tracked - Content: {content_id}, "
+                f"Total viewers: {viewer_count}, "
+                f"User: {request.user.id}"
             )
             
             return JsonResponse({
                 "status": "success", 
-                "new_views": content.views
+                "new_viewers": viewer_count
             })
             
     except Exception as e:
         logger.error(
-            f"View increment failed - Content: {content_id}, "
+            f"Viewer tracking failed - Content: {content_id}, "
             f"Error: {str(e)}"
         )
         return JsonResponse(

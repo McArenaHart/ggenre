@@ -208,13 +208,13 @@
       <!-- Navbar Collapse Wrapper -->
       <div class="collapse navbar-collapse" id="navbarNav">
         <!-- Mobile Sidebar (Only for Mobile View) -->
-<!-- Search Form (Centered) -->
-<form class="form-inline my-2 my-lg-0 mx-auto" method="GET" action="{% url 'search_results' %}">
-  <input class="form-control mr-sm-2 w-90 w-md-75 w-lg-100" type="search" name="q" placeholder="Search..." aria-label="Search" required>
-  <button class="btn btn-outline-success my-2 my-sm-0" type="submit">
-      <i class="fas fa-search"></i>
-  </button>
-</form>
+      <!-- Search Form (Centered) -->
+      <form class="form-inline my-2 my-lg-0 mx-auto" method="GET" action="{% url 'search_results' %}">
+        <input class="form-control mr-sm-2 w-90 w-md-75 w-lg-100" type="search" name="q" placeholder="Search..." aria-label="Search" required>
+        <button class="btn btn-outline-success my-2 my-sm-0" type="submit">
+            <i class="fas fa-search"></i>
+        </button>
+      </form>
 
         <div id="mobile-wrapper" class="d-lg-none">
           <ul class="navbar-nav pt-5">
@@ -331,7 +331,7 @@
         {% endif %}
       </ul>
 
-      {% endif %}
+    {% endif %}
       <!-- /.content-wrapper -->
       <div class="content-wrapper">{% block content %}{% endblock %}</div>
     </div>

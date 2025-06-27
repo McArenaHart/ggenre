@@ -80,7 +80,12 @@ class Content(models.Model):
     )
     is_approved_for_voting = models.BooleanField(default=False)  # New field for voting approval
     is_approved = models.BooleanField(default=False)  # Approval status for admin
-    views = models.PositiveIntegerField(default=0)  # Tracks view count
+    is_visible = models.BooleanField(default=True)    # Visibility to artist
+    viewers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name='viewed_content',
+        blank=True
+    )
     tags = TaggableManager()  # Tags for content (e.g., music, dance, drama)
 
     def __str__(self):
@@ -88,13 +93,18 @@ class Content(models.Model):
 
     def calculate_popularity(self):
         total_votes = self.votes.aggregate(total=Sum('value'))['total'] or 0
-        return self.views + total_votes
+        return self.viewers.count() + total_votes  # Use count of viewers instead of views
 
     def get_average_vote(self):
         """
         Returns the average vote for the content.
         """
         return self.votes.aggregate(average=Avg('value'))['average'] or 0
+    
+    @property
+    def view_count(self):
+        """Property to maintain compatibility with templates expecting .views"""
+        return self.viewers.count()
 
 
 

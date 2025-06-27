@@ -1,67 +1,71 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <style>
-        #root {
-            width: 100vw;
-            height: 100vh;
-        }
+      #root {
+        width: 100vw;
+        height: 100vh;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div id="root"></div>
     <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
     <script>
-        window.onload = function () {
-            // Fetch room_name and role from Django template context
-            const roomID = "{{ room_name }}";
-            const role = "{{ role }}";
+      window.onload = function () {
+        // Fetch room_name and role from Django template context
+        const roomID = "{{ room_name }}";
+        const role = "{{ role }}";
 
-            // Generate a random user ID and name for demonstration
-            const userID = Math.floor(Math.random() * 10000) + "";
-            const userName = "User" + userID;
+        // Generate a random user ID and name for demonstration
+        const userID = Math.floor(Math.random() * 10000) + "";
+        const userName = "User" + userID;
 
-            // ZegoCloud app credentials
-            const appID = 323015059;
-            const serverSecret = "5456cacaeda2a8178663a0e95fdedb24";
+        // ZegoCloud app credentials
+        const appID = 236901691;
+        const serverSecret = "3b7ec14419a63833662937d91c0d3a0a";
 
-            // Generate the token
-            const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-                appID,
-                serverSecret,
-                roomID,
-                userID,
-                userName
-            );
+        // Generate the token
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
+          appID,
+          serverSecret,
+          roomID,
+          userID,
+          userName
+        );
 
-            // Configure the role
-            const zegoRole = role === "Host" 
-                ? ZegoUIKitPrebuilt.Host 
-                : ZegoUIKitPrebuilt.Audience;
+        // Configure the role
+        const zegoRole =
+          role === "Host" ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience;
 
-            // Create and join the ZegoUIKit room
-            const zp = ZegoUIKitPrebuilt.create(kitToken);
-            zp.joinRoom({
-                container: document.querySelector("#root"),
-                scenario: {
-                    mode: ZegoUIKitPrebuilt.LiveStreaming,
-                    config: { role: zegoRole }
-                },
-                sharedLinks: [{
-                    name: 'Join as an audience',
-                    url:
-                        window.location.protocol + '//' +
-                        window.location.host +
-                        window.location.pathname +
-                        '?roomID=' + roomID + '&role=Audience',
-                }],
-                turnOnCameraWhenJoining: zegoRole === ZegoUIKitPrebuilt.Host,
-                showMyCameraToggleButton: zegoRole === ZegoUIKitPrebuilt.Host,
-                showScreenSharingButton: zegoRole === ZegoUIKitPrebuilt.Host,
-                showTextChat: true,
-                showUserList: true,
-            });
-        };
+        // Create and join the ZegoUIKit room
+        const zp = ZegoUIKitPrebuilt.create(kitToken);
+        zp.joinRoom({
+          container: document.querySelector("#root"),
+          scenario: {
+            mode: ZegoUIKitPrebuilt.LiveStreaming,
+            config: { role: zegoRole },
+          },
+          sharedLinks: [
+            {
+              name: "Join as an audience",
+              url:
+                window.location.protocol +
+                "//" +
+                window.location.host +
+                window.location.pathname +
+                "?roomID=" +
+                roomID +
+                "&role=Audience",
+            },
+          ],
+          turnOnCameraWhenJoining: zegoRole === ZegoUIKitPrebuilt.Host,
+          showMyCameraToggleButton: zegoRole === ZegoUIKitPrebuilt.Host,
+          showScreenSharingButton: zegoRole === ZegoUIKitPrebuilt.Host,
+          showTextChat: true,
+          showUserList: true,
+        });
+      };
     </script>
-</body>
+  </body>
 </html>

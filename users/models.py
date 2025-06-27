@@ -37,6 +37,7 @@ class CustomUser(AbstractUser):
     bio = models.TextField(null=True, blank=True)
     subscription_expiry = models.DateField(null=True, blank=True)
     wants_to_participate = models.BooleanField(default=False)
+    can_download_content = models.BooleanField(default=False)
 
     def notify_admin(self):
         """
@@ -72,6 +73,15 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.username
+    
+    @property
+    def can_download(self):
+        """Hybrid permission check - role-based with individual override"""
+        # Admins and artists can always download
+        if self.is_admin():
+            return True
+        # Fans need explicit permission
+        return self.can_download_content
 
 
 class Follow(models.Model):

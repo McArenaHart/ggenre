@@ -8,21 +8,22 @@ from django.contrib.auth.decorators import login_required, permission_required
 
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
-    list_display = ('username', 'email', 'phone_number', 'role', 'is_active', 'is_staff', 'subscription_expiry')
+    list_display = ('username', 'email', 'phone_number', 'role', 'is_active', 'is_staff', 'subscription_expiry', 'can_download_content')
+    list_editable = ('can_download_content',)
     search_fields = ('username', 'email', 'role')
     ordering = ('-date_joined',)
     
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('Personal info', {'fields': ('first_name', 'last_name', 'email', 'profile_picture', 'bio')}),
-        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions', 'can_download_content')}),
         ('Role-specific Info', {'fields': ('role', 'subscription_expiry')}),
     )
     
     add_fieldsets = (
         (None, {'fields': ('username', 'password1', 'password2')}),
         ('Personal info', {'fields': ('first_name', 'last_name', 'email', 'profile_picture', 'bio')}),
-        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions', 'can_download_content')}),
         ('Role-specific Info', {'fields': ('role', 'subscription_expiry')}),
     )
     

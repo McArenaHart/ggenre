@@ -82,7 +82,7 @@
   {% else %}
   <div class="placeholder-thumbnail">Audio</div>
   {% endif %}
-  <audio controls controlsList="nodownload" class="media-audio">
+  <audio controls {% if not request.user.can_download %}controlsList="nodownload"{% endif %} class="media-audio">
     <source src="{{ content.file.url }}" type="audio/mpeg" />
     Your browser does not support the audio tag.
   </audio>
@@ -94,7 +94,7 @@
 
 <!-- media_display.html -->
 {% if content.media_type == 'video' %}
-<video controls controlsList="nodownload">
+<video controls {% if not request.user.can_download %}controlsList="nodownload"{% endif %}>
   <source src="{{ content.media_file.url }}" type="video/mp4" />
   Your browser does not support the video tag.
 </video>
