@@ -22,10 +22,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-+p2ameub_oesk6t4ok9&*e&4tbq&ts@=q02%@x(m4t0cw@-8z@'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-+p2ameub_oesk6t4ok9&*e&4tbq&ts@=q02%@x(m4t0cw@-8z@')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = ['ggenre.com', 'www.ggenre.com', '147.93.95.1']
 
@@ -78,16 +78,34 @@ TEMPLATES = [
 WSGI_APPLICATION = 'ggenre.wsgi.application'
 
 
+# Database Configuration
+# Detect if we're in production environment
+IS_PRODUCTION = os.path.exists('/etc/nginx/sites-available/ggenre') or os.getenv('DJANGO_PRODUCTION', False)
 
-# Database
-# https://docs.djangoproject.com/en/5.1/ref/settings/#databases
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if IS_PRODUCTION:
+    # Production settings (MySQL on VPS)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': 'ggenre_db',
+            'USER': 'ggenre_user',
+            'PASSWORD': os.getenv('MYSQL_PASSWORD', ''),
+            'HOST': 'localhost',
+            'PORT': '3306',
+            'OPTIONS': {
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+                'charset': 'utf8mb4',
+            },
+        }
     }
-}
+else:
+    # Development settings (SQLite on local machine)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -132,7 +150,7 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'mightycareen@gmail.com'
-EMAIL_HOST_PASSWORD = 'dhba ynnf itpb fqjg'  # Use an App Password, NOT your real Gmail password
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'dhba ynnf itpb fqjg')  # Use environment variable
 
 
 # Internationalization
