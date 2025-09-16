@@ -150,7 +150,12 @@
                         <textarea name="bio" class="form-control">{{ form.bio.value }}</textarea>
                     </div>
                     <button type="submit" name="update_profile" class="btn btn-primary mt-2">Update Profile</button>
+                    <!-- In your profile template -->
+                    <a href="{% url 'password_change' %}" class="btn btn-outline-primary">
+                        Change Password
+                    </a>
                 </form>
+            
             </div>
             {% endif %}
         </div>

@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
+from django.contrib.auth import views as auth_views
 from django.conf.urls.static import static
 from content.views import home  # Import the home view
 
@@ -26,8 +27,24 @@ urlpatterns = [
     path('users/', include('users.urls')),
     path('content/', include('content.urls')),
     path('subscriptions/', include('subscriptions.urls')),
+
+    # Password change URLs
+    path('password-change/', 
+         auth_views.PasswordChangeView.as_view(
+             template_name='users/password_change.html',
+             success_url='/password-change-done/'
+         ), 
+         name='password_change'),
+    
+    path('password-change-done/', 
+         auth_views.PasswordChangeDoneView.as_view(
+             template_name='users/password_change_done.html'
+         ), 
+         name='password_change_done'),
+
 ]
 
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+

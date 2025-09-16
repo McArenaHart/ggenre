@@ -35,6 +35,9 @@ class CustomUser(AbstractUser):
     # Additional profile information
     profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
     bio = models.TextField(null=True, blank=True)
+    receive_notifications = models.BooleanField(default=True)
+    notify_on_new_content = models.BooleanField(default=True)
+    notify_on_artist_updates = models.BooleanField(default=True)
     subscription_expiry = models.DateField(null=True, blank=True)
     wants_to_participate = models.BooleanField(default=False)
     can_download_content = models.BooleanField(default=False)

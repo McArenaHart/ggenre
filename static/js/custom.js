@@ -244,3 +244,70 @@ function fetchAnnouncements() {
         console.error("Error fetching announcements:", error);
     });
 }
+
+        // Toggle password visibility
+        function togglePassword(inputId) {
+            const passwordInput = document.getElementById(inputId);
+            const eyeIcon = passwordInput.nextElementSibling.querySelector('i');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                eyeIcon.classList.remove('fa-eye');
+                eyeIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                eyeIcon.classList.remove('fa-eye-slash');
+                eyeIcon.classList.add('fa-eye');
+            }
+        }
+
+        // Check password strength
+        document.getElementById('newPassword').addEventListener('input', function() {
+            const password = this.value;
+            const strengthBar = document.getElementById('passwordStrength');
+            
+            // Reset strength bar
+            strengthBar.className = '';
+            
+            if (password.length === 0) {
+                return;
+            }
+            
+            // Very basic strength check (in real app, use more robust validation)
+            if (password.length < 6) {
+                strengthBar.classList.add('strength-weak');
+            } else if (password.length < 10) {
+                strengthBar.classList.add('strength-medium');
+            } else {
+                strengthBar.classList.add('strength-strong');
+            }
+        });
+
+        // Check if passwords match
+        document.getElementById('confirmPassword').addEventListener('input', function() {
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = this.value;
+            const messageElement = document.getElementById('passwordMatchMessage');
+            
+            if (confirmPassword.length === 0) {
+                messageElement.textContent = '';
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                messageElement.textContent = 'Passwords do not match';
+            } else {
+                messageElement.textContent = 'Passwords match';
+                messageElement.classList.remove('text-danger');
+                messageElement.classList.add('text-success');
+            }
+        });
+
+        // Form submission
+        document.querySelector('form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Hide form and show success message
+            document.querySelector('.password-card').style.display = 'none';
+            document.getElementById('successMessage').style.display = 'block';
+        });

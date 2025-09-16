@@ -1,4 +1,6 @@
 # content/views.py
+# In content/views.py
+from users.utils import send_notification_to_followers
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
@@ -77,6 +79,11 @@ def upload_content(request):
             if upload_limit and not upload_limit.suspended_by_admin:
                 upload_limit.uploads_used += 1
                 upload_limit.save()
+
+            
+            # Send notifications to followers
+            message = f"{request.user.username} just uploaded new content: {content.title}"
+            send_notification_to_followers(request.user, message)
 
             messages.success(request, "Content uploaded successfully!")
             return redirect('artist_content', artist_id=request.user.id)

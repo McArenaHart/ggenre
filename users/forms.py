@@ -57,6 +57,8 @@ class LoginForm(AuthenticationForm):
     pass
 
 
+
+
 class ProfileUpdateForm(forms.ModelForm):
     password = forms.CharField(
         widget=forms.PasswordInput,
