@@ -1,40 +1,16 @@
 {% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/users-admin-dashboard.css' %}?v=20260227a" rel="stylesheet" />
+{% endblock extra_css %}
 
 {% block content %}
 
-<style>
-  .btn-success {
-    background-color: #28a745;
-    border-color: #28a745;
-    color: #fff;
-  }
-  
-  .btn-success:hover {
-    background-color: #218838;
-    border-color: #1e7e34;
-  }
-
-  /* Match existing button styles */
-.btn-group select {
-  border: 1px solid #ccc;
-  padding: 6px 12px;
-  height: 34px;
-  background: #fff;
-}
-
-/* Ensure spacing aligns with the layout */
-form .btn-group {
-  display: flex;
-  gap: 8px;
-}
-
-.btn i {
-  margin-right: 5px;
-}
-</style>
-
 <!-- Main Content -->
-<div class="right_col" role="main">
+<div class="right_col admin-dashboard-page" role="main">
 
 <div class="row">
   <div class="col-md-12 col-sm-12 col-xs-12">
@@ -65,37 +41,39 @@ form .btn-group {
         <hr>
 
         <!-- Announcement List -->
-        <table class="table table-striped">
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Message</th>
-              <th>Created By</th>
-              <th>Date</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for announcement in announcements %}
+        <div class="table-responsive">
+          <table class="table table-striped">
+            <thead>
               <tr>
-                <td>{{ announcement.title }}</td>
-                <td>{{ announcement.message }}</td>
-                <td>{{ announcement.created_by.username }}</td>
-                <td>{{ announcement.created_at|date:"M d, Y H:i" }}</td>
-                <td>
-                  <form method="POST" action="{% url 'delete_announcement' announcement.id %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                  </form>
-                </td>
+                <th>Title</th>
+                <th>Message</th>
+                <th>Created By</th>
+                <th>Date</th>
+                <th>Actions</th>
               </tr>
-            {% empty %}
-              <tr>
-                <td colspan="5" class="text-center">No announcements available.</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {% for announcement in announcements %}
+                <tr>
+                  <td>{{ announcement.title }}</td>
+                  <td>{{ announcement.message }}</td>
+                  <td>{{ announcement.created_by.username }}</td>
+                  <td>{{ announcement.created_at|date:"M d, Y H:i" }}</td>
+                  <td>
+                    <form method="POST" action="{% url 'delete_announcement' announcement.id %}">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5" class="text-center">No announcements available.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -110,24 +88,26 @@ form .btn-group {
           <div class="clearfix"></div>
         </div>
         <div class="x_content">
-          <table class="table table-bordered">
-            <thead>
-              <tr>
-                <th><i class="fa fa-users"></i> Total Users</th>
-                <th><i class="fa fa-file"></i> Total Content</th>
-                <th><i class="fa fa-check"></i> Approved Content</th>
-                <th><i class="fa fa-hourglass"></i> Pending Content</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>{{ statistics.total_users }}</td>
-                <td>{{ statistics.total_content }}</td>
-                <td>{{ statistics.approved_content }}</td>
-                <td>{{ statistics.pending_content }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th><i class="fa fa-users"></i> Total Users</th>
+                  <th><i class="fa fa-file"></i> Total Content</th>
+                  <th><i class="fa fa-check"></i> Approved Content</th>
+                  <th><i class="fa fa-hourglass"></i> Pending Content</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>{{ statistics.total_users }}</td>
+                  <td>{{ statistics.total_content }}</td>
+                  <td>{{ statistics.approved_content }}</td>
+                  <td>{{ statistics.pending_content }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -145,7 +125,7 @@ form .btn-group {
         <div class="clearfix"></div>
       </div>
       <div class="x_content">
-        <form method="get" action="{% url 'export_data' %}" class="mt-3">
+        <form method="get" action="{% url 'export_data' %}" class="mt-3 admin-dashboard-export-form">
           <div class="btn-group" role="group" aria-label="Export Options">
             <select name="format" id="format" class="form-control btn btn-default">
               <option value="csv">CSV</option>
@@ -156,33 +136,35 @@ form .btn-group {
             </button>
           </div>
         </form>
-             
-        <table class="table table-bordered table-hover">
-          <thead class="thead">
-            <tr>
-              <th><i class="fa fa-trophy"></i> Rank</th>
-              <th><i class="fa fa-music"></i> Content</th>
-              <th><i class="fa fa-star"></i> Total Points</th>
-              <th><i class="fa fa-thumbs-up"></i> Total Votes</th>
-              <th><i class="fa fa-certificate"></i> Badge Votes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for content in content_ranking %}
-            <tr>
-              <td><strong>#{{ forloop.counter }}</strong></td>
-              <td>{{ content.title }}</td>
-              <td>{{ content.total_points|default_if_none:"0" }}</td>
-              <td>{{ content.total_votes|default_if_none:"0" }}</td>
-              <td>{{ content.badge_votes|default_if_none:"0" }}</td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="5" class="text-center text-muted">No voting data available.</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover">
+            <thead class="thead">
+              <tr>
+                <th><i class="fa fa-trophy"></i> Rank</th>
+                <th><i class="fa fa-music"></i> Content</th>
+                <th><i class="fa fa-star"></i> Total Points</th>
+                <th><i class="fa fa-thumbs-up"></i> Total Votes</th>
+                <th><i class="fa fa-certificate"></i> Badge Votes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for content in content_ranking %}
+              <tr>
+                <td><strong>#{{ forloop.counter }}</strong></td>
+                <td>{{ content.title }}</td>
+                <td>{{ content.total_points|default_if_none:"0" }}</td>
+                <td>{{ content.total_votes|default_if_none:"0" }}</td>
+                <td>{{ content.badge_votes|default_if_none:"0" }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="text-center text-muted">No voting data available.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -208,7 +190,7 @@ form .btn-group {
           />
 
           <!-- Filter Options -->
-          <div class="btn-group" role="group" aria-label="Content Filters">
+          <div class="btn-group admin-dashboard-filter-group" role="group" aria-label="Content Filters">
             <button 
               type="button" 
               class="btn btn-default filter-btn" 
@@ -244,32 +226,33 @@ form .btn-group {
           </select>
 
           <!-- Content Table -->
-          <table class="table table-striped" id="contentTable">
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Artist</th>
-                <th>Status</th>
-                <th>Category</th>
-                <th>Uploaded On</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for content in recent_uploads %}
-                <tr data-status="{% if content.is_approved %}approved{% else %}pending{% endif %}" data-category="{{ content.category }}">
-                  <td>{{ content.title }}</td>
-                  <td>{{ content.artist.username }}</td>
-                  <td>
-                    {% if content.is_approved %}
-                      <span class="label label-success">Approved</span>
-                    {% else %}
-                      <span class="label label-warning">Pending</span>
-                    {% endif %}
-                  </td>
-                  <td>{{ content.category }}</td>
-                  <td>{{ content.upload_date }}</td>
-                  <!-- Updated Actions Dropdown -->
+          <div class="table-responsive">
+            <table class="table table-striped" id="contentTable">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Artist</th>
+                  <th>Status</th>
+                  <th>Category</th>
+                  <th>Uploaded On</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for content in recent_uploads %}
+                  <tr data-status="{% if content.is_approved %}approved{% else %}pending{% endif %}" data-category="{{ content.category }}">
+                    <td>{{ content.title }}</td>
+                    <td>{{ content.artist.username }}</td>
+                    <td>
+                      {% if content.is_approved %}
+                        <span class="label label-success">Approved</span>
+                      {% else %}
+                        <span class="label label-warning">Pending</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ content.category }}</td>
+                    <td>{{ content.upload_date }}</td>
+                    <!-- Updated Actions Dropdown -->
 <td>
   <div class="btn-group">
     <button type="button" class="btn btn-sm btn-default dropdown-toggle" data-toggle="dropdown">
@@ -302,15 +285,15 @@ form .btn-group {
   </div>
 </td>
 
-                  
-                </tr>
-              {% empty %}
-                <tr>
-                  <td colspan="6" class="text-center">No content found.</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="6" class="text-center">No content found.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -328,26 +311,28 @@ form .btn-group {
           <form method="POST">
             {% csrf_token %}
             <input type="hidden" name="action" value="reset_limit">
-            <table class="table table-striped">
-              <thead>
-                <tr>
-                  <th><input type="checkbox" id="select-all-artists"></th>
-                  <th>Artist</th>
-                  <th>Uploads Used</th>
-                  <th>Upload Limit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for artist in artists %}
+            <div class="table-responsive">
+              <table class="table table-striped">
+                <thead>
                   <tr>
-                    <td><input type="checkbox" name="artist_ids" value="{{ artist.artist.id }}"></td>
-                    <td>{{ artist.artist.username }}</td>
-                    <td>{{ artist.uploads_used }}</td>
-                    <td>{{ artist.upload_limit }}</td>
+                    <th><input type="checkbox" id="select-all-artists"></th>
+                    <th>Artist</th>
+                    <th>Uploads Used</th>
+                    <th>Upload Limit</th>
                   </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {% for artist in artists %}
+                    <tr>
+                      <td><input type="checkbox" name="artist_ids" value="{{ artist.artist.id }}"></td>
+                      <td>{{ artist.artist.username }}</td>
+                      <td>{{ artist.uploads_used }}</td>
+                      <td>{{ artist.upload_limit }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
             <button type="submit" class="btn btn-primary">Reset Selected Limits</button>
           </form>
         </div>
@@ -424,7 +409,7 @@ form .btn-group {
             <select name="performance_id" class="form-control" required>
               {% for perf in live_performances %}
                 <option value="{{ perf.id }}">
-                  {{ perf.title }} — {{ perf.artist.username }} — {{ perf.start_time }} — {{ perf.is_restricted|yesno:"Restricted,Public" }}
+                  {{ perf.title }} &mdash; {{ perf.artist.username }} &mdash; {{ perf.start_time }} &mdash; {{ perf.is_restricted|yesno:"Restricted,Public" }}
                 </option>
               {% endfor %}
             </select>

@@ -1281,3 +1281,50 @@ body.app-theme[data-theme="light"] .app-empty {
     font-size: 0.82rem;
   }
 }
+
+/* Mobile hardening for legacy and mixed layouts */
+body.app-theme .right_col {
+  width: 100%;
+  min-width: 0;
+}
+
+body.app-theme .container,
+body.app-theme .container-fluid {
+  width: 100%;
+  max-width: 100%;
+}
+
+body.app-theme .app-content-wrapper [class*="col-"] {
+  min-width: 0;
+}
+
+body.app-theme .table-responsive {
+  border-radius: inherit;
+}
+
+body.app-theme .table td,
+body.app-theme .table th {
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767.98px) {
+  body.app-theme .app-content-wrapper .btn-group {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  body.app-theme .app-content-wrapper .btn-group > .btn,
+  body.app-theme .app-content-wrapper .btn-group > .form-control,
+  body.app-theme .app-content-wrapper .btn-group > .custom-select,
+  body.app-theme .app-content-wrapper .btn-group > select {
+    flex: 1 1 100%;
+  }
+
+  body.app-theme .app-content-wrapper .dropdown-menu-right {
+    right: auto;
+    left: 0;
+  }
+}

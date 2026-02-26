@@ -1,11 +1,15 @@
 {% extends "includes/base.html" %}
-{% load content_filters %}
+{% load content_filters static %}
 
 {% block title %}Vote{% endblock %}
 
+{% block extra_css %}
+<link href="{% static 'css/pages/content-vote.css' %}?v=20260227a" rel="stylesheet" />
+{% endblock extra_css %}
+
 {% block content %}
-<div class="container py-4">
-  <div class="card p-4">
+<div class="container py-4 vote-page">
+  <div class="card p-4 vote-card">
     <h2 class="mb-3">Vote for {{ content.title }}</h2>
     <p><strong>Artist:</strong> {{ content.artist.username }}</p>
     <p><strong>Description:</strong> {{ content.description }}</p>
@@ -17,7 +21,7 @@
       <form method="post" action="{% url 'vote_content' content.id %}" class="mt-4">
         {% csrf_token %}
         <label for="vote_value">Rate this content (1-5):</label>
-        <select id="vote_value" name="vote_value" class="form-control" style="width: 100px;">
+        <select id="vote_value" name="vote_value" class="form-control vote-select">
           {% for i in "12345" %}
             <option value="{{ i }}" {% if vote_value == i %}selected{% endif %}>{{ i }}</option>
           {% endfor %}

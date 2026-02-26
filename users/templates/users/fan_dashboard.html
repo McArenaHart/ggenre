@@ -1,9 +1,14 @@
 {% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Fan Dashboard{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/users-role-dashboard.css' %}?v=20260227a" rel="stylesheet" />
+{% endblock extra_css %}
 
 {% block content %}
-<!-- Main Content -->
-<div class="right_col" role="main">
-  <!-- Mini Table for Statistics -->
+<div class="right_col role-dashboard-page fan-dashboard-page" role="main">
   <div class="row">
     <div class="col-md-12 col-sm-12 col-xs-12">
       <div class="x_panel">
@@ -12,24 +17,25 @@
           <div class="clearfix"></div>
         </div>
         <div class="x_content">
-          <table class="table table-bordered">
-            <thead>
-              <tr>
-                <th><i class="fa fa-thumbs-up"></i> Total Votes</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>{{ total_votes }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th><i class="fa fa-thumbs-up"></i> Total Votes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>{{ total_votes }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Voted Content Section -->
   <div class="row">
     <div class="col-md-12 col-sm-12 col-xs-12">
       <div class="x_panel">
@@ -38,28 +44,30 @@
           <div class="clearfix"></div>
         </div>
         <div class="x_content">
-          <table class="table table-striped">
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Artist</th>
-                <th>Voted On</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for vote in voted_content %}
+          <div class="table-responsive">
+            <table class="table table-striped">
+              <thead>
                 <tr>
-                  <td>{{ vote.content.title }}</td>
-                  <td>{{ vote.content.artist.username }}</td>
-                  <td>{{ vote.timestamp }}</td>
+                  <th>Title</th>
+                  <th>Artist</th>
+                  <th>Voted On</th>
                 </tr>
-              {% empty %}
-                <tr>
-                  <td colspan="3" class="text-center">No votes found.</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {% for vote in voted_content %}
+                  <tr>
+                    <td>{{ vote.content.title }}</td>
+                    <td>{{ vote.content.artist.username }}</td>
+                    <td>{{ vote.timestamp }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="3" class="text-center">No votes found.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

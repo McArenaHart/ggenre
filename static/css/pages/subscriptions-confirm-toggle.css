@@ -1,0 +1,32 @@
+.confirm-toggle-page {
+  padding-top: 1rem;
+}
+
+.confirm-toggle-page .x_panel {
+  margin-bottom: 0;
+}
+
+.confirm-toggle-page .x_content p {
+  margin-bottom: 1rem;
+}
+
+.confirm-toggle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0;
+}
+
+.confirm-toggle-actions .btn {
+  min-width: 120px;
+}
+
+@media (max-width: 575.98px) {
+  .confirm-toggle-page {
+    padding-top: 0.6rem;
+  }
+
+  .confirm-toggle-actions .btn {
+    width: 100%;
+  }
+}

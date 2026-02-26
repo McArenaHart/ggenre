@@ -4,24 +4,24 @@
 {% block title %}Live Streams{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/content-live-stream-index.css' %}" rel="stylesheet" />
+<link href="{% static 'css/pages/content-live-stream-index.css' %}?v=20260227a" rel="stylesheet" />
 {% endblock extra_css %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="card shadow-lg p-4">
+<div class="container mt-5 live-index-page">
+    <div class="card shadow-lg p-4 live-index-card">
         <h2 class="mb-4 fw-bold text-center">Live Performances</h2>
 
         {% if performances %}
-        <ul class="list-group mb-4">
+        <ul class="list-group mb-4 live-index-list">
             {% for performance in performances %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
+            <li class="list-group-item d-flex justify-content-between align-items-center live-index-item">
                 <div>
                     <strong>{{ performance.title }}</strong>
                     <br>
                     <small class="text-muted">by {{ performance.artist.username }}</small>
                 </div>
-                <a href="{% url 'live_stream_room' room_name=performance.stream_key %}" class="btn btn-outline-primary btn-sm">
+                <a href="{% url 'live_stream_room' room_name=performance.stream_key %}" class="btn btn-outline-primary btn-sm live-index-join-btn">
                     Join Stream
                 </a>
             </li>

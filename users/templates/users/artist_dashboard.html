@@ -1,9 +1,14 @@
 {% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Artist Dashboard{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/users-role-dashboard.css' %}?v=20260227a" rel="stylesheet" />
+{% endblock extra_css %}
 
 {% block content %}
-<!-- Main Content -->
-<div class="right_col" role="main">
-  <!-- Mini Table for Statistics -->
+<div class="right_col role-dashboard-page artist-dashboard-page" role="main">
   <div class="row">
     <div class="col-md-12 col-sm-12 col-xs-12">
       <div class="x_panel">
@@ -38,6 +43,5 @@
       </div>
     </div>
   </div>
-
-
+</div>
 {% endblock %}

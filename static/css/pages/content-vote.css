@@ -1,0 +1,19 @@
+.vote-page .vote-card {
+  border-radius: 12px;
+}
+
+.vote-page .vote-select {
+  width: 120px;
+  max-width: 100%;
+}
+
+@media (max-width: 575.98px) {
+  .vote-page .vote-card {
+    padding: 1rem !important;
+  }
+
+  .vote-page .vote-select,
+  .vote-page .btn[type="submit"] {
+    width: 100%;
+  }
+}

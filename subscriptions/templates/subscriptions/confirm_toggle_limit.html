@@ -1,9 +1,16 @@
 {% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Confirm Action{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/subscriptions-confirm-toggle.css' %}?v=20260227a" rel="stylesheet" />
+{% endblock extra_css %}
 
 {% block content %}
-<div class="right_col" role="main">
-  <div class="row">
-    <div class="col-md-12 col-sm-12 col-xs-12">
+<div class="container-fluid confirm-toggle-page">
+  <div class="row justify-content-center">
+    <div class="col-lg-8 col-md-10">
       <div class="x_panel">
         <div class="x_title">
           <h2>Confirm Action</h2>
@@ -12,14 +19,14 @@
         <div class="x_content">
           {% if user %}
             <p>
-              Are you sure you want to 
-              <strong>{% if user_limit.suspended_by_admin %}reinstate{% else %}suspend{% endif %}</strong> 
-              the subscription limits for 
+              Are you sure you want to
+              <strong>{% if user_limit.suspended_by_admin %}reinstate{% else %}suspend{% endif %}</strong>
+              the subscription limits for
               <strong>{{ user.username }}</strong> ({{ target|title }})?
             </p>
             <form method="POST" action="{% url 'subscriptions:toggle_limit_suspension' user.id target %}">
               {% csrf_token %}
-              <div class="form-group">
+              <div class="form-group confirm-toggle-actions">
                 <button type="submit" class="btn btn-danger">
                   {% if user_limit.suspended_by_admin %}Reinstate{% else %}Suspend{% endif %}
                 </button>
@@ -27,7 +34,7 @@
               </div>
             </form>
           {% else %}
-            <p class="text-danger">Invalid user data.</p>
+            <p class="text-danger mb-0">Invalid user data.</p>
           {% endif %}
         </div>
       </div>
