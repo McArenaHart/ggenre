@@ -14,7 +14,7 @@
             {% for user in users %}
             <div class="col-md-4">
                 <div class="card shadow-sm p-3 d-flex align-items-center">
-                    <img src="{{ user.get_profile_picture }}" class="rounded-circle mb-2" width="60" height="60">
+                    {% include "partials/user_avatar.html" with avatar_user=user size=60 class_name="mb-2" alt_text=user.username %}
                     <h6 class="font-weight-bold">{{ user.username }}</h6>
                     <p class="text-muted">{{ user.email }}</p>
                     <a href="{% url 'user_profile' user.id %}" class="btn btn-outline-primary btn-sm mt-2">View Profile</a>

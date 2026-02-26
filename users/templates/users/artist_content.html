@@ -1,50 +1,67 @@
 {% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}{{ artist.username }} Content{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/users-artist-content.css' %}?v=20260226a" rel="stylesheet" />
+{% endblock extra_css %}
 
 {% block content %}
-<!-- Main Content -->
-<div class="right_col" role="main">
-  <div class="row">
-    <div class="col-md-12 col-sm-12 col-xs-12">
-      <div class="x_panel">
-        <div class="x_title">
-          <h2>Content by {{ artist.username }}</h2>
-          <div class="clearfix"></div>
-        </div>
-        <div class="x_content">
-          <table class="table table-striped">
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Uploaded On</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for content in artist_content %}
-                <tr>
-                  <td>
-                    <!-- Make the title clickable -->
-                    <a href="{% url 'content_detail' content.id %}">{{ content.title }}</a>
-                  </td>
-                  <td>
-                    {% if content.is_approved %}
-                      <span class="label label-success">Approved</span>
-                    {% else %}
-                      <span class="label label-warning">Pending</span>
-                    {% endif %}
-                  </td>
-                  <td>{{ content.upload_date }}</td>
-                </tr>
-              {% empty %}
-                <tr>
-                  <td colspan="3" class="text-center">No content found.</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+<div class="container-fluid artist-content-page">
+  <header class="artist-content-header">
+    <div class="artist-content-identity">
+      {% include "partials/user_avatar.html" with avatar_user=artist size=64 class_name="artist-content-avatar" alt_text=artist.username %}
+      <div>
+        <h1 class="mb-1">Content by {{ artist.username }}</h1>
+        <p class="mb-0 text-muted">Track all uploads and approval status.</p>
       </div>
     </div>
-  </div>
+
+    {% if request.user == artist %}
+      <a href="{% url 'upload_content' %}" class="btn btn-primary btn-sm">
+        <i class="fas fa-cloud-upload-alt"></i> Upload New
+      </a>
+    {% endif %}
+  </header>
+
+  <article class="card artist-content-card">
+    <div class="table-responsive">
+      <table class="table mb-0 artist-content-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Uploaded On</th>
+            <th class="text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for content in artist_content %}
+            <tr>
+              <td>
+                <a href="{% url 'content_detail' content.id %}" class="artist-content-title">{{ content.title }}</a>
+              </td>
+              <td>
+                {% if content.is_approved %}
+                  <span class="badge badge-success">Approved</span>
+                {% else %}
+                  <span class="badge badge-warning">Pending Review</span>
+                {% endif %}
+              </td>
+              <td>{{ content.upload_date|date:"M d, Y H:i" }}</td>
+              <td class="text-right">
+                <a href="{% url 'content_detail' content.id %}" class="btn btn-outline-primary btn-sm">Open</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="text-center artist-content-empty">No content found.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
 </div>
 {% endblock %}

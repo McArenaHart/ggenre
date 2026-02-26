@@ -3,6 +3,10 @@
 
 {% block title %}Live Streams{% endblock %}
 
+{% block extra_css %}
+<link href="{% static 'css/pages/content-live-stream-index.css' %}" rel="stylesheet" />
+{% endblock extra_css %}
+
 {% block content %}
 <div class="container mt-5">
     <div class="card shadow-lg p-4">
@@ -59,25 +63,4 @@
     </div>
 </div>
 
-<!-- Optional Styling -->
-<style>
-    .card {
-        border-radius: 12px;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    .card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
-    }
-
-    .list-group-item {
-        border-radius: 6px;
-        transition: background-color 0.2s ease;
-    }
-
-    .list-group-item:hover {
-        background-color: #f8f9fa;
-    }
-</style>
 {% endblock %}

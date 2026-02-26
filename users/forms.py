@@ -11,7 +11,7 @@ from django.contrib.auth.models import User
 CustomUser = get_user_model()
 
 class UserRegistrationForm(UserCreationForm):
-    phone_number = forms.CharField(max_length=15, required=True, label="Phone Number")
+    email = forms.EmailField(required=True, label="Email")
     password1 = forms.CharField(widget=forms.PasswordInput, label="Password")
     password2 = forms.CharField(widget=forms.PasswordInput, label="Confirm Password")
     
@@ -20,13 +20,7 @@ class UserRegistrationForm(UserCreationForm):
 
     class Meta:
         model = CustomUser
-        fields = ['username', 'email', 'phone_number', 'password1', 'password2', 'role']
-        
-    def clean_phone_number(self):
-        phone_number = self.cleaned_data.get('phone_number')
-        if CustomUser.objects.filter(phone_number=phone_number).exists():
-            raise forms.ValidationError("This phone number is already registered.")
-        return phone_number
+        fields = ['username', 'email', 'password1', 'password2', 'role']
 
 
     def clean_username(self):

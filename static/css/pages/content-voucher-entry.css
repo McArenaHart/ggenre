@@ -1,0 +1,16 @@
+.card {
+  border-radius: 12px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(5, 10, 25, 0.55);
+}
+
+@media (max-width: 768px) {
+  .col-lg-6,
+  .col-md-8 {
+    width: 100%;
+  }
+}

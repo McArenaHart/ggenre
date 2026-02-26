@@ -1,0 +1,18 @@
+.card {
+  border-radius: 12px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(5, 9, 24, 0.55);
+}
+
+.list-group-item {
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.list-group-item:hover {
+  background-color: rgba(122, 237, 238, 0.08);
+}

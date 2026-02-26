@@ -3,184 +3,221 @@
 
 {% block title %}{{ profile_user.username }}'s Profile{% endblock %}
 
+{% block extra_css %}
+<link href="{% static 'css/pages/users-profile.css' %}?v=20260226a" rel="stylesheet" />
+{% endblock extra_css %}
+
 {% block content %}
-<div class="container-fluid mt-4">
-    <div class="row">
-        <!-- Profile Section -->
-        <div class="col-lg-9 col-md-8">
-            <div class="card shadow-lg p-4">
-                <div class="d-flex align-items-center">
-                    <!-- Profile Picture -->
-                    <div class="profile-picture">
-                        <img class="rounded-circle profile-preview" width="120" height="120"
-                            src="{{ profile_user.get_profile_picture }}" alt="{{ profile_user.username }}">
-                    </div>
+<div class="container-fluid user-profile-page">
+    <section class="card profile-hero-card mb-4">
+        <div class="card-body profile-hero-body">
+            <div class="profile-hero-main">
+                <div class="profile-avatar-wrap" data-profile-avatar>
+                    {% include "partials/user_avatar.html" with avatar_user=profile_user size=120 class_name="profile-preview profile-avatar" alt_text=profile_user.username %}
+                </div>
 
-                    <div class="ml-3">
-                        <h2 class="font-weight-bold">{{ profile_user.username }}</h2>
-                        <p class="text-muted">
-                            {% if is_artist %}
-                                <i class="fas fa-music"></i> Artist
-                            {% else %}
-                                <i class="fas fa-user"></i> Fan
-                            {% endif %}
-                        </p>
-                        <p><i class="fas fa-envelope"></i> {{ profile_user.email }}</p>
-
-                        <!-- Follower Stats -->
-                        <p><i class="fas fa-users"></i> Followers: <strong>{{ followers_count }}</strong></p>
-                        <p><i class="fas fa-user-friends"></i> Following: <strong>{{ following_count }}</strong></p>
-
-                        <!-- Follow/Unfollow Button -->
-                        {% if request.user != profile_user %}
-                        <form method="post" action="{% url 'user_profile' profile_user.id %}">
-                            {% csrf_token %}
-                            {% if is_following %}
-                                <button type="submit" name="follow" class="btn btn-outline-danger btn-sm">
-                                    <i class="fas fa-user-minus"></i> Unfollow
-                                </button>
-                            {% else %}
-                                <button type="submit" name="follow" class="btn btn-primary btn-sm">
-                                    <i class="fas fa-user-plus"></i> Follow
-                                </button>
-                            {% endif %}
-                        </form>
+                <div class="profile-identity">
+                    <h1 class="profile-name mb-1">{{ profile_user.username }}</h1>
+                    <p class="profile-role mb-2">
+                        {% if is_artist %}
+                            <i class="fas fa-music"></i> Artist
+                        {% else %}
+                            <i class="fas fa-user"></i> Fan
                         {% endif %}
-                    </div>
+                    </p>
+                    <p class="profile-email mb-0"><i class="fas fa-envelope"></i> {{ profile_user.email }}</p>
                 </div>
             </div>
 
-            <!-- Followers & Following Lists -->
-            <div class="mt-4">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5 class="font-weight-bold">Followers</h5>
-                        <ul class="list-group">
-                            {% for follow in followers %}
-                            <li class="list-group-item d-flex align-items-center">
-                                <img src="{{ follow.follower.get_profile_picture }}" class="rounded-circle mr-2" width="40" height="40">
-                                <a href="{% url 'user_profile' follow.follower.id %}" class="text-dark">{{ follow.follower.username }}</a>
-                            </li>
-                            {% empty %}
-                            <li class="list-group-item text-muted">No followers yet.</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                    <div class="col-md-6">
-                        <h5 class="font-weight-bold">Following</h5>
-                        <ul class="list-group">
-                            {% for follow in following %}
-                            <li class="list-group-item d-flex align-items-center">
-                                <img src="{{ follow.following.get_profile_picture }}" class="rounded-circle mr-2" width="40" height="40">
-                                <a href="{% url 'user_profile' follow.following.id %}" class="text-dark">{{ follow.following.username }}</a>
-                            </li>
-                            {% empty %}
-                            <li class="list-group-item text-muted">Not following anyone yet.</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
+            <div class="profile-hero-side">
+                <div class="profile-stat-row">
+                    <span class="profile-stat-pill">
+                        <i class="fas fa-users"></i>
+                        Followers
+                        <strong>{{ followers_count }}</strong>
+                    </span>
+                    <span class="profile-stat-pill">
+                        <i class="fas fa-user-friends"></i>
+                        Following
+                        <strong>{{ following_count }}</strong>
+                    </span>
                 </div>
-            </div>
 
-            <!-- Artist Content Section -->
-            {% if is_artist %}
-            <div class="mt-4">
-                <h4 class="font-weight-bold">Uploaded Content</h4>
+                {% if request.user != profile_user %}
+                    <form method="post" action="{% url 'user_profile' profile_user.id %}" class="profile-follow-form">
+                        {% csrf_token %}
+                        {% if is_following %}
+                            <button type="submit" name="follow" class="btn btn-outline-danger btn-sm">
+                                <i class="fas fa-user-minus"></i> Unfollow
+                            </button>
+                        {% else %}
+                            <button type="submit" name="follow" class="btn btn-primary btn-sm">
+                                <i class="fas fa-user-plus"></i> Follow
+                            </button>
+                        {% endif %}
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <section class="row">
+        <div class="col-xl-6 mb-4">
+            <article class="card profile-list-card h-100">
+                <div class="card-header profile-list-header">
+                    <h5 class="mb-0">Followers</h5>
+                    <span>{{ followers_count }}</span>
+                </div>
+                <ul class="list-group list-group-flush profile-user-list">
+                    {% for follow in followers %}
+                        <li class="list-group-item">
+                            <a href="{% url 'user_profile' follow.follower.id %}" class="profile-user-item">
+                                {% include "partials/user_avatar.html" with avatar_user=follow.follower size=40 class_name="profile-user-avatar" alt_text=follow.follower.username %}
+                                <span>{{ follow.follower.username }}</span>
+                            </a>
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item profile-list-empty">No followers yet.</li>
+                    {% endfor %}
+                </ul>
+            </article>
+        </div>
+
+        <div class="col-xl-6 mb-4">
+            <article class="card profile-list-card h-100">
+                <div class="card-header profile-list-header">
+                    <h5 class="mb-0">Following</h5>
+                    <span>{{ following_count }}</span>
+                </div>
+                <ul class="list-group list-group-flush profile-user-list">
+                    {% for follow in following %}
+                        <li class="list-group-item">
+                            <a href="{% url 'user_profile' follow.following.id %}" class="profile-user-item">
+                                {% include "partials/user_avatar.html" with avatar_user=follow.following size=40 class_name="profile-user-avatar" alt_text=follow.following.username %}
+                                <span>{{ follow.following.username }}</span>
+                            </a>
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item profile-list-empty">Not following anyone yet.</li>
+                    {% endfor %}
+                </ul>
+            </article>
+        </div>
+    </section>
+
+    {% if is_artist %}
+        <section class="card profile-content-card mb-4">
+            <div class="card-header profile-content-header">
+                <h4 class="mb-0">Uploaded Content</h4>
+            </div>
+            <div class="card-body">
                 <div class="row">
                     {% for content in user_content %}
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <a href="{% url 'content_detail' content.id %}" class="card-link">
-                            <div class="card shadow-sm">
-                                <div class="card-body">
-                                    <h6 class="font-weight-bold">{{ content.title }}</h6>
-                                    <p class="text-muted small">
-                                        <i class="fas fa-eye"></i> {{ content.views }} views
-                                    </p>
-                                </div>
-                            </div>
-                        </a>
-                    </div>
+                        <div class="col-xl-4 col-md-6 mb-3">
+                            <a href="{% url 'content_detail' content.id %}" class="profile-content-link">
+                                <article class="profile-content-item">
+                                    <h6 class="mb-2">{{ content.title }}</h6>
+                                    <div class="profile-content-meta">
+                                        <span><i class="fas fa-eye"></i> {{ content.view_count }} views</span>
+                                        <span><i class="fas fa-calendar-alt"></i> {{ content.upload_date|date:"M d, Y" }}</span>
+                                    </div>
+                                    {% if content.is_approved %}
+                                        <span class="badge badge-success">Approved</span>
+                                    {% else %}
+                                        <span class="badge badge-warning">Pending</span>
+                                    {% endif %}
+                                </article>
+                            </a>
+                        </div>
                     {% empty %}
-                    <p class="text-muted">No content uploaded yet.</p>
+                        <div class="col-12">
+                            <p class="profile-list-empty mb-0">No content uploaded yet.</p>
+                        </div>
                     {% endfor %}
                 </div>
             </div>
-
-            {% else %}
-            <!-- Fan Followed Artists Section -->
-            <div class="mt-4">
-                <h4 class="font-weight-bold">Followed Artists</h4>
+        </section>
+    {% else %}
+        <section class="card profile-content-card mb-4">
+            <div class="card-header profile-content-header">
+                <h4 class="mb-0">Followed Artists</h4>
+            </div>
+            <div class="card-body">
                 <div class="row">
-                    {% for artist in followed_artists %}
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <a href="{% url 'artist_content' artist.id %}" class="card-link text-decoration-none">
-                            <div class="card shadow-sm p-3 d-flex align-items-center">
-                                <img src="{{ artist.get_profile_picture }}" class="rounded-circle mr-3" width="50" height="50">
-                                <h6 class="font-weight-bold mb-0">{{ artist.username }}</h6>
-                            </div>
-                        </a>
-                    </div>
+                    {% for follow in followed_artists %}
+                        <div class="col-xl-4 col-md-6 mb-3">
+                            <a href="{% url 'artist_content' follow.following.id %}" class="profile-content-link">
+                                <article class="profile-followed-item">
+                                    {% include "partials/user_avatar.html" with avatar_user=follow.following size=50 class_name="mr-2" alt_text=follow.following.username %}
+                                    <h6 class="mb-0">{{ follow.following.username }}</h6>
+                                </article>
+                            </a>
+                        </div>
                     {% empty %}
-                    <p class="text-muted text-center">No artists followed yet.</p>
+                        <div class="col-12">
+                            <p class="profile-list-empty mb-0">No artists followed yet.</p>
+                        </div>
                     {% endfor %}
                 </div>
             </div>
-            {% endif %}
+        </section>
+    {% endif %}
 
-            <!-- Profile Editing (For Profile Owner) -->
-            {% if profile_user == request.user %}
-            <div class="mt-4">
-                <h4 class="font-weight-bold">Edit Profile</h4>
-                <form method="post" enctype="multipart/form-data" action="{% url 'user_profile' profile_user.id %}">
-                    {% csrf_token %}
-                    <div class="form-group">
-                        <label>Username</label>
-                        <input type="text" name="username" value="{{ form.username.value }}" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" name="email" value="{{ form.email.value }}" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label>Profile Picture</label>
-                        <input type="file" name="profile_picture" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label>Bio</label>
-                        <textarea name="bio" class="form-control">{{ form.bio.value }}</textarea>
-                    </div>
-                    <button type="submit" name="update_profile" class="btn btn-primary mt-2">Update Profile</button>
-                    <!-- In your profile template -->
-                    <a href="{% url 'password_change' %}" class="btn btn-outline-primary">
-                        Change Password
-                    </a>
-                </form>
-            
+    {% if profile_user == request.user %}
+        <section class="card profile-edit-card mb-4">
+            <div class="card-header profile-content-header">
+                <h4 class="mb-0">Edit Profile</h4>
             </div>
-            {% endif %}
-        </div>
-    </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" action="{% url 'user_profile' profile_user.id %}" class="profile-edit-form">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="profile_username">Username</label>
+                                <input id="profile_username" type="text" name="username" value="{{ form.username.value|default_if_none:'' }}" class="form-control">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="profile_email">Email</label>
+                                <input id="profile_email" type="email" name="email" value="{{ form.email.value|default_if_none:'' }}" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile_picture">Profile Picture</label>
+                        <div class="profile-file-picker">
+                            <input id="profile_picture" type="file" name="profile_picture" class="form-control">
+                            <label for="profile_picture" class="profile-file-trigger">
+                                <i class="fas fa-image"></i>
+                                <span>Choose Image</span>
+                            </label>
+                        </div>
+                        <small class="form-text" data-profile-file-status>No file selected.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile_bio">Bio</label>
+                        <textarea id="profile_bio" name="bio" class="form-control" rows="4">{{ form.bio.value|default_if_none:'' }}</textarea>
+                    </div>
+
+                    <div class="profile-edit-actions">
+                        <button type="submit" name="update_profile" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Update Profile
+                        </button>
+                        <a href="{% url 'password_change' %}" class="btn btn-outline-primary">
+                            Change Password
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </section>
+    {% endif %}
 </div>
-
-<!-- Custom Styles -->
-<style>
-    .profile-picture {
-        width: 120px;
-        height: 120px;
-    }
-    .list-group-item img {
-        object-fit: cover;
-    }
-</style>
-
-<script>
-    document.querySelector("input[name='profile_picture']").addEventListener('change', function(e) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            document.querySelector('.profile-preview').src = e.target.result;
-        };
-        reader.readAsDataURL(this.files[0]);
-    });
-</script>
-
 {% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pages/users-profile.js' %}?v=20260226a"></script>
+{% endblock extra_js %}

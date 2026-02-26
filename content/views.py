@@ -5,7 +5,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.forms import modelform_factory
-from .models import Content, Vote, LivePerformance, ArtistUploadLimit, Comment, Badge, Voucher
+from .models import Content, Vote, LivePerformance, ArtistUploadLimit, Comment, Badge, Voucher, Genre
 from users.models import  OTP, CustomUser
 from .forms import ContentUploadForm, CommentForm, StartLiveStreamForm, VoucherEntryForm
 from django.db.models import Avg, Sum, Max
@@ -181,17 +181,17 @@ def list_content(request, content_id=None):
     """
     query = request.GET.get('q', '').strip()
     filter_tag = request.GET.get('tag', '').strip()
+    selected_genre = request.GET.get('genre', '').strip()
 
-    # Get only approved content
-    contents = Content.objects.filter(is_approved=True).order_by('-upload_date')
+    base_contents = Content.objects.select_related('artist', 'genre').prefetch_related('votes')
 
+    if request.user.is_authenticated and request.user.is_artist():
+        contents = base_contents.filter(Q(is_approved=True) | Q(artist=request.user)).order_by('-upload_date')
+    else:
+        contents = base_contents.filter(is_approved=True).order_by('-upload_date')
 
     if content_id:
-        # If content_id is provided, show only one content item
-        contents = Content.objects.filter(id=content_id, is_approved=True)
-    else:
-        # Get all approved content
-        contents = Content.objects.filter(is_approved=True).order_by('-upload_date')
+        contents = contents.filter(id=content_id)
 
     # Search by title, description, or artist username
     if query:
@@ -205,17 +205,37 @@ def list_content(request, content_id=None):
     if filter_tag:
         contents = contents.filter(tags__name=filter_tag)
 
+    if selected_genre:
+        contents = contents.filter(genre__name__iexact=selected_genre)
+
     # Paginate results (10 per page)
     paginator = Paginator(contents, 10)
     page_number = request.GET.get('page')
     page_contents = paginator.get_page(page_number)
 
+    popular_contents = (
+        Content.objects.filter(is_approved=True)
+        .select_related('artist', 'genre')
+        .prefetch_related('votes')
+        .annotate(total_votes=Count('votes'))
+        .order_by('-total_votes', '-upload_date')[:8]
+    )
+
+    available_genres = (
+        Genre.objects.filter(contents__is_approved=True)
+        .order_by('name')
+        .distinct()
+    )
+
     return render(request, 'content/list.html', {
         'contents': page_contents,
-        'query': query,  # Pass query back to template
+        'query': query,
         'filter_tag': filter_tag,
+        'selected_genre': selected_genre,
+        'available_genres': available_genres,
+        'popular_contents': popular_contents,
         'all_tags': Tag.objects.all(),
-        'single_content': content_id is not None  # Flag for single content view
+        'single_content': content_id is not None
     })
 
 
@@ -426,7 +446,12 @@ def vote_content(request, content_id):
         if vote_value not in range(1, 9):
             return JsonResponse({'status': 'error', 'message': 'Invalid rank (1-8 only)'}, status=400)
 
-        otp = OTP.objects.filter(user=request.user, otp_code=otp_code, remaining_votes__gt=0).first()
+        otp = OTP.objects.filter(
+            user=request.user,
+            otp_code=otp_code,
+            is_active=True,
+            remaining_votes__gt=0
+        ).first()
         if not otp:
             return JsonResponse({'status': 'error', 'message': 'Invalid/expired OTP'}, status=403)
 
@@ -454,8 +479,9 @@ def vote_content(request, content_id):
             }
         )
 
-        otp.use_vote()
-        assign_or_upgrade_badge(request, request.user.id)  # ✅ FIXED CALL
+        if not otp.use_vote():
+            return JsonResponse({'status': 'error', 'message': 'OTP vote limit reached'}, status=403)
+        assign_or_upgrade_badge(request, request.user.id)
 
         return JsonResponse({'status': 'success', 'message': f'Vote {vote_value} recorded!'})
 
@@ -605,6 +631,7 @@ def classify_content(request, content_id):
         form = ContentClassificationForm(instance=content)
 
     return render(request, 'users/classify.html', {'form': form, 'content': content})
+
 
 
 

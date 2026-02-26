@@ -1,254 +1,187 @@
 {% extends "includes/base.html" %}
-{% load content_filters %}
+{% load static %}
 
 {% block title %}{{ content.title }}{% endblock %}
 
+{% block extra_css %}
+<link href="{% static 'css/pages/content-detail.css' %}?v=20260226d" rel="stylesheet" />
+{% endblock extra_css %}
+
 {% block content %}
-
-<!-- Custom Styles -->
-<style>
-    /* Thumbnail Container with 16:9 Aspect Ratio */
-    .thumbnail-container {
-        position: relative;
-        width: 100%;
-        padding-top: 56.25%; /* 16:9 Aspect Ratio (9 / 16 * 100%) */
-        overflow: hidden;
-        border-radius: 8px;
-        max-height: 400px; /* Set a maximum height to maintain quality */
-    }
-
-    /* Thumbnail Image */
-    .thumbnail-container img {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover; /* Ensures the image covers the container without distortion */
-    }
-
-    /* Thumbnail Container with 16:9 Aspect Ratio */
-    .thumbnail {
-        position: relative;
-        width: 100%;
-        padding-top: 56.25%; /* 16:9 Aspect Ratio (9 / 16 * 100%) */
-        overflow: hidden;
-        border-radius: 8px;
-        max-height: 400px; /* Set a maximum height to maintain quality */
-    }
-
-    /* Thumbnail Image */
-    .thumbnail img {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover; /* Ensures the image covers the container without distortion */
-    }
-
-    /* Video Container */
-    .video-container {
-        position: relative;
-        padding-top: 50;
-        overflow: hidden;
-        width: 100%;
-    }
-    .video-container iframe {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-    }
-
-    /* Card Styling */
-    .card {
-        transition: transform 0.2s, box-shadow 0.2s;
-        border-radius: 12px;
-        overflow: hidden;
-    }
-    .card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    }
-
-    /* Voting Icon */
-    .voting-icon {
-        cursor: pointer;
-        font-size: 1.3rem;
-        color: #ffc107;
-        transition: transform 0.2s;
-    }
-    .voting-icon:hover {
-        transform: scale(1.1);
-    }
-
-    /* Voting Options */
-    .voting-options {
-        display: none;
-        position: absolute;
-        background: white;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        padding: 5px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        z-index: 10;
-    }
-    .vote-option {
-        cursor: pointer;
-        padding: 5px 10px;
-        font-size: 1rem;
-        transition: background 0.2s;
-    }
-    .vote-option:hover {
-        background: #f8f9fa;
-    }
-
-    /* Scrollable "Up Next" List */
-    .scrollable-list {
-        max-height: 400px;
-        overflow-y: auto;
-    }
-    .scrollable-list::-webkit-scrollbar {
-        width: 5px;
-    }
-    .scrollable-list::-webkit-scrollbar-thumb {
-        background: #ccc;
-        border-radius: 4px;
-    }
-
-    .comment-content {
-        flex-grow: 1;
-    }
-    
-    .comment-content p {
-        margin-bottom: 5px;
-    }
-    
-    .comment-count {
-        font-weight: bold;
-        color:rgb(105, 99, 82);
-    }
-
-    .video-card {
-        display: flex;
-        align-items: center;
-        transition: background 0.3s ease, transform 0.2s;
-    }
-    
-    .video-card:hover {
-        background: rgba(0, 0, 0, 0.05);
-        transform: scale(1.02);
-    }
-</style>
-
-<div class="container-fluid mt-4">
-    <div class="row">
-        <!-- Main Content Area (75% width) -->
-        <div class="col-lg-9 col-md-8">
-            <div class="card shadow-lg p-3 pt-0">
-                <!-- Video/Media -->
-                <div class="video-container">
-                    {% include "partials/media_display.html" with content=content %}
-                </div>
-
-                <!-- Content Body -->
-                <div class="card-body">
-                    <h2 class="font-weight-bold">{{ content.title }}</h2>
-                    <p class="text-muted view-count" data-content-id="{{ content.id }}">
-                        <i class="fas fa-eye"></i> 
-                        {{ content.viewers.count }} viewer{{ content.viewers.count|pluralize }}
-                    </p>
-    
-
-                    <!-- Author Info -->
-                    <div class="d-flex align-items-center mb-3">
-                        <img class="rounded-circle mr-2" width="50" height="50" src="{{ content.artist.get_profile_picture }}" alt="{{ content.artist.username }}">
-                        <div>
-                            <p class="mb-1">
-                                <a href="{% url 'user_profile' content.artist.id %}" class="text-dark font-weight-bold">{{ content.artist.username }}</a>
-                                <i class="fas fa-check-circle text-success"></i>
-                            </p>
-                            <small class="text-muted">Published on {{ content.upload_date|date:"M d, Y" }}</small>
-                        </div>
-                    </div>
-
-                    <!-- Content Description -->
-                    <p class="mb-4">{{ content.description }}</p>
-                    <!-- Delete Button (Only for content owner) -->
-                    {% if content.artist == user %}
-                    <form method="post" action="{% url 'delete_content' content.id %}" class="mt-3">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-danger btn-sm">
-                            <i class="fas fa-trash"></i> Delete Content
-                        </button>
-                    </form>
-                    {% endif %}
-                </div>
-
-                <!-- Comments Section -->
-<div class="card-footer bg-light pt-0">
-    <h5>Comments {<span class="comment-count">{{ comments.count }}</span>}</h5>
-
-    <!-- Display Existing Comments -->
-    {% for comment in comments %}
-    <div class="border rounded p-2 mb-2 bg-white d-flex align-items-start">
-        <!-- User Profile Picture -->
-        <img src="{{ comment.user.get_profile_picture }}" alt="{{ comment.user.username }}" class="rounded-circle me-2" width="40" height="40">
-        
-        <div class="comment-content">
-            <!-- Username & Timestamp -->
-            <p class="mb-1">
-                <a href="{% url 'user_profile' comment.user.id %}"><strong>{{ comment.user.username }}</strong></a>
-                <small class="text-muted">{{ comment.timestamp|date:"M d, Y H:i" }}</small>
-            </p>
-            
-            <!-- Comment Text -->
-            <p class="p-2 border bg-light rounded">{{ comment.text }}</p>
+<div class="container-fluid content-watch-page">
+  <div class="row">
+    <div class="col-xl-8 col-lg-8 mb-4">
+      <article class="card watch-main-card">
+        <div class="watch-player">
+          {% include "partials/media_display.html" with content=content %}
         </div>
-    </div>
-    {% empty %}
-        <p class="text-muted">No comments yet. Be the first to comment!</p>
-    {% endfor %}
 
-    <!-- Add Comment Form -->
-    <form method="post" action="{% url 'add_comment' content.id %}" class="mt-2 add-comment-form">
-        {% csrf_token %}
-        <textarea name="text" rows="2" class="form-control" placeholder="Write a comment..." required></textarea>
-        <button type="submit" class="btn btn-primary mt-2 w-100">Submit</button>
-    </form>
+        <div class="card-body watch-main-body">
+          <h1 class="watch-title">{{ content.title }}</h1>
+
+          <div class="watch-meta-row">
+            <div class="watch-author">
+              {% include "partials/user_avatar.html" with avatar_user=content.artist size=48 class_name="watch-author-avatar" alt_text=content.artist.username %}
+              <div class="watch-author-meta">
+                <a href="{% url 'user_profile' content.artist.id %}" class="watch-author-name">
+                  {{ content.artist.username }}
+                </a>
+                <p class="watch-published mb-0">
+                  Published on {{ content.upload_date|date:"M d, Y" }}
+                </p>
+              </div>
+            </div>
+
+            <div class="watch-stats">
+              <span>
+                <i class="fas fa-eye"></i>
+                <strong class="view-count" data-content-id="{{ content.id }}">{{ content.view_count }}</strong>
+                view{{ content.view_count|pluralize }}
+              </span>
+              <span>
+                <i class="fas fa-star"></i>
+                {{ content.votes.count }} vote{{ content.votes.count|pluralize }}
+              </span>
+              <span>
+                <i class="fas fa-chart-line"></i>
+                {{ average_vote }} avg
+              </span>
+            </div>
+          </div>
+
+          <div class="watch-action-row">
+            <a href="{% url 'user_profile' content.artist.id %}" class="btn btn-sm btn-outline-primary watch-action-btn">
+              <i class="fas fa-user-circle"></i> Artist Profile
+            </a>
+
+            <div class="watch-vote-panel">
+              <button class="watch-vote-toggle" type="button" onclick="toggleDetailVoting(this)">
+                <i class="fas fa-star"></i> Vote This Content
+              </button>
+
+              <div class="watch-vote-options">
+                <div class="watch-vote-inputs">
+                  <input type="text" id="otpCode_{{ content.id }}" placeholder="OTP code" class="form-control form-control-sm" />
+                  <input type="text" id="voterTag_{{ content.id }}" placeholder="Your tag" class="form-control form-control-sm" />
+                </div>
+
+                <div class="watch-vote-grid">
+                  {% for i in "12345678"|make_list %}
+                    {% url 'vote_content' content.id as vote_url %}
+                    <button
+                      class="btn btn-sm btn-outline-primary watch-vote-option"
+                      type="button"
+                      data-value="{{ i }}"
+                      data-url="{{ vote_url }}"
+                      onclick="submitDetailVote(this, '{{ content.id }}')"
+                    >
+                      {{ i }}
+                    </button>
+                  {% endfor %}
+                </div>
+
+                <p id="voteMessage_{{ content.id }}" class="small mt-2 mb-0" style="display: none"></p>
+              </div>
+            </div>
+
+            {% if content.artist == user %}
+              <form method="post" action="{% url 'delete_content' content.id %}" class="watch-delete-form">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-danger btn-sm watch-action-btn">
+                  <i class="fas fa-trash"></i> Delete
+                </button>
+              </form>
+            {% endif %}
+          </div>
+
+          <div class="watch-description">
+            <h6 class="watch-section-label">Description</h6>
+            <p class="mb-0">{{ content.description|default:"No description provided yet." }}</p>
+          </div>
+        </div>
+
+        <section class="card-footer watch-comments">
+          <h5 class="watch-comments-title">
+            Comments <span class="comment-count">{{ comments.count }}</span>
+          </h5>
+
+          <div class="watch-comment-list">
+            {% for comment in comments %}
+              <div class="watch-comment-item">
+                {% include "partials/user_avatar.html" with avatar_user=comment.user size=38 class_name="watch-comment-avatar" alt_text=comment.user.username %}
+                <div class="comment-content">
+                  <p class="watch-comment-meta">
+                    <a href="{% url 'user_profile' comment.user.id %}"><strong>{{ comment.user.username }}</strong></a>
+                    <small>{{ comment.timestamp|date:"M d, Y H:i" }}</small>
+                  </p>
+                  <p class="watch-comment-text">{{ comment.text }}</p>
+                </div>
+              </div>
+            {% empty %}
+              <p class="watch-empty">No comments yet. Be the first to comment.</p>
+            {% endfor %}
+          </div>
+
+          <form method="post" action="{% url 'add_comment' content.id %}" class="add-comment-form watch-comment-form">
+            {% csrf_token %}
+            <textarea
+              name="text"
+              rows="2"
+              class="form-control"
+              placeholder="Write a comment..."
+              required
+            ></textarea>
+            <button type="submit" class="btn btn-primary mt-2 w-100">
+              Post Comment
+            </button>
+          </form>
+        </section>
+      </article>
+    </div>
+
+    <div class="col-xl-4 col-lg-4 mb-4">
+      <aside class="card watch-sidebar">
+        <div class="watch-sidebar-header">
+          <h5 class="mb-0">Up Next</h5>
+        </div>
+
+        <div class="watch-sidebar-list">
+          {% for related in related_contents %}
+            <a href="{% url 'content_detail' related.id %}" class="watch-related-card">
+              <div class="watch-related-thumb">
+                {% if related.safe_thumbnail_url %}
+                  <img src="{{ related.safe_thumbnail_url }}" alt="{{ related.title }}" />
+                {% elif related.youtube_video_id %}
+                  <img src="https://img.youtube.com/vi/{{ related.youtube_video_id }}/mqdefault.jpg" alt="{{ related.title }}" />
+                {% elif related.is_audio_file %}
+                  <img src="{{ related.audio_thumbnail_url }}" alt="{{ related.title }}" />
+                {% elif related.is_image_file and related.safe_file_url %}
+                  <img src="{{ related.safe_file_url }}" alt="{{ related.title }}" />
+                {% else %}
+                  <div class="watch-related-fallback">
+                    <i class="fas fa-photo-video"></i>
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="watch-related-meta">
+                <h6>{{ related.title }}</h6>
+                <p class="watch-related-artist">{{ related.artist.username }}</p>
+                <p class="watch-related-stats">
+                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{ related.votes.count|pluralize }}
+                </p>
+              </div>
+            </a>
+          {% empty %}
+            <p class="watch-empty p-3 mb-0">No upcoming content.</p>
+          {% endfor %}
+        </div>
+      </aside>
+    </div>
+  </div>
 </div>
-
-            </div>
-        </div>
-
-        <!-- "Up Next" Section (25% width) -->
-        <div class="col-lg-3 col-md-4">
-            <div class="p-3">
-                <h5 class="font-weight-bold">Up Next</h5>
-                <div class="scrollable-list">
-                    {% for related in related_contents %}
-                    <a href="{% url 'content_detail' related.id %}" class="video-card d-flex align-items-center p-2 border rounded mb-2 text-decoration-none">
-                        <!-- Thumbnail -->
-                        {% comment %} <img class="img-fluid rounded" width="100" src="{{ related.thumbnail.url }}" alt="{{ related.title }}"> {% endcomment %}
-                        
-                        <!-- Video Info -->
-                        <div class="ml-2">
-                            <p class="text-dark font-weight-bold small mb-1">{{ related.title }}</p>
-                            <p class="text-muted view-count" data-content-id="{{ content.id }}">
-                                <i class="fas fa-eye"></i> 
-                                {{ content.viewers.count }} viewer{{ content.viewers.count|pluralize }}
-                            </p>
-                        </div>
-                    </a>
-                    {% empty %}
-                        <p class="text-muted">No upcoming content.</p>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-
-    </div>
-</div>    
 {% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pages/content-detail.js' %}?v=20260226a"></script>
+{% endblock extra_js %}

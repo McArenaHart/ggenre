@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="audioTitle audioDesc">
+  <title id="audioTitle">Default audio thumbnail</title>
+  <desc id="audioDesc">Gradient background with a music icon used when no thumbnail is uploaded.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d1429" />
+      <stop offset="52%" stop-color="#163978" />
+      <stop offset="100%" stop-color="#1d7d91" />
+    </linearGradient>
+    <radialGradient id="glow" cx="82%" cy="20%" r="56%">
+      <stop offset="0%" stop-color="#7aedee" stop-opacity="0.36" />
+      <stop offset="100%" stop-color="#7aedee" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="panel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.05" />
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)" />
+  <rect width="1280" height="720" fill="url(#glow)" />
+  <g>
+    <circle cx="640" cy="340" r="170" fill="#e8eefc" fill-opacity="0.12" />
+    <circle cx="640" cy="340" r="128" fill="#e8eefc" fill-opacity="0.12" />
+    <path
+      d="M604 248v180.5c-11.8-8.5-27.4-13.5-44.2-13.5c-40.5 0-73.3 28.8-73.3 64.3c0 35.6 32.8 64.4 73.3 64.4s73.2-28.8 73.2-64.4V322.4l140.3-29.2V392c-11.8-8.5-27.4-13.5-44.2-13.5c-40.4 0-73.2 28.8-73.2 64.4s32.8 64.3 73.2 64.3c40.5 0 73.3-28.8 73.3-64.3V230.2L604 248z"
+      fill="#7aedee"
+    />
+  </g>
+  <rect x="380" y="540" width="520" height="96" rx="20" fill="url(#panel)" stroke="#e8eefc" stroke-opacity="0.18" />
+  <text x="640" y="584" text-anchor="middle" fill="#e8eefc" font-size="44" font-family="Sora, Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="3">
+    AUDIO
+  </text>
+  <text x="640" y="614" text-anchor="middle" fill="#e8eefc" fill-opacity="0.76" font-size="20" font-family="Manrope, Segoe UI, Arial, sans-serif" letter-spacing="1">
+    Default cover art
+  </text>
+</svg>

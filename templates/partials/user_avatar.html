@@ -1,0 +1,24 @@
+{% load avatar_extras %}
+{% with avatar_size=size|default:40 %}
+  {% if avatar_user and avatar_user.profile_picture %}
+    <img
+      src="{{ avatar_user.profile_picture.url }}"
+      alt="{{ alt_text|default:avatar_user.username|default:'User avatar' }}"
+      class="rounded-circle gg-avatar {{ class_name|default:'' }}"
+      width="{{ avatar_size }}"
+      height="{{ avatar_size }}"
+      {% if lazy %}loading="{{ lazy }}"{% endif %}
+    />
+  {% else %}
+    {% with avatar_name=avatar_user.get_full_name|default:avatar_user.username|default:"User" %}
+      <span
+        class="rounded-circle gg-avatar-fallback {{ class_name|default:'' }}"
+        style="--gg-avatar-size: {{ avatar_size }}px;"
+        role="img"
+        aria-label="{{ alt_text|default:avatar_name }}"
+      >
+        {{ avatar_name|initials }}
+      </span>
+    {% endwith %}
+  {% endif %}
+{% endwith %}

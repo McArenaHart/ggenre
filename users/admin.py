@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
-    list_display = ('username', 'email', 'phone_number', 'role', 'is_active', 'is_staff', 'subscription_expiry', 'can_download_content')
+    list_display = ('username', 'email', 'role', 'is_active', 'is_staff', 'subscription_expiry', 'can_download_content')
     list_editable = ('can_download_content',)
     search_fields = ('username', 'email', 'role')
     ordering = ('-date_joined',)

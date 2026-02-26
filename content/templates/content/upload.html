@@ -3,194 +3,149 @@
 
 {% block title %}Upload Content{% endblock %}
 
+{% block extra_css %}
+<link href="{% static 'css/pages/content-upload.css' %}?v=20260226b" rel="stylesheet" />
+{% endblock extra_css %}
+
 {% block content %}
-<div class="container-fluid mt-4">
+<div class="container-fluid upload-page">
+    <header class="upload-page-header">
+        <div>
+            <h1 class="upload-title mb-1">Upload Content</h1>
+            <p class="upload-subtitle mb-0">Share your next release with clean metadata, a strong thumbnail, and the right tags.</p>
+        </div>
+        <span class="upload-header-badge"><i class="fas fa-bolt"></i> Artist Studio</span>
+    </header>
+
     <div class="row">
-        <!-- Main Content Area (75% width) -->
-        <div class="col-lg-9 col-md-8">
-            <div class="card shadow-lg p-4">
-                <h2 class="font-weight-bold mb-4">Upload Content</h2>
+        <div class="col-xl-8 col-lg-8 mb-4">
+            <article class="card upload-main-card">
+                <div class="card-body upload-main-body">
+                    <form method="post" enctype="multipart/form-data" class="needs-validation upload-form" novalidate>
+                        {% csrf_token %}
 
-                <!-- Display messages -->
-                {% if messages %}
-                <div class="mb-4">
-                    {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                    {% endfor %}
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger upload-non-field-errors" role="alert">
+                            {% for error in form.non_field_errors %}
+                            <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <section class="upload-section">
+                            <h6 class="upload-section-title">Basic Info</h6>
+
+                            <div class="upload-field">
+                                <label for="id_title" class="form-label">Title</label>
+                                {{ form.title }}
+                                <div class="invalid-feedback">Please provide a title.</div>
+                                {% for error in form.title.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+
+                            <div class="upload-field">
+                                <label for="id_description" class="form-label">Description</label>
+                                {{ form.description }}
+                                <div class="invalid-feedback">Please provide a description.</div>
+                                {% for error in form.description.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="upload-section upload-source-section">
+                            <h6 class="upload-section-title">Media Source</h6>
+
+                            <div class="upload-source-grid">
+                                <div class="upload-source-panel" data-source-panel="file">
+                                    <label for="id_file" class="form-label">Upload File</label>
+                                    <div class="upload-file-picker">
+                                        {{ form.file }}
+                                        <label for="id_file" class="upload-file-trigger">
+                                            <i class="fas fa-folder-open"></i>
+                                            <span>Choose File</span>
+                                        </label>
+                                    </div>
+                                    <small class="form-text">Video, audio, or image file.</small>
+                                    <p class="upload-source-state mb-0" data-file-status>Select a file to upload.</p>
+                                    {% for error in form.file.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                </div>
+
+                                <div class="upload-or" aria-hidden="true">OR</div>
+
+                                <div class="upload-source-panel" data-source-panel="youtube">
+                                    <label for="id_youtube_url" class="form-label">YouTube Link</label>
+                                    {{ form.youtube_url }}
+                                    <small class="form-text">Use watch/share/embed/shorts links.</small>
+                                    {% for error in form.youtube_url.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="upload-section">
+                            <h6 class="upload-section-title">Presentation</h6>
+
+                            <div class="upload-field">
+                                <label for="id_thumbnail" class="form-label">Thumbnail</label>
+                                <div class="upload-file-picker">
+                                    {{ form.thumbnail }}
+                                    <label for="id_thumbnail" class="upload-file-trigger">
+                                        <i class="fas fa-image"></i>
+                                        <span>Choose Thumbnail</span>
+                                    </label>
+                                </div>
+                                <small class="form-text">Recommended: clear 16:9 image for best card previews.</small>
+                                <p class="upload-source-state mb-0" data-thumb-status>No thumbnail selected.</p>
+                                {% for error in form.thumbnail.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+
+                            <div class="upload-field">
+                                <label for="id_tags" class="form-label">Tags</label>
+                                {{ form.tags }}
+                                <small class="form-text">Separate tags with commas.</small>
+                                {% for error in form.tags.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+
+                            {% if form.genre %}
+                            <div class="upload-field">
+                                <label for="id_genre" class="form-label">Genre</label>
+                                {{ form.genre }}
+                                {% for error in form.genre.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                            </div>
+                            {% endif %}
+                        </section>
+
+                        <div class="upload-submit-row">
+                            <button type="submit" class="btn btn-primary btn-lg upload-submit-btn">
+                                <i class="fas fa-cloud-upload-alt"></i> Publish Content
+                            </button>
+                        </div>
+                    </form>
                 </div>
-                {% endif %}
-
-                <!-- Upload form -->
-                <form method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
-                    {% csrf_token %}
-
-                    <!-- Form fields -->
-                    <div class="mb-3">
-                        <label for="id_title" class="form-label">Title</label>
-                        {{ form.title }}
-                        <div class="invalid-feedback">
-                            Please provide a title.
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="id_description" class="form-label">Description</label>
-                        {{ form.description }}
-                        <div class="invalid-feedback">
-                            Please provide a description.
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="id_file" class="form-label">File</label>
-                        {{ form.file }}
-                        <div class="invalid-feedback">
-                            Please upload a file.
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="id_thumbnail" class="form-label">Thumbnail</label>
-                        {{ form.thumbnail }}
-                        <div class="invalid-feedback">
-                            Please upload a thumbnail.
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="id_tags" class="form-label">Tags</label>
-                        {{ form.tags }}
-                        <div class="invalid-feedback">
-                            Please provide tags.
-                        </div>
-                    </div>
-
-                    <!-- Submit button -->
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary btn-lg">
-                            <i class="fas fa-cloud-upload-alt me-2"></i> Upload
-                        </button>
-                    </div>
-                </form>
-            </div>
+            </article>
         </div>
 
-        <!-- Sidebar (25% width) -->
-        <div class="col-lg-3 col-md-4">
-            <div class="p-3">
-                <h5 class="font-weight-bold">Tips for Uploading</h5>
-                <div class="scrollable-list">
-                    <p class="text-muted small">
-                        <i class="fas fa-info-circle me-2"></i> Ensure your file is in a supported format (e.g., MP4, AVI).
-                    </p>
-                    <p class="text-muted small">
-                        <i class="fas fa-info-circle me-2"></i> Use a high-quality thumbnail to attract viewers.
-                    </p>
-                    <p class="text-muted small">
-                        <i class="fas fa-info-circle me-2"></i> Keep your title and description clear and concise.
-                    </p>
+        <div class="col-xl-4 col-lg-4 mb-4">
+            <aside class="card upload-tips-card">
+                <div class="card-body">
+                    <h5 class="upload-tips-title">Tips for Better Reach</h5>
+                    <ul class="upload-tips-list">
+                        <li><i class="fas fa-check-circle"></i> Keep titles short, specific, and searchable.</li>
+                        <li><i class="fas fa-check-circle"></i> Use strong tags so fans can discover related work.</li>
+                        <li><i class="fas fa-check-circle"></i> Thumbnails with clear contrast perform better in feeds.</li>
+                        <li><i class="fas fa-check-circle"></i> Choose either local upload or YouTube link, not both.</li>
+                    </ul>
+
+                    <div class="upload-requirements">
+                        <h6>Quick Requirements</h6>
+                        <p class="mb-1">Max upload size: <strong>50 MB</strong></p>
+                        <p class="mb-0">Supported: MP4, MPEG, MP3, JPEG, PNG, GIF</p>
+                    </div>
                 </div>
-            </div>
+            </aside>
         </div>
     </div>
 </div>
 
-<!-- Custom Styles -->
-<style>
-    /* Custom styling for form fields */
-    .form-control {
-        border-radius: 8px;
-        padding: 10px;
-        border: 1px solid #ddd;
-        transition: border-color 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    .form-control:focus {
-        border-color: #0d6efd;
-        box-shadow: 0 0 5px rgba(13, 110, 253, 0.5);
-    }
-
-    /* Custom styling for the card */
-    .card {
-        border-radius: 12px;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
-    }
-
-    /* Custom styling for the submit button */
-    .btn-primary {
-        background-color: #0d6efd;
-        border: none;
-        padding: 12px;
-        font-size: 1.1rem;
-        transition: background-color 0.3s ease, transform 0.3s ease;
-    }
-
-    .btn-primary:hover {
-        background-color: #0b5ed7;
-        transform: translateY(-2px);
-    }
-
-    /* Scrollable "Tips" List */
-    .scrollable-list {
-        max-height: 200px;
-        overflow-y: auto;
-        padding-right: 10px;
-    }
-
-    .scrollable-list::-webkit-scrollbar {
-        width: 5px;
-    }
-
-    .scrollable-list::-webkit-scrollbar-thumb {
-        background: #ccc;
-        border-radius: 4px;
-    }
-
-    /* Responsive Design */
-    @media (max-width: 768px) {
-        .col-lg-9, .col-lg-3 {
-            width: 100%;
-        }
-
-        .card {
-            margin-bottom: 20px;
-        }
-
-        .scrollable-list {
-            max-height: 150px;
-        }
-    }
-</style>
-
-<!-- Bootstrap Validation Script -->
-<script>
-    // Example starter JavaScript for disabling form submissions if there are invalid fields
-    (function () {
-        'use strict'
-
-        // Fetch all the forms we want to apply custom Bootstrap validation styles to
-        var forms = document.querySelectorAll('.needs-validation')
-
-        // Loop over them and prevent submission
-        Array.prototype.slice.call(forms)
-            .forEach(function (form) {
-                form.addEventListener('submit', function (event) {
-                    if (!form.checkValidity()) {
-                        event.preventDefault()
-                        event.stopPropagation()
-                    }
-
-                    form.classList.add('was-validated')
-                }, false)
-            })
-    })()
-</script>
 {% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pages/content-upload.js' %}?v=20260226b"></script>
+{% endblock extra_js %}

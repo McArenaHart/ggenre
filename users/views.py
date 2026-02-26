@@ -156,7 +156,7 @@ def admin_dashboard(request):
         return redirect('dashboard')
 
     # Admin-specific data
-    fans = CustomUser.objects.filter(role='fan')  # Fetch only fans
+    fans = CustomUser.objects.filter(role=Role.FAN).order_by('username')
     generated_otp = None  # Store OTP to display in template
     generated_voucher = None #Store OTP to display in template
 
@@ -247,20 +247,47 @@ def admin_dashboard(request):
             Content.objects.filter(id__in=content_ids).update(category=category)
             messages.success(request, f"Assigned category '{category}' to {len(content_ids)} content items.")
 
-    # Handle OTP generation
-    if request.method == "POST" and 'generate_otp' in request.POST:
+    # Handle OTP access controls
+    if request.method == "POST" and request.POST.get('otp_action'):
+        otp_action = request.POST.get('otp_action')
         user_id = request.POST.get('user_id')
-        remaining_votes = int(request.POST.get('remaining_votes', 0))
-        user = get_object_or_404(CustomUser, id=user_id, role='fan')  # Ensure only fans can get OTPs
-        # Generate a new OTP
-        otp_code = generate_otp()
-        # Update or create OTP for the fan
-        otp, created = OTP.objects.update_or_create(
-            user=user,
-            defaults={'otp_code': otp_code, 'remaining_votes': remaining_votes}
+        vote_count_raw = request.POST.get('vote_count', '1')
+        regenerate_code = request.POST.get('regenerate_code') == '1'
+
+        try:
+            vote_count = max(1, int(vote_count_raw))
+        except (TypeError, ValueError):
+            vote_count = 1
+
+        fan = get_object_or_404(CustomUser, id=user_id, role=Role.FAN)
+        otp, _ = OTP.objects.get_or_create(
+            user=fan,
+            defaults={
+                'otp_code': generate_otp(),
+                'remaining_votes': 0,
+                'is_active': True,
+            }
         )
-        messages.success(request, f"OTP generated for {user.username}: {otp.otp_code}")
-        generated_otp = otp.otp_code
+
+        if otp_action == 'grant':
+            otp.reset_votes(votes=vote_count, regenerate_code=generate_otp())
+            generated_otp = otp.otp_code
+            messages.success(request, f"OTP access granted to {fan.username} with {vote_count} vote(s).")
+        elif otp_action == 'extend':
+            otp.grant_votes(votes=vote_count)
+            messages.success(request, f"Extended {fan.username}'s OTP by {vote_count} vote(s).")
+        elif otp_action == 'cancel':
+            otp.cancel_access()
+            messages.warning(request, f"Cancelled OTP access for {fan.username}.")
+        elif otp_action == 'reset':
+            new_code = generate_otp() if regenerate_code else None
+            otp.reset_votes(votes=vote_count, regenerate_code=new_code)
+            generated_otp = otp.otp_code
+            messages.success(request, f"Reset OTP votes for {fan.username} to {vote_count}.")
+        else:
+            messages.error(request, "Invalid OTP action.")
+
+        return redirect('admin_dashboard')
 
 
     if request.method == "POST" and 'generate_voucher' in request.POST:
@@ -301,12 +328,20 @@ def admin_dashboard(request):
             else:
                 messages.warning(request, f"{fan.username} does not have a badge to remove.")   
 
+    otp_by_user = {
+        otp.user_id: otp for otp in OTP.objects.filter(user__in=fans).select_related('user')
+    }
+    fan_otp_statuses = [
+        {'fan': fan, 'otp': otp_by_user.get(fan.id)} for fan in fans
+    ]
+
     # Prepare context
     context = {
         'announcements': announcements,
         'artists': artists,
         'fans': fans,
         'generated_otp': generated_otp,
+        'fan_otp_statuses': fan_otp_statuses,
         'generated_voucher': generated_voucher,
         'recent_uploads': recent_uploads.order_by('-upload_date')[:10],
         'query': query,
@@ -432,8 +467,11 @@ def artist_content(request, artist_id):
     # Fetch the artist or return a 404 error if not found
     artist = get_object_or_404(CustomUser, id=artist_id, role=Role.ARTIST)
 
-    # Fetch all content uploaded by the artist
-    artist_content = Content.objects.filter(artist=artist)
+    # Artists can see all of their uploads, including pending admin approval.
+    # Other users can only see approved content.
+    artist_content = Content.objects.filter(artist=artist).order_by('-upload_date')
+    if request.user != artist and not request.user.is_admin():
+        artist_content = artist_content.filter(is_approved=True)
 
     # Pass the artist and their content to the template
     context = {

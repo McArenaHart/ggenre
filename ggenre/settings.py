@@ -18,16 +18,35 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _load_env_file(env_path):
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding='utf-8').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+
+        key, value = line.split('=', 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+_load_env_file(BASE_DIR / '.env')
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-+p2ameub_oesk6t4ok9&*e&4tbq&ts@=q02%@x(m4t0cw@-8z@')
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'change-me-in-env-c1f9f77b4f424eb9890b760151982c41abf3f5f74a864ce8')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
+DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = ['ggenre.com', 'www.ggenre.com', '147.93.95.1']
+ALLOWED_HOSTS = ['ggenre.com', 'www.ggenre.com', '147.93.95.1', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -80,7 +99,10 @@ WSGI_APPLICATION = 'ggenre.wsgi.application'
 
 # Database Configuration
 # Detect if we're in production environment
-IS_PRODUCTION = os.path.exists('/etc/nginx/sites-available/ggenre') or os.getenv('DJANGO_PRODUCTION', False)
+IS_PRODUCTION = (
+    os.path.exists('/etc/nginx/sites-available/ggenre')
+    or os.getenv('DJANGO_PRODUCTION', 'False').lower() == 'true'
+)
 
 if IS_PRODUCTION:
     # Production settings (MySQL on VPS)
@@ -148,8 +170,6 @@ LOGIN_REDIRECT_URL = 'dashboard'  # Redirect after successful login
 LOGOUT_REDIRECT_URL = 'login'    # Redirect after logout
 
 
-LOGIN_URL = '/admin/login/'  # Default for admin users
-
 LOGIN_URL = '/users/login/'  # Example for custom login
 
 
@@ -160,12 +180,18 @@ SESSION_COOKIE_AGE = 3600  # Session expires after 1 hour (in seconds)
 
 
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'mightycareen@gmail.com'
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'dhba ynnf itpb fqjg')  # Use environment variable
+LOCAL_CONSOLE_EMAIL = os.getenv('LOCAL_CONSOLE_EMAIL', 'True').lower() == 'true'
+
+if not IS_PRODUCTION and LOCAL_CONSOLE_EMAIL:
+    # Prints OTP and other emails in the local terminal for easy testing.
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+    EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'mightycareen@gmail.com')
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 
 
 # Internationalization
@@ -183,7 +209,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 # Static files (CSS, JavaScript, images)
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # Directory where `collectstatic` collects static files for production

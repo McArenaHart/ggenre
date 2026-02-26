@@ -30,7 +30,6 @@ class Role:
 class CustomUser(AbstractUser):
     # Role definition: Each user can have one of the roles - Admin, Artist, or Fan
     role = models.CharField(max_length=10, choices=Role.CHOICES, default=Role.FAN)
-    phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
 
     # Additional profile information
     profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
@@ -103,29 +102,54 @@ class Follow(models.Model):
 class OTP(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
     otp_code = models.CharField(max_length=6)
-    remaining_votes = models.IntegerField(default=0)  # ✅ Allow multiple uses
+    remaining_votes = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    last_vote_reset_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    updated_at = models.DateTimeField(auto_now=True)
 
     def use_vote(self):
         """
         Deduct a vote if available.
         """
-        if self.remaining_votes > 0:
+        if self.is_active and self.remaining_votes > 0:
             self.remaining_votes -= 1
-            self.save()
+            self.save(update_fields=['remaining_votes', 'updated_at'])
             return True
         return False
 
+    def grant_votes(self, votes=1, regenerate_code=None):
+        votes = max(1, int(votes or 1))
+        self.remaining_votes += votes
+        self.is_active = True
+        if regenerate_code:
+            self.otp_code = regenerate_code
+        self.save(update_fields=['remaining_votes', 'is_active', 'otp_code', 'updated_at'])
+
+    def reset_votes(self, votes=1, regenerate_code=None):
+        votes = max(1, int(votes or 1))
+        self.remaining_votes = votes
+        self.is_active = True
+        self.last_vote_reset_at = timezone.now()
+        if regenerate_code:
+            self.otp_code = regenerate_code
+        self.save(update_fields=['remaining_votes', 'is_active', 'last_vote_reset_at', 'otp_code', 'updated_at'])
+
+    def cancel_access(self):
+        self.remaining_votes = 0
+        self.is_active = False
+        self.save(update_fields=['remaining_votes', 'is_active', 'updated_at'])
+
     def is_expired(self):
         return now() > self.created_at + timedelta(minutes=5)  # OTP expires in 5 minutes
-    
+
     def clean(self):
         if self.remaining_votes < 0:
             raise ValidationError("Remaining votes cannot be negative")
-            
+
     def __str__(self):
-        return f"OTP for {self.user.username} ({self.remaining_votes} votes left)"
+        status = "active" if self.is_active else "cancelled"
+        return f"OTP for {self.user.username} ({self.remaining_votes} votes left, {status})"
 
 
 class Announcement(models.Model):

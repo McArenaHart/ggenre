@@ -1,0 +1,83 @@
+.artist-content-page {
+  margin-top: 0.4rem;
+}
+
+.artist-content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.artist-content-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+}
+
+.artist-content-identity h1 {
+  font-size: clamp(1.2rem, 2vw, 1.65rem);
+  margin: 0;
+}
+
+.artist-content-avatar {
+  border: 2px solid rgba(122, 237, 238, 0.4);
+}
+
+.artist-content-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.artist-content-table thead th {
+  border-top: 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gg-text-muted);
+}
+
+.artist-content-table td,
+.artist-content-table th {
+  border-color: rgba(255, 255, 255, 0.08);
+  vertical-align: middle;
+}
+
+.artist-content-title {
+  color: var(--gg-text);
+  font-weight: 700;
+}
+
+.artist-content-title:hover,
+.artist-content-title:focus {
+  color: var(--gg-neon-cyan);
+  text-decoration: none;
+}
+
+.artist-content-empty {
+  color: var(--gg-text-muted);
+  padding: 1.3rem 0.8rem !important;
+}
+
+body.app-theme[data-theme="light"] .artist-content-card {
+  border-color: rgba(19, 41, 86, 0.12);
+}
+
+body.app-theme[data-theme="light"] .artist-content-table td,
+body.app-theme[data-theme="light"] .artist-content-table th {
+  border-color: rgba(19, 41, 86, 0.1);
+}
+
+@media (max-width: 767.98px) {
+  .artist-content-header .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .artist-content-table th,
+  .artist-content-table td {
+    white-space: nowrap;
+  }
+}

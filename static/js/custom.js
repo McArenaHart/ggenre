@@ -1,313 +1,265 @@
-(function($) {
-  "use strict"; // Start of use strict
-  // Prevent the content wrapper from scrolling when the fixed side navigation hovered over
-  $('body.fixed-nav .sidebar').on('mousewheel DOMMouseScroll wheel', function(e) {
-    if ($window.width() > 768) {
-      var e0 = e.originalEvent,
-        delta = e0.wheelDelta || -e0.detail;
-      this.scrollTop += (delta < 0 ? 1 : -1) * 30;
-      e.preventDefault();
+(function ($) {
+  "use strict";
+
+  const $window = $(window);
+
+  $("body.fixed-nav .sidebar").on("mousewheel DOMMouseScroll wheel", function (e) {
+    if ($window.width() <= 768) {
+      return;
     }
-  });
-  
-  // Category Owl Carousel
-  var objowlcarousel = $(".owl-carousel-category");
-  if (objowlcarousel.length > 0) {
-	 objowlcarousel.owlCarousel({
-		items: 8,
-		lazyLoad: true,
-		pagination: false,
-		loop: true,
-		autoPlay: 2000,
-		navigation: true,
-		stopOnHover: true,
-		navigationText: ["<i class='fa fa-chevron-left'></i>", "<i class='fa fa-chevron-right'></i>"]
-	});
-  }
 
-  // Login Owl Carousel
-  var mainslider = $(".owl-carousel-login");
-  if (mainslider.length > 0) {
-      mainslider.owlCarousel({
-          items: 1,
-          lazyLoad: true,
-          pagination: true,
-          autoPlay: 4000,
-		 loop: true,
-		singleItem: true,
-          navigation: false,
-          stopOnHover: true,
-		navigationText: ["<i class='mdi mdi-chevron-left'></i>", "<i class='mdi mdi-chevron-right'></i>"]
-      });
-  }
-	
-  // Tooltip
-  $('[data-toggle="tooltip"]').tooltip()
-
-  // Scroll to top button appear
-  $(document).on('scroll', function() {
-    var scrollDistance = $(this).scrollTop();
-    if (scrollDistance > 100) {
-      $('.scroll-to-top').fadeIn();
-    } else {
-      $('.scroll-to-top').fadeOut();
-    }
+    const original = e.originalEvent;
+    const delta = original.wheelDelta || -original.detail;
+    this.scrollTop += (delta < 0 ? 1 : -1) * 30;
+    e.preventDefault();
   });
 
-  // Smooth scrolling using jQuery easing
-  $(document).on('click', 'a.scroll-to-top', function(event) {
-    var $anchor = $(this);
-    $('html, body').stop().animate({
-      scrollTop: ($($anchor.attr('href')).offset().top)
-    }, 1000, 'easeInOutExpo');
-    event.preventDefault();
-  });
-
-})(jQuery); // End of use strict
-
-
-
-  
-  document.addEventListener('DOMContentLoaded', () => {
-      document.querySelectorAll('.add-comment-form').forEach((form) => {
-          form.addEventListener('submit', async (event) => {
-              event.preventDefault(); // Prevent page reload
-  
-              const formData = new FormData(form);
-              const url = form.action;
-              const commentSection = form.closest('.card-footer');
-              const commentCountElement = commentSection.querySelector(".comment-count");
-  
-              try {
-                  const response = await fetch(url, {
-                      method: 'POST',
-                      body: formData,
-                      headers: {
-                          'X-CSRFToken': formData.get('csrfmiddlewaretoken'),
-                          'X-Requested-With': 'XMLHttpRequest',
-                      },
-                  });
-  
-                  const data = await response.json();
-  
-                  if (data.status === 'success') {
-                      // Create new comment HTML
-                      const newComment = document.createElement('div');
-                      newComment.classList.add('border', 'rounded', 'p-2', 'mb-2', 'bg-white', 'd-flex', 'align-items-center');
-                      newComment.innerHTML = `
-                          <img src="${data.comment.user_profile}" alt="${data.comment.user}" class="rounded-circle me-2" width="30" height="30">
-                          <div>
-                              <p class="mb-0"><a href="/user/${data.comment.user_id}/"><strong>${data.comment.user}</strong></a> - ${data.comment.timestamp}</p>
-                              <p>${data.comment.text}</p>
-                          </div>
-                      `;
-  
-                      // Insert comment before the form
-                      commentSection.insertBefore(newComment, form);
-  
-                      // Update comment count
-                      if (commentCountElement) {
-                          commentCountElement.textContent = data.comment_count;
-                      }
-  
-                      // Clear the input field
-                      form.querySelector('textarea[name="text"]').value = '';
-                  } else {
-                      alert(data.message || 'An error occurred while adding the comment.');
-                  }
-              } catch (error) {
-                  console.error('Error:', error);
-                  alert('Failed to add the comment. Please try again.');
-              }
-          });
-      });
-  });
-  
-  function incrementViews(contentId) {
-      const csrfTokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
-      const csrfToken = csrfTokenElement ? csrfTokenElement.value : null;
-  
-      if (!csrfToken) {
-          console.error("CSRF token not found!");
-          return;
-      }
-  
-      const url = new URL(`/content/increment-views/${contentId}/`, window.location.origin);
-      console.log("Fetching URL:", url.href); // Debugging
-  
-      fetch(url.href, {
-          method: "POST",
-          headers: {
-              "X-CSRFToken": csrfToken,
-              "X-Requested-With": "XMLHttpRequest"
-          },
-          credentials: "same-origin"
-      })
-      .then(response => {
-          if (!response.ok) {
-              throw new Error(`HTTP error! Status: ${response.status}`);
-          }
-          return response.json();
-      })
-      .then(data => {
-          console.log("Success:", data);
-          
-          // Find and update the corresponding view count on the page
-          const viewCountElement = document.querySelector(`.view-count[data-content-id="${contentId}"]`);
-          if (viewCountElement && data.new_views) {
-              viewCountElement.textContent = data.new_views;  // Update the UI with new view count
-          }
-      })
-      .catch(error => console.error("Error updating views:", error));
-  }
-  
-  document.addEventListener('DOMContentLoaded', function() {
-      const mediaElements = document.querySelectorAll('video, audio');
-  
-      mediaElements.forEach(media => {
-          let hasIncremented = false;
-  
-          media.addEventListener('timeupdate', function() {
-              if (!hasIncremented && media.currentTime >= 5) {
-                  const card = media.closest('.card');
-                  const viewCountElement = card ? card.querySelector('.view-count') : null;
-                  const contentId = viewCountElement ? viewCountElement.getAttribute('data-content-id') : null;
-  
-                  if (contentId) {
-                      incrementViews(contentId);
-                      hasIncremented = true; // Ensure the view is only incremented once
-                  } else {
-                      console.error("Content ID not found!");
-                  }
-              }
-          });
-  
-          // Reset the flag if the user seeks back before 5 seconds
-          media.addEventListener('seeked', function() {
-              if (media.currentTime < 5) {
-                  hasIncremented = false;
-              }
-          });
-      });
-  });
-  
-  
-
-  $(document).ready(function(){
-    $(".owl-carousel-login").owlCarousel({
-      items: 1,
+  const categoryCarousel = $(".owl-carousel-category");
+  if (categoryCarousel.length) {
+    categoryCarousel.owlCarousel({
+      items: 8,
+      lazyLoad: true,
+      pagination: false,
       loop: true,
-      autoplay: true,
-      autoplayTimeout: 5000,
-      nav: false,
-      dots: true
+      autoPlay: 2000,
+      navigation: true,
+      stopOnHover: true,
+      navigationText: ["<i class='fa fa-chevron-left'></i>", "<i class='fa fa-chevron-right'></i>"],
+    });
+  }
+
+  const loginCarousel = $(".owl-carousel-login");
+  if (loginCarousel.length) {
+    loginCarousel.owlCarousel({
+      items: 1,
+      lazyLoad: true,
+      pagination: true,
+      autoPlay: 4000,
+      loop: true,
+      singleItem: true,
+      navigation: false,
+      stopOnHover: true,
+    });
+  }
+
+  $('[data-toggle="tooltip"]').tooltip();
+
+  function initSmartScrollButton() {
+    const scrollButton = document.querySelector(".scroll-to-top");
+    if (!scrollButton) {
+      return;
+    }
+
+    const prefersReducedMotion =
+      window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let lastScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    let ticking = false;
+    let idleTimer = null;
+
+    function updateScrollButton() {
+      const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
+      const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
+      const progress = Math.min(1, currentY / maxScroll);
+      const progressDegrees = Math.round(progress * 360);
+      const scrollingDown = currentY > lastScrollY + 2;
+      const showThreshold = 260;
+      const nearBottom = currentY > maxScroll - 160;
+      const shouldShow = currentY > showThreshold && (!scrollingDown || nearBottom);
+
+      scrollButton.style.setProperty("--scroll-progress", progressDegrees + "deg");
+      scrollButton.classList.toggle("is-visible", shouldShow);
+      scrollButton.classList.toggle("is-condensed", shouldShow && scrollingDown && !nearBottom);
+
+      if (idleTimer) {
+        window.clearTimeout(idleTimer);
+      }
+
+      if (shouldShow && !scrollingDown) {
+        idleTimer = window.setTimeout(function () {
+          scrollButton.classList.add("is-condensed");
+        }, 1600);
+      }
+
+      lastScrollY = currentY;
+      ticking = false;
+    }
+
+    function onScrollLikeEvent() {
+      if (ticking) {
+        return;
+      }
+      ticking = true;
+      window.requestAnimationFrame(updateScrollButton);
+    }
+
+    scrollButton.addEventListener("click", function (event) {
+      event.preventDefault();
+      window.scrollTo({
+        top: 0,
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+      });
+    });
+
+    window.addEventListener("scroll", onScrollLikeEvent, { passive: true });
+    window.addEventListener("resize", onScrollLikeEvent);
+    updateScrollButton();
+  }
+
+  initSmartScrollButton();
+})(jQuery);
+
+function incrementViews(contentId) {
+  const csrfTokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+  const csrfToken = csrfTokenElement ? csrfTokenElement.value : null;
+
+  if (!csrfToken || !contentId) {
+    return;
+  }
+
+  fetch(`/content/increment-views/${contentId}/`, {
+    method: "POST",
+    headers: {
+      "X-CSRFToken": csrfToken,
+      "X-Requested-With": "XMLHttpRequest",
+    },
+    credentials: "same-origin",
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.json();
+    })
+    .then((data) => {
+      const viewCountElement = document.querySelector(`.view-count[data-content-id="${contentId}"]`);
+      if (viewCountElement && typeof data.new_viewers !== "undefined") {
+        viewCountElement.textContent = data.new_viewers;
+      }
+    })
+    .catch((error) => console.error("Error updating views:", error));
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  function getInitials(name) {
+    const base = (name || "").trim();
+    if (!base) {
+      return "U";
+    }
+
+    const parts = base.replace(/[_-]+/g, " ").split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+
+    const cleaned = parts[0].replace(/[^a-zA-Z0-9]/g, "");
+    return (cleaned.slice(0, 2) || "U").toUpperCase();
+  }
+
+  function buildAvatarMarkup(profileUrl, username) {
+    const url = (profileUrl || "").trim();
+    const lowerUrl = url.toLowerCase();
+    const usesDefaultAvatar =
+      !url ||
+      lowerUrl.includes("/static/defaults/profile.png") ||
+      lowerUrl.includes("/static/img/default-profile.png");
+
+    if (usesDefaultAvatar) {
+      return `<span class="rounded-circle gg-avatar-fallback mr-2" style="--gg-avatar-size: 30px;" role="img" aria-label="${username}">${getInitials(username)}</span>`;
+    }
+
+    return `<img src="${url}" alt="${username}" class="rounded-circle gg-avatar mr-2" width="30" height="30">`;
+  }
+
+  document.querySelectorAll(".add-comment-form").forEach((form) => {
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+
+      const formData = new FormData(form);
+      const url = form.action;
+      const commentSection = form.closest(".card-footer");
+      const commentCountElement = commentSection ? commentSection.querySelector(".comment-count") : null;
+
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          body: formData,
+          headers: {
+            "X-CSRFToken": formData.get("csrfmiddlewaretoken"),
+            "X-Requested-With": "XMLHttpRequest",
+          },
+        });
+
+        const data = await response.json();
+        if (data.status !== "success" || !commentSection) {
+          alert(data.message || "Unable to add comment.");
+          return;
+        }
+
+        const newComment = document.createElement("div");
+        newComment.classList.add("border", "rounded", "p-2", "mb-2", "bg-white", "d-flex", "align-items-center");
+        newComment.innerHTML = `
+          ${buildAvatarMarkup(data.comment.user_profile, data.comment.user)}
+          <div>
+            <p class="mb-0"><a href="/users/profile/${data.comment.user_id}/"><strong>${data.comment.user}</strong></a> - ${data.comment.timestamp}</p>
+            <p class="mb-0">${data.comment.text}</p>
+          </div>
+        `;
+
+        commentSection.insertBefore(newComment, form);
+        if (commentCountElement) {
+          commentCountElement.textContent = data.comment_count;
+        }
+
+        const textarea = form.querySelector('textarea[name="text"]');
+        if (textarea) {
+          textarea.value = "";
+        }
+      } catch (error) {
+        console.error("Error adding comment:", error);
+        alert("Failed to add comment. Please try again.");
+      }
     });
   });
 
+  document.querySelectorAll("video, audio").forEach((media) => {
+    let hasIncremented = false;
 
+    media.addEventListener("timeupdate", function () {
+      if (hasIncremented || media.currentTime < 5) {
+        return;
+      }
 
-  function filterContent() {
-    const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
-    const selectedCategory = document.getElementById('categoryFilter').value.toLowerCase().trim();
-    const items = document.querySelectorAll('.content-item');
-    
-    items.forEach(item => {
-        const title = item.getAttribute('data-title') || "";
-        const artist = item.getAttribute('data-artist') || "";
-        const category = item.getAttribute('data-category') || "";
-        const votes = parseInt(item.getAttribute('data-votes')) || 0;
-        
-        const matchesSearch = title.includes(searchQuery) || artist.includes(searchQuery);
-        const matchesCategory = selectedCategory === "" || category === selectedCategory;
-        const matchesVotes = votes >= 5;  // Show only content with 5+ votes
+      const card = media.closest(".card");
+      const viewCountElement = card ? card.querySelector(".view-count") : null;
+      const contentId = viewCountElement ? viewCountElement.getAttribute("data-content-id") : null;
 
-        item.style.display = matchesSearch && matchesCategory && matchesVotes ? "" : "none";
+      if (contentId) {
+        incrementViews(contentId);
+        hasIncremented = true;
+      }
     });
-}
 
-
-
-function fetchAnnouncements() {
-    fetch('/api/announcements/')
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        return response.json(); // Parse JSON
-    })
-    .then(data => {
-        if (data.announcements && data.announcements.length > 0) {
-            showPopup(data.announcements);
-        }
-    })
-    .catch(error => {
-        console.error("Error fetching announcements:", error);
+    media.addEventListener("seeked", function () {
+      if (media.currentTime < 5) {
+        hasIncremented = false;
+      }
     });
-}
+  });
+});
 
-        // Toggle password visibility
-        function togglePassword(inputId) {
-            const passwordInput = document.getElementById(inputId);
-            const eyeIcon = passwordInput.nextElementSibling.querySelector('i');
-            
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-                eyeIcon.classList.remove('fa-eye');
-                eyeIcon.classList.add('fa-eye-slash');
-            } else {
-                passwordInput.type = 'password';
-                eyeIcon.classList.remove('fa-eye-slash');
-                eyeIcon.classList.add('fa-eye');
-            }
-        }
+window.togglePassword = function togglePassword(inputId) {
+  const passwordInput = document.getElementById(inputId);
+  if (!passwordInput) {
+    return;
+  }
 
-        // Check password strength
-        document.getElementById('newPassword').addEventListener('input', function() {
-            const password = this.value;
-            const strengthBar = document.getElementById('passwordStrength');
-            
-            // Reset strength bar
-            strengthBar.className = '';
-            
-            if (password.length === 0) {
-                return;
-            }
-            
-            // Very basic strength check (in real app, use more robust validation)
-            if (password.length < 6) {
-                strengthBar.classList.add('strength-weak');
-            } else if (password.length < 10) {
-                strengthBar.classList.add('strength-medium');
-            } else {
-                strengthBar.classList.add('strength-strong');
-            }
-        });
+  const icon = passwordInput.parentElement ? passwordInput.parentElement.querySelector("i") : null;
+  const isPassword = passwordInput.type === "password";
 
-        // Check if passwords match
-        document.getElementById('confirmPassword').addEventListener('input', function() {
-            const newPassword = document.getElementById('newPassword').value;
-            const confirmPassword = this.value;
-            const messageElement = document.getElementById('passwordMatchMessage');
-            
-            if (confirmPassword.length === 0) {
-                messageElement.textContent = '';
-                return;
-            }
-            
-            if (newPassword !== confirmPassword) {
-                messageElement.textContent = 'Passwords do not match';
-            } else {
-                messageElement.textContent = 'Passwords match';
-                messageElement.classList.remove('text-danger');
-                messageElement.classList.add('text-success');
-            }
-        });
+  passwordInput.type = isPassword ? "text" : "password";
 
-        // Form submission
-        document.querySelector('form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            // Hide form and show success message
-            document.querySelector('.password-card').style.display = 'none';
-            document.getElementById('successMessage').style.display = 'block';
-        });
+  if (icon) {
+    icon.classList.toggle("fa-eye", !isPassword);
+    icon.classList.toggle("fa-eye-slash", isPassword);
+  }
+};

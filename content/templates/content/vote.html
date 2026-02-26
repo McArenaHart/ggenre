@@ -1,41 +1,37 @@
-<h2>Vote for {{ content.title }}</h2>
-<p><strong>Artist:</strong> {{ content.artist.username }}</p>
-<p><strong>Description:</strong> {{ content.description }}</p>
-<p><strong>Average Rating:</strong> {{ average_vote|floatformat:1 }}</p>
+{% extends "includes/base.html" %}
+{% load content_filters %}
 
-<!-- Video or Audio Playback -->
-{% if content.file.url|endswith:".mp4" or content.file.url|endswith:".mpeg" %}
-<video controls width="640" height="360">
-    <source src="{{ content.file.url }}" type="video/mp4">
-    Your browser does not support the video tag.
-</video>
-{% elif content.file.url|endswith:".mp3" or content.file.url|endswith:".mpeg" %}
-<audio controls>
-    <source src="{{ content.file.url }}" type="audio/mpeg">
-    Your browser does not support the audio tag.
-</audio>
-{% endif %}
+{% block title %}Vote{% endblock %}
 
-<!-- Voting Form -->
-{% if request.user.is_fan %}
-    <form method="post" action="{% url 'vote_content' content.id %}">
+{% block content %}
+<div class="container py-4">
+  <div class="card p-4">
+    <h2 class="mb-3">Vote for {{ content.title }}</h2>
+    <p><strong>Artist:</strong> {{ content.artist.username }}</p>
+    <p><strong>Description:</strong> {{ content.description }}</p>
+    <p><strong>Average Rating:</strong> {{ average_vote|floatformat:1 }}</p>
+
+    {% include "partials/media_display.html" with content=content %}
+
+    {% if request.user.is_fan %}
+      <form method="post" action="{% url 'vote_content' content.id %}" class="mt-4">
         {% csrf_token %}
         <label for="vote_value">Rate this content (1-5):</label>
-        
-        <!-- Dropdown for vote selection -->
         <select id="vote_value" name="vote_value" class="form-control" style="width: 100px;">
-            {% for i in "12345" %}
-                <option value="{{ i }}" {% if vote_value == i %} selected {% endif %}>{{ i }}</option>
-            {% endfor %}
+          {% for i in "12345" %}
+            <option value="{{ i }}" {% if vote_value == i %}selected{% endif %}>{{ i }}</option>
+          {% endfor %}
         </select>
 
-        <button type="submit" class="btn btn-primary" style="margin-top: 10px;">Submit Vote</button>
-    </form>
+        <button type="submit" class="btn btn-primary mt-3">Submit Vote</button>
+      </form>
 
-    <!-- Display existing vote if present -->
-    {% if vote_value %}
-        <p>Your current vote: {{ vote_value }}</p>
+      {% if vote_value %}
+        <p class="mt-3">Your current vote: {{ vote_value }}</p>
+      {% endif %}
+    {% else %}
+      <p class="mt-3">You must be logged in as a fan to vote.</p>
     {% endif %}
-{% else %}
-    <p>You must be logged in as a fan to vote.</p>
-{% endif %}
+  </div>
+</div>
+{% endblock %}

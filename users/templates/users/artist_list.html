@@ -3,6 +3,10 @@
 
 {% block title %}Artists{% endblock %}
 
+{% block extra_css %}
+<link href="{% static 'css/pages/users-artist-list.css' %}" rel="stylesheet" />
+{% endblock extra_css %}
+
 {% block content %}
 <div class="container-fluid mt-4">
     <h2 class="font-weight-bold mb-4">Artists</h2>
@@ -13,12 +17,7 @@
                 <div class="card shadow-sm p-3 d-flex align-items-center">
                     <!-- Profile Picture -->
                     <div class="profile-picture-container">
-                        <img src="{{ artist.get_profile_picture }}" 
-                             class="rounded-circle mr-3" 
-                             width="50" 
-                             height="50" 
-                             alt="{{ artist.username }}'s profile picture"
-                             loading="lazy">
+                        {% include "partials/user_avatar.html" with avatar_user=artist size=50 class_name="mr-3" alt_text=artist.username lazy="lazy" %}
                     </div>
                     <!-- Username -->
                     <h6 class="font-weight-bold mb-0">{{ artist.username }}</h6>
@@ -33,29 +32,4 @@
     </div>
 </div>
 
-<!-- Custom Styles -->
-<style>
-    /* Card Styling */
-    .card {
-        transition: transform 0.2s, box-shadow 0.2s;
-        border-radius: 12px;
-        overflow: hidden;
-    }
-    .card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    }
-
-    /* Profile Picture Container */
-    .profile-picture-container {
-        position: relative;
-        width: 50px;
-        height: 50px;
-    }
-
-    /* Artist Name */
-    .font-weight-bold {
-        font-size: 1.1rem;
-    }
-</style>
 {% endblock %}

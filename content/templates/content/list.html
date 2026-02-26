@@ -1,528 +1,137 @@
-{% extends "includes/base.html" %} 
+{% extends "includes/base.html" %}
 {% load content_filters %}
-{% block title%}Content list{% endblock title %}
+{% load static %}
 
+{% block title %}Content List{% endblock title %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/content-list.css' %}?v=20260226s" rel="stylesheet" />
+{% endblock extra_css %}
 
 {% block content %}
+<div class="container-fluid mt-0 content-list-page">
+  <div class="content-toolbar">
+    <input
+      type="text"
+      id="searchInput"
+      class="form-control"
+      placeholder="Filter by title or artist"
+      value="{{ query }}"
+    />
 
+    <select id="genreFilter" class="custom-select">
+      <option value="">All genres</option>
+      {% for genre in available_genres %}
+        <option value="{{ genre.name|lower }}" {% if selected_genre|lower == genre.name|lower %}selected{% endif %}>
+          {{ genre.name }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
 
-<!-- Custom CSS for Video Container -->
-<style>
-
-.video-container iframe,
-.video-container video,
-.video-container img {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain; /* Ensures the entire media is visible */
-}
-  .card-link {
-    text-decoration: none; /* Remove underline from link */
-    color: inherit; /* Inherit text color */
-    display: block; /* Make the link cover the entire card */
-  }
-
-  .card-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.1); /* Semi-transparent overlay */
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    z-index: 1; /* Ensure overlay is above the card content */
-  }
-
-  .card:hover .card-overlay {
-    opacity: 1; /* Show overlay on hover */
-  }
-
-  .card {
-    position: relative; /* Ensure overlay is positioned correctly */
-    cursor: pointer; /* Change cursor to pointer on hover */
-  }
-
-  .card-body,
-  .card-footer {
-    position: relative;
-    z-index: 2; /* Ensure content is above the overlay */
-  }
-
-  .video-container {
-    position: relative;
-    padding-top: 56.25%; /* 16:9 Aspect Ratio */
-    overflow: hidden;
-  }
-
-
-  .card {
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-
-  .card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  }
-
-  .card-title {
-    font-size: 0.8 rem;
-    font-weight: bold;
-  }
-
-  .card-text {
-    font-size: 0.8rem;
-    color: #555;
-  }
-
-  .text-muted {
-    font-size: 11px;
-  }
-
-  .card-footer {
-    background-color: #f8f9fa;
-    height: 200px;
-  }
-
-  .pagination .page-link {
-    color: #007bff;
-  }
-
-  .pagination .page-item.disabled .page-link {
-    color: #6c757d;
-  }
-
-  /* Sidebar Toggle Styles */
-  #wrapper.toggled #main-content {
-    margin-left: -50px; /* Adjust based on your sidebar width */
-  }
-
-  #main-content {
-    transition: margin-left 0.3s ease;
-  }
-
-  /* Adjust Main Content Margin */
-  #main-content {
-    padding-left: -15px; /* Add some spacing between sidebar and content */
-  }
-
-  /* Limit the height of the comments section and enable scrolling */
-  .card-footer {
-    max-height: 100px; /* Adjust this value as needed */
-    overflow-y: auto; /* Enable vertical scrolling */
-  }
-
-  .card-footer {
-    padding-top: 0 !important;
-    margin-top: -18px; /* Adjust this value as needed */
-  }
-
-  /* Style the scrollbar */
-  .card-footer::-webkit-scrollbar {
-    width: 3px; /* Width of the scrollbar */
-  }
-
-  .card-footer::-webkit-scrollbar-track {
-    background: #f1f1f1; /* Color of the scrollbar track */
-  }
-
-  .card-footer::-webkit-scrollbar-thumb {
-    background: #888; /* Color of the scrollbar thumb */
-    border-radius: 4px; /* Rounded corners for the thumb */
-  }
-
-  .card-footer::-webkit-scrollbar-thumb:hover {
-    background: #555; /* Color of the scrollbar thumb on hover */
-  }
-
-  /* Voting Icon */
-  .voting-icon {
-    cursor: pointer;
-    font-size: 1.5rem;
-    color: #ffc107; /* Yellow color for the star icon */
-    display: inline-block;
-    transition: transform 0.2s;
-  }
-
-
-  /* Voting Options (Hidden by Default) */
-  .voting-options {
-    display: none;
-    position: relative; /* Make sure it stays in the flow */
-    background: white;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    padding-bottom: 5px;
-
-  }
-
-  .voting-options .vote-option {
-    cursor: pointer;
-    padding: 4px 8px;
-    font-size: .8rem;
-    color: #333;
-    transition: background 0.2s;
-  }
-
-  .voting-options .vote-option:hover {
-    background: #f8f9fa; /* Light background on hover */
-  }
-
-  /* Show Voting Options When Active */
-  .voting-section.active .voting-options {
-    display: flex;
-    gap: 4px;
-  }
-
-  .voting-section {
-    position: relative; /* Ensures voting-options are positioned relative to this container */
-    z-index: 1000; /* Ensures it appears above other content */
-  }
-  
-  .voting-options {
-    top: 100%; /* Position below the voting icon */
-    left: 0;
-    flex-direction: column; /* Stack inputs and buttons vertically */
-    margin-top: 5px; /* Add some spacing */
-    padding: 10px;
-  }
-
-  
-  
-  .voting-options .vote-option {
-    margin: 2px 0; /* Add spacing between buttons */
-  }
-  
-  .otp-input, .voter-tag-input {
-    margin-bottom: 5px; /* Spacing between inputs */
-    z-index: 999;
-  }
-
-  /* Style for the delete button icon */
-  .fa-trash {
-    background: white;
-    color: red;
-    font-size: 1rem; /* Adjust the size as needed */
-    vertical-align: middle; /* Align the icon vertically */
-  }
-
-  .voting-options {
-    display: block;
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.4s ease-in-out, padding 0.4s ease-in-out;
-    background: white;
-    border: 1px solid #ddd;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    padding: 0; /* Initially no padding */
-    position: relative; /* Make sure it stays in the flow */
-}
-
-.voting-section {
-    transition: all 0.4s ease-in-out;
-}
-
-.voting-section.active .voting-options {
-    max-height: 250px; /* Adjust height based on content */
-    padding: 15px 10px 20px; /* Add padding-bottom for better spacing */
-}
-
-/* Ensure space between buttons */
-.vote-option {
-    margin: 5px; /* Adds space around buttons */
-    padding-bottom: 15px;
-}
-
-.mt-2{
-  padding-bottom: 25px;
-  padding-left: 10px;
-}
-
-
-  
-
-</style>
-
-
-
-<div class="container-fluid mt-4">
-  <div class="row">
-    <!-- Main Content -->
-    <div class="col-md-12" id="main-content">
-      <!-- Filter Options -->
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <input
-          type="text"
-          id="searchInput"
-          class="form-control w-25"
-          placeholder="Search content or artist..."
-          oninput="filterContent()"
-        />
-        <select id="genreFilter" class="form-control w-25" onchange="filterContent()">
-          <option value="">All Categories</option>
-          {% for category in all_categories %}
-            <option value="{{ category.0 }}">{{ category.1 }}</option>
-          {% endfor %}
-      </select>
-      
-      </div>
-      <!-- Content Grid -->
-      <div class="row">
-        {% for content in contents %}
-        <div class="col-md-4 mb-4">
-          <!-- Adjusted column sizes for smaller cards -->
-          <div class="card h-100 shadow-sm">
-            <!-- Clickable Overlay -->
-            <a
-              href="{% url 'content_detail' content.id %}"
-              class="card-overlay-link"
-              title="View Details"
-            >
-              <div class="card-overlay"></div>
-            </a>
-
-            <div class="video-container">
-              {% include "partials/media_display.html" with content=content %}
+  <div class="row" id="contentGrid">
+    {% for content in contents %}
+      <div
+        class="col-xl-4 col-lg-6 mb-4 content-item"
+        data-title="{{ content.title|lower }}"
+        data-artist="{{ content.artist.username|lower }}"
+        data-genre="{% if content.genre %}{{ content.genre.name|lower }}{% endif %}"
+      >
+        {% if content.artist == user %}
+          <form method="post" action="{% url 'delete_content' content.id %}" class="content-delete-form">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm content-delete-btn" aria-label="Delete {{ content.title }}">
+              <i class="fas fa-trash-alt"></i>
+              <span class="d-none d-sm-inline">Delete</span>
+            </button>
+          </form>
+        {% endif %}
+        <a
+          href="{% url 'content_detail' content.id %}"
+          class="content-card-link text-decoration-none text-reset"
+          aria-label="Open {{ content.title }}"
+        >
+          <article class="content-card">
+            <div class="content-card-media">
+              <div class="video-container">
+                {% include "partials/media_display.html" with content=content %}
+              </div>
             </div>
 
-            <div class="card-body">
-              <h5 class="card-title">{{ content.title }}</h5>
-              <p class="text-muted">
-                <img
-                  src="{{ content.artist.get_profile_picture }}"
-                  alt="{{ content.artist.username }}"
-                  class="rounded-circle"
-                  width="30"
-                  height="30"
-                />
-                <a
-                  href="{% url 'user_profile' content.artist.id %}"
-                  class="pb-0 mb-0"
-                  ><strong>{{ content.artist.username }}</strong></a
-                >
-                | Views:
-                <strong class="view-count" data-content-id="{{ content.id }}"
-                  >{{ content.views }}</strong
-                >
-                | Votes: <strong>{{ content.votes.count }}</strong> | Date:
-                <strong>{{ content.upload_date|date:"M d" }}</strong>
-                <!-- Detail Icon (Linked to content detail) -->
+            <div class="p-3 content-card-body">
+              <h5 class="mb-2">{{ content.title }}</h5>
+              <div class="content-artist-row">
+                {% include "partials/user_avatar.html" with avatar_user=content.artist size=28 class_name="content-artist-avatar" alt_text=content.artist.username %}
+                <span class="content-artist-link">
+                  <strong>{{ content.artist.username }}</strong>
+                </span>
+              </div>
+
+              <p class="content-description mb-2">
+                {{ content.description|default:"No description provided."|truncatechars:110 }}
               </p>
 
-              <div class="voting-section mb-0 pb-0 mt-0">
-                <div class="voting-icon" onclick="toggleVotingOptions(this)">
-                    <i class="fas fa-star" style="font-size: 1rem"></i>
-                </div>
-            
-                {% csrf_token %}
-            
-                <div class="voting-options"  style="z-index: 999;">
-                    <input type="text" id="otpCode_{{ content.id }}" placeholder="Enter OTP" class="form-control otp-input" required />
-                    <input type="text" id="voter_tag_{{ content.id }}" placeholder="Enter your tag" class="form-control mt-2" required class="pb-5"/>
-            
-                    <div class="mt-2">
-                        {% for i in "12345678"|make_list %}
-                        {% url 'vote_content' content.id as vote_url %}
-                        <button 
-                            class="btn btn-sm btn-outline-primary vote-option"
-                            data-value="{{ i }}"
-                            data-url="{{ vote_url }}"
-                            onclick="submitVote(this)"
-                        >
-                            {{ i }}
-                        </button>
-                        {% endfor %}
-                    </div>
-                </div>
-            
-                <p id="voteMessage_{{ content.id }}" class="text-success" style="display: none"></p>
+              <div class="content-metrics-row">
+                <span>Views: <strong class="view-count" data-content-id="{{ content.id }}">{{ content.view_count }}</strong></span>
+                <span>Votes: <strong>{{ content.votes.count }}</strong></span>
+                <span>{{ content.upload_date|date:"M d" }}</span>
+              </div>
             </div>
-
-              <!-- Delete Button -->
-              {% if content.artist == user %}
-              <form
-                method="post"
-                action="{% url 'delete_content' content.id %}"
-              >
-                {% csrf_token %}
-                <button type="submit" class="btn btn bg-white">
-                  <i class="fas fa-trash"></i>
-                  <!-- Font Awesome trash icon -->
-                </button>
-              </form>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-        {% empty %}
-        <p class="text-center">No content available at the moment.</p>
-        {% endfor %}
+          </article>
+        </a>
       </div>
+    {% empty %}
+      <div class="col-12">
+        <p class="text-center text-muted py-5">No content available at the moment.</p>
+      </div>
+    {% endfor %}
+  </div>
 
-      <!-- Pagination (Only for List View) -->
-      {% if not single_content %}
-      <nav class="my-4">
-        <ul class="pagination justify-content-center">
-          {% if contents.has_previous %}
+  {% if not single_content %}
+    <nav class="my-4">
+      <ul class="pagination justify-content-center">
+        {% if contents.has_previous %}
           <li class="page-item">
-            <a
-              class="page-link"
-              href="?page={{ contents.previous_page_number }}"
-              >Previous</a
-            >
+            <a class="page-link" href="?page={{ contents.previous_page_number }}">Previous</a>
           </li>
-          {% endif %}
-          <li class="page-item disabled">
-            <span class="page-link"
-              >Page {{ contents.number }} of {{contents.paginator.num_pages}}</span>
-          </li>
-          {% if contents.has_next %}
+        {% endif %}
+
+        <li class="page-item disabled">
+          <span class="page-link">Page {{ contents.number }} of {{ contents.paginator.num_pages }}</span>
+        </li>
+
+        {% if contents.has_next %}
           <li class="page-item">
             <a class="page-link" href="?page={{ contents.next_page_number }}">Next</a>
           </li>
-          {% endif %}
-        </ul>
-      </nav>
-      {% endif %}
+        {% endif %}
+      </ul>
+    </nav>
+  {% endif %}
 
-      <!-- Popular Content -->
-      {% comment %}
-      <h2 class="text-center mt-5">Popular Content</h2>
-      {% endcomment %}
-      <div class="row">
+  {% if popular_contents %}
+    <section class="popular-section">
+      <h4 class="mb-3">Popular Content</h4>
+      <div class="popular-grid">
         {% for popular in popular_contents %}
-        <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
-          <!-- Adjusted column sizes for smaller cards -->
-          <div class="card shadow-sm">
-            <div class="video-container">
-              {% include "partials/media_display.html" with content=popular %}
+          <a href="{% url 'content_detail' popular.id %}" class="text-decoration-none text-reset">
+            <div class="content-card h-100 p-2">
+              <div class="video-container mb-2">
+                {% include "partials/media_display.html" with content=popular %}
+              </div>
+              <div class="px-1 pb-1">
+                <strong>{{ popular.title }}</strong>
+                <p class="small text-muted mb-0">{{ popular.artist.username }} | {{ popular.votes.count }} votes</p>
+              </div>
             </div>
-            <div class="card-body">
-              <h5 class="card-title">{{ popular.title }}</h5>
-              <p>
-                Votes: <strong>{{ popular.votes.count }}</strong> | Uploaded by:
-                <strong>{{ popular.artist.username }}</strong>
-              </p>
-              <a
-                href="{% url 'content_detail' popular.id %}"
-                class="btn btn-secondary w-100"
-                >View & Vote</a
-              >
-            </div>
-          </div>
-        </div>
-        {% empty %}
-        <p class="text-center"></p>
+          </a>
         {% endfor %}
       </div>
-    </div>
-  </div>
+    </section>
+  {% endif %}
 </div>
-
-<script>
-  function filterContent() {
-    const searchQuery = document.getElementById("searchInput").value.toLowerCase().trim();
-    const selectedGenre = document.getElementById("genreFilter").value.toLowerCase().trim();
-    const items = document.querySelectorAll(".content-item");
-
-    items.forEach((item) => {
-        const title = item.getAttribute("data-title") || "";
-        const artist = item.getAttribute("data-artist") || "";
-        const genre = item.getAttribute("data-genre") || "";
-
-        const matchesSearch = title.includes(searchQuery) || artist.includes(searchQuery);
-        const matchesGenre = selectedGenre === "" || genre === selectedGenre;
-
-        item.style.display = matchesSearch && matchesGenre ? "" : "none";
-    });
-}
-
-</script>
-
-
-<script>
-
-  function toggleVotingOptions(element) {
-    console.log("Voting icon clicked", element);
-
-    const votingSection = element.closest('.voting-section');
-    if (!votingSection) {
-        console.log("Voting section not found!");
-        return;
-    }
-
-    const votingOptions = votingSection.querySelector('.voting-options');
-
-    if (votingSection.classList.contains('active')) {
-        // Collapse the voting options
-        votingOptions.style.maxHeight = "0px";
-        votingOptions.style.paddingBottom = "0px";
-    } else {
-        // Expand the voting options
-        votingOptions.style.maxHeight = votingOptions.scrollHeight + "px";
-        votingOptions.style.paddingBottom = "10px";
-    }
-
-    votingSection.classList.toggle('active');
-}
-
-
-async function submitVote(button) {
-  const voteValue = parseInt(button.dataset.value);
-  const voteUrl = button.dataset.url;
-  const contentId = button.closest('.voting-section').querySelector('.otp-input').id.split('_')[1];
-  const otpCode = document.getElementById(`otpCode_${contentId}`).value.trim();
-  const voterTag = document.getElementById(`voter_tag_${contentId}`).value.trim();
-
-  if (!otpCode || !voterTag) {
-      alert("Please enter OTP and voter tag.");
-      return;
-  }
-
-  try {
-      const response = await fetch(voteUrl, {
-          method: "POST",
-          headers: {
-              "Content-Type": "application/json",
-              "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value
-          },
-          body: JSON.stringify({
-              vote_value: voteValue,
-              otp_code: otpCode,
-              voter_tag: voterTag
-          })
-      });
-
-      const data = await response.json();
-      console.log("Server Response:", data);
-
-      const messageElem = document.getElementById(`voteMessage_${contentId}`);
-      messageElem.style.display = "block";
-      messageElem.textContent = data.message;
-
-      if (data.status === "success") {
-          messageElem.classList.add("text-success");
-          messageElem.classList.remove("text-danger");
-
-          // Refresh page only after 2 seconds
-          setTimeout(() => window.location.reload(), 2000);
-      } else {
-          messageElem.classList.add("text-danger");
-          messageElem.classList.remove("text-success");
-          alert(data.message);
-      }
-  } catch (error) {
-      console.error("Error submitting vote:", error);
-      alert("An error occurred while submitting your vote.");
-  }
-}
-
-  </script>
-  
-  
-
 {% endblock content %}
+
+{% block extra_js %}
+<script src="{% static 'js/pages/content-list.js' %}?v=20260226a"></script>
+{% endblock extra_js %}

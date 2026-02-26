@@ -1,0 +1,31 @@
+{% extends "includes/base.html" %}
+
+{% block title %}Recommendations{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="app-page-header">
+    <h2>Recommended for You</h2>
+  </div>
+
+  {% if contents %}
+    <div class="row">
+      {% for content in contents %}
+        <div class="col-lg-4 col-md-6 mb-3">
+          <a href="{% url 'content_detail' content.id %}" class="text-decoration-none text-reset">
+            <div class="card h-100 p-2">
+              {% include "partials/media_display.html" with content=content %}
+              <div class="p-2">
+                <strong>{{ content.title }}</strong>
+                <p class="small text-muted mb-0">{{ content.artist.username }}</p>
+              </div>
+            </div>
+          </a>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="app-empty">No recommendations available yet.</div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,178 +1,296 @@
-from django.test import TestCase, Client
-from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, TestCase
+from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
+from unittest.mock import patch
+
+from .models import Announcement, DismissedAnnouncement, OTP, Role
 
 CustomUser = get_user_model()
+
 
 class UsersAppTests(TestCase):
     def setUp(self):
         self.client = Client()
-        self.register_url = reverse('register')
-        self.login_url = reverse('login')
-        self.logout_url = reverse('logout')
-        self.dashboard_url = reverse('dashboard')
-        self.profile_url = reverse('profile')
+        self.register_url = reverse("register")
+        self.login_url = reverse("login")
+        self.logout_url = reverse("logout")
+        self.dashboard_url = reverse("dashboard")
+        self.profile_url = reverse("profile")
 
-        # Sample data for users
         self.admin_data = {
             "username": "admin_user",
             "email": "admin@example.com",
             "password": "adminpass123",
-            "role": "admin",
+            "role": Role.ADMIN,
+            "is_staff": True,
         }
         self.artist_data = {
             "username": "artist_user",
             "email": "artist@example.com",
             "password": "artistpass123",
-            "role": "artist",
+            "role": Role.ARTIST,
         }
         self.fan_data = {
             "username": "fan_user",
             "email": "fan@example.com",
             "password": "fanpass123",
-            "role": "fan",
+            "role": Role.FAN,
         }
 
-        # Create sample users
         self.admin_user = CustomUser.objects.create_user(**self.admin_data)
         self.artist_user = CustomUser.objects.create_user(**self.artist_data)
         self.fan_user = CustomUser.objects.create_user(**self.fan_data)
 
     def test_register_view(self):
-        response = self.client.post(self.register_url, {
-            "username": "new_user",
-            "email": "new_user@example.com",
-            "password1": "newuserpass123",
-            "password2": "newuserpass123",
-            "role": "fan"
-        })
-        self.assertEqual(response.status_code, 302)  # Should redirect to the dashboard
-        self.assertTrue(CustomUser.objects.filter(username="new_user").exists())
+        response = self.client.post(
+            self.register_url,
+            {
+                "username": "new_user",
+                "email": "new_user@example.com",
+                "password1": "newuserpass123",
+                "password2": "newuserpass123",
+                "role": Role.FAN,
+                "terms_accepted": True,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        new_user = CustomUser.objects.get(username="new_user")
+        self.assertFalse(new_user.is_active)
+        self.assertRedirects(response, reverse("verify_otp", args=[new_user.id]))
 
     def test_login_view(self):
-        response = self.client.post(self.login_url, {
-            "username": self.admin_user.username,
-            "password": self.admin_data["password"],
-        })
-        self.assertEqual(response.status_code, 302)  # Should redirect to the dashboard
-        self.assertIn('_auth_user_id', self.client.session)
+        response = self.client.post(
+            self.login_url,
+            {
+                "username": self.admin_user.username,
+                "password": self.admin_data["password"],
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("_auth_user_id", self.client.session)
 
     def test_logout_view(self):
-        self.client.login(username=self.admin_user.username, password=self.admin_data["password"])
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
         response = self.client.get(self.logout_url)
-        self.assertEqual(response.status_code, 302)  # Should redirect to login
-        self.assertNotIn('_auth_user_id', self.client.session)
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn("_auth_user_id", self.client.session)
 
-    def test_dashboard_access(self):
-        self.client.login(username=self.admin_user.username, password=self.admin_data["password"])
+    def test_dashboard_redirects_by_role(self):
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
         response = self.client.get(self.dashboard_url)
-        self.assertEqual(response.status_code, 200)  # Dashboard should be accessible
+        self.assertRedirects(response, reverse("admin_dashboard"))
 
-        self.client.login(username=self.artist_user.username, password=self.artist_data["password"])
+        self.client.login(
+            username=self.artist_user.username,
+            password=self.artist_data["password"],
+        )
         response = self.client.get(self.dashboard_url)
-        self.assertEqual(response.status_code, 200)
+        self.assertRedirects(response, reverse("artist_dashboard"))
 
-        self.client.login(username=self.fan_user.username, password=self.fan_data["password"])
+        self.client.login(
+            username=self.fan_user.username,
+            password=self.fan_data["password"],
+        )
         response = self.client.get(self.dashboard_url)
-        self.assertEqual(response.status_code, 200)
-
-    def test_dashboard_roles(self):
-        self.client.login(username=self.admin_user.username, password=self.admin_data["password"])
-        response = self.client.get(self.dashboard_url)
-        self.assertTemplateUsed(response, 'users/admin_dashboard.html')
-
-        self.client.login(username=self.artist_user.username, password=self.artist_data["password"])
-        response = self.client.get(self.dashboard_url)
-        self.assertTemplateUsed(response, 'users/artist_dashboard.html')
-
-        self.client.login(username=self.fan_user.username, password=self.fan_data["password"])
-        response = self.client.get(self.dashboard_url)
-        self.assertTemplateUsed(response, 'users/fan_dashboard.html')
+        self.assertRedirects(response, reverse("fan_dashboard"))
 
     def test_profile_update(self):
-        self.client.login(username=self.artist_user.username, password=self.artist_data["password"])
-
-        # Create a valid image file for testing
-        valid_image = SimpleUploadedFile(
-            "profile.jpg", 
-            b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xFF\xFF\xFF\x21\xF9\x04\x01\x00\x00\x01\x00\x2C\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x4C\x01\x00\x3B', 
-            content_type="image/jpeg"
+        self.client.login(
+            username=self.artist_user.username,
+            password=self.artist_data["password"],
         )
 
-        # Update the profile with valid data
-        response = self.client.post(self.profile_url, {
-            "username": self.artist_user.username,  # Required field
-            "email": self.artist_user.email,  # Optional but good to include
-            "bio": "Updated bio",
-            "profile_picture": valid_image,  # Valid image file
-        })
+        valid_image = SimpleUploadedFile(
+            "profile.jpg",
+            (
+                b"\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00"
+                b"\x00\x00\x00\xFF\xFF\xFF\x21\xF9\x04\x01\x00\x00\x01\x00"
+                b"\x2C\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x4C\x01\x00\x3B"
+            ),
+            content_type="image/jpeg",
+        )
 
-        # Check if the response redirects after successful form submission
-        self.assertEqual(response.status_code, 302)  # Should redirect to profile
+        response = self.client.post(
+            self.profile_url,
+            {
+                "username": self.artist_user.username,
+                "email": self.artist_user.email,
+                "bio": "Updated bio",
+                "profile_picture": valid_image,
+            },
+        )
 
-        # Refresh the user instance and validate updates
+        self.assertEqual(response.status_code, 302)
         self.artist_user.refresh_from_db()
         self.assertEqual(self.artist_user.bio, "Updated bio")
 
-
     def test_access_restrictions(self):
-        # Ensure dashboard is restricted for unauthenticated users
         response = self.client.get(self.dashboard_url)
-        self.assertEqual(response.status_code, 302)  # Redirect to login
+        self.assertEqual(response.status_code, 302)
 
-        # Ensure profile is restricted for unauthenticated users
         response = self.client.get(self.profile_url)
-        self.assertEqual(response.status_code, 302)  # Redirect to login
+        self.assertEqual(response.status_code, 302)
 
+    def test_admin_can_manage_fan_otp_access(self):
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
 
-# users/tests.py
-from django.contrib.auth import get_user_model
-from django.test import TestCase
-from django.urls import reverse
-from .models import Announcement, DismissedAnnouncement, Role
+        grant_response = self.client.post(
+            reverse("admin_dashboard"),
+            {
+                "otp_action": "grant",
+                "user_id": self.fan_user.id,
+                "vote_count": 1,
+            },
+        )
+        self.assertEqual(grant_response.status_code, 302)
+        otp = OTP.objects.get(user=self.fan_user)
+        self.assertTrue(otp.is_active)
+        self.assertEqual(otp.remaining_votes, 1)
 
-CustomUser = get_user_model()
+        extend_response = self.client.post(
+            reverse("admin_dashboard"),
+            {
+                "otp_action": "extend",
+                "user_id": self.fan_user.id,
+                "vote_count": 2,
+            },
+        )
+        self.assertEqual(extend_response.status_code, 302)
+        otp.refresh_from_db()
+        self.assertEqual(otp.remaining_votes, 3)
+
+        cancel_response = self.client.post(
+            reverse("admin_dashboard"),
+            {
+                "otp_action": "cancel",
+                "user_id": self.fan_user.id,
+                "vote_count": 1,
+            },
+        )
+        self.assertEqual(cancel_response.status_code, 302)
+        otp.refresh_from_db()
+        self.assertFalse(otp.is_active)
+        self.assertEqual(otp.remaining_votes, 0)
+
+        reset_response = self.client.post(
+            reverse("admin_dashboard"),
+            {
+                "otp_action": "reset",
+                "user_id": self.fan_user.id,
+                "vote_count": 1,
+            },
+        )
+        self.assertEqual(reset_response.status_code, 302)
+        otp.refresh_from_db()
+        self.assertTrue(otp.is_active)
+        self.assertEqual(otp.remaining_votes, 1)
+
+    def test_verify_otp_activates_registered_user(self):
+        pending_user = CustomUser.objects.create_user(
+            username="pending_user",
+            email="pending@example.com",
+            password="pendingpass123",
+            role=Role.FAN,
+            is_active=False,
+        )
+        OTP.objects.create(user=pending_user, otp_code="111222")
+
+        response = self.client.post(
+            reverse("verify_otp", args=[pending_user.id]),
+            {"otp": "111222"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pending_user.refresh_from_db()
+        self.assertTrue(pending_user.is_active)
+        self.assertFalse(OTP.objects.filter(user=pending_user).exists())
+
+    def test_verify_otp_rejects_expired_code(self):
+        expired_user = CustomUser.objects.create_user(
+            username="expired_user",
+            email="expired@example.com",
+            password="expiredpass123",
+            role=Role.FAN,
+            is_active=False,
+        )
+        otp = OTP.objects.create(user=expired_user, otp_code="333444")
+        OTP.objects.filter(pk=otp.pk).update(created_at=timezone.now() - timedelta(minutes=6))
+
+        response = self.client.post(
+            reverse("verify_otp", args=[expired_user.id]),
+            {"otp": "333444"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        expired_user.refresh_from_db()
+        self.assertFalse(expired_user.is_active)
+        self.assertTrue(OTP.objects.filter(user=expired_user).exists())
+
+    @patch("users.views.generate_otp", return_value="987654")
+    def test_resend_otp_replaces_code_for_user(self, _mock_generate):
+        pending_user = CustomUser.objects.create_user(
+            username="resend_user",
+            email="resend@example.com",
+            password="resendpass123",
+            role=Role.FAN,
+            is_active=False,
+        )
+        OTP.objects.create(user=pending_user, otp_code="111111")
+
+        response = self.client.get(reverse("resend_otp", args=[pending_user.id]))
+
+        self.assertEqual(response.status_code, 302)
+        otp = OTP.objects.get(user=pending_user)
+        self.assertEqual(otp.otp_code, "987654")
+
 
 class AnnouncementTests(TestCase):
     def setUp(self):
-        self.user = CustomUser.objects.create_user(username='testuser', password='testpass', role=Role.FAN)
-        self.admin = CustomUser.objects.create_user(username='admin', password='adminpass', role=Role.ADMIN, is_staff=True)
-        self.announcement = Announcement.objects.create(title='Test', message='Test message', created_by=self.admin)
+        self.user = CustomUser.objects.create_user(
+            username="testuser",
+            password="testpass",
+            role=Role.FAN,
+        )
+        self.admin = CustomUser.objects.create_user(
+            username="admin",
+            password="adminpass",
+            role=Role.ADMIN,
+            is_staff=True,
+        )
+        self.announcement = Announcement.objects.create(
+            title="Test",
+            message="Test message",
+            created_by=self.admin,
+        )
 
     def test_get_announcements(self):
-        self.client.login(username='testuser', password='testpass')
-        response = self.client.get(reverse('get_announcements'))
+        self.client.login(username="testuser", password="testpass")
+        response = self.client.get(reverse("get_announcements"))
         self.assertEqual(response.status_code, 200)
-        self.assertIn('announcements', response.json())
+        self.assertIn("announcements", response.json())
 
     def test_dismiss_announcement(self):
-        self.client.login(username='testuser', password='testpass')
-        response = self.client.post(reverse('dismiss_announcement', args=[self.announcement.id]))
+        self.client.login(username="testuser", password="testpass")
+        response = self.client.post(
+            reverse("dismiss_announcement", args=[self.announcement.id])
+        )
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(DismissedAnnouncement.objects.filter(user=self.user, announcement=self.announcement).exists())
-
-class UsersAppTests(TestCase):
-    def setUp(self):
-        self.user = CustomUser.objects.create_user(username='testuser', password='testpass', role=Role.FAN)
-        self.admin = CustomUser.objects.create_user(username='admin', password='adminpass', role=Role.ADMIN, is_staff=True)
-
-    def test_dashboard_access(self):
-        self.client.login(username='testuser', password='testpass')
-        response = self.client.get(reverse('dashboard'))
-        self.assertEqual(response.status_code, 200)
-
-    def test_dashboard_roles(self):
-        self.client.login(username='admin', password='adminpass')
-        response = self.client.get(reverse('admin_dashboard'))
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'users/admin_dashboard.html')
-
-    def test_register_view(self):
-        response = self.client.post(reverse('register'), data={
-            'username': 'newuser',
-            'password1': 'complexpassword123',
-            'password2': 'complexpassword123',
-        })
-        self.assertEqual(response.status_code, 302)
-        self.assertRedirects(response, reverse('verify_otp', args=[CustomUser.objects.latest('id').id]))
+        self.assertTrue(
+            DismissedAnnouncement.objects.filter(
+                user=self.user,
+                announcement=self.announcement,
+            ).exists()
+        )

@@ -1,0 +1,235 @@
+:root {
+  --gg-bg: #f5f6f8;
+  --gg-surface: #ffffff;
+  --gg-text: #1f2937;
+  --gg-muted: #6b7280;
+  --gg-accent: #ff8a00;
+  --gg-accent-deep: #e76f00;
+  --gg-accent-soft: #ffe5bf;
+  --gg-shadow: 0 12px 28px rgba(28, 34, 45, 0.08);
+  --gg-sidebar-width: 232px;
+  --gg-radius: 14px;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at 5% 0%, #fff4df 0%, transparent 38%),
+    radial-gradient(circle at 95% 15%, #ffe9c9 0%, transparent 32%),
+    var(--gg-bg);
+  color: var(--gg-text);
+  font-family: "Manrope", "Segoe UI", sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.app-brand {
+  font-family: "Sora", "Segoe UI", sans-serif;
+}
+
+.app-topbar {
+  border-bottom: 1px solid #eceff3;
+  box-shadow: 0 8px 22px rgba(30, 35, 50, 0.05);
+  z-index: 1100;
+}
+
+.app-brand {
+  font-size: 1rem;
+  letter-spacing: 0.3px;
+}
+
+.app-brand-genre {
+  color: transparent;
+  background: linear-gradient(110deg, var(--gg-accent), #f1b400);
+  -webkit-background-clip: text;
+  background-clip: text;
+  font-weight: 700;
+}
+
+.app-brand-genius {
+  color: #1e293b;
+  font-weight: 700;
+  margin-left: 6px;
+}
+
+.app-search-form .form-control {
+  width: min(560px, 56vw);
+  border-radius: 999px;
+  border-color: #e4e6eb;
+  background: #fcfcfd;
+}
+
+.app-search-form .btn {
+  border-radius: 999px;
+  padding-inline: 14px;
+}
+
+.app-shell {
+  display: flex;
+  gap: 0;
+}
+
+.app-shell .sidebar {
+  position: sticky !important;
+  top: 66px;
+  width: var(--gg-sidebar-width) !important;
+  height: calc(100vh - 66px);
+  overflow-y: auto;
+  flex: 0 0 var(--gg-sidebar-width);
+  background: linear-gradient(180deg, #20324e, #1a253a) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 1rem;
+}
+
+.app-shell .sidebar .nav-item .nav-link {
+  width: calc(var(--gg-sidebar-width) - 22px);
+  margin: 0 auto;
+  border-radius: 10px;
+}
+
+.app-shell .sidebar .nav-item .nav-link:hover,
+.app-shell .sidebar .nav-item.active .nav-link {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.app-content-wrapper {
+  margin-left: 0 !important;
+  width: 100% !important;
+  min-height: calc(100vh - 66px);
+  padding: 1.25rem 1.25rem 2rem;
+}
+
+.app-content-wrapper .card {
+  border: 1px solid #eceef2;
+  border-radius: var(--gg-radius);
+  box-shadow: var(--gg-shadow);
+}
+
+.app-content-wrapper .text-muted {
+  color: var(--gg-muted) !important;
+}
+
+.app-guest-content {
+  max-width: 1280px;
+  margin-inline: auto;
+}
+
+.user-dropdown-link {
+  border-radius: 999px;
+}
+
+.user-dropdown-link:hover {
+  background: #f6f7f9;
+}
+
+.announcement-popup {
+  position: fixed;
+  top: 84px;
+  right: 18px;
+  width: min(380px, calc(100vw - 36px));
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid #eceff3;
+  border-radius: 12px;
+  box-shadow: 0 14px 30px rgba(29, 38, 53, 0.2);
+  z-index: 9999;
+  padding: 10px;
+}
+
+.announcement-content + .announcement-content {
+  border-top: 1px solid #eef2f6;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.announcement-popup h4 {
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.announcement-popup p {
+  margin: 4px 0 8px;
+  font-size: 0.86rem;
+  color: #374151;
+}
+
+.announcement-popup button {
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--gg-accent), #f2a400);
+}
+
+.gg-media-frame {
+  width: 100%;
+  background: #0f172a;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.gg-media-frame iframe,
+.gg-media-frame video,
+.gg-media-frame img {
+  width: 100%;
+  max-height: 520px;
+  display: block;
+  object-fit: contain;
+}
+
+.gg-media-placeholder {
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e5e7eb;
+  color: #4b5563;
+  font-weight: 600;
+}
+
+.gg-audio-wrapper {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.gg-audio-wrapper audio {
+  width: 100%;
+}
+
+.gg-audio-thumb {
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 991.98px) {
+  .app-search-form {
+    margin-top: 0.65rem;
+    margin-bottom: 0.65rem;
+    width: 100%;
+  }
+
+  .app-search-form .form-control {
+    width: 100%;
+  }
+
+  .app-shell .sidebar {
+    display: none !important;
+  }
+
+  .app-content-wrapper {
+    min-height: auto;
+    padding: 1rem;
+  }
+}

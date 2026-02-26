@@ -23,7 +23,7 @@
             <div class="form-group">
               <label for="otp">Enter OTP</label>
               <input type="text" class="form-control {% if form.errors %}is-invalid{% endif %}"
-                     id="otp" name="otp" placeholder="Enter the OTP sent to your phone">
+                     id="otp" name="otp" placeholder="Enter the OTP sent to your email">
               {% for error in form.errors %}
               <div class="invalid-feedback">{{ error }}</div>
               {% endfor %}

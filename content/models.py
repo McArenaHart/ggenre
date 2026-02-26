@@ -8,6 +8,18 @@ from PIL import Image
 from datetime import timedelta
 from io import BytesIO
 from django.core.files.base import ContentFile
+from urllib.parse import parse_qs, urlparse
+from django.templatetags.static import static
+import re
+
+
+def _get_resample_filter():
+    """Support Pillow>=10 (Resampling enum) and older versions."""
+    try:
+        return Image.Resampling.LANCZOS
+    except AttributeError:
+        return Image.LANCZOS
+
 
 def resize_and_crop_thumbnail(image, target_size=(1280, 720)):
     """
@@ -35,7 +47,10 @@ def resize_and_crop_thumbnail(image, target_size=(1280, 720)):
         img = img.crop((0, top, width, bottom))
 
     # Resize the image to the target size
-    img = img.resize(target_size, Image.ANTIALIAS)
+    img = img.resize(target_size, _get_resample_filter())
+
+    if img.mode in ("RGBA", "P"):
+        img = img.convert("RGB")
 
     # Save the image to a BytesIO object
     output = BytesIO()
@@ -43,13 +58,6 @@ def resize_and_crop_thumbnail(image, target_size=(1280, 720)):
     output.seek(0)
 
     return ContentFile(output.read(), image.name)
-
-# Usage in your model's save method
-def save(self, *args, **kwargs):
-    if self.thumbnail:
-        self.thumbnail = resize_and_crop_thumbnail(self.thumbnail)
-    super().save(*args, **kwargs)
-
 
 class Genre(models.Model):
     name = models.CharField(max_length=255, unique=True)
@@ -70,7 +78,8 @@ class Content(models.Model):
     title = models.CharField(max_length=255)
     genre = models.ForeignKey(Genre, on_delete=models.CASCADE, related_name="contents", null=True, blank=True)
     description = models.TextField(blank=True, null=True)
-    file = models.FileField(upload_to='content/')
+    file = models.FileField(upload_to='content/', blank=True, null=True)
+    youtube_url = models.URLField(blank=True, null=True)
     thumbnail = models.ImageField(upload_to='thumbnails/', blank=True, null=True)  # New field
     upload_date = models.DateTimeField(auto_now_add=True)
     artist = models.ForeignKey(
@@ -100,11 +109,93 @@ class Content(models.Model):
         Returns the average vote for the content.
         """
         return self.votes.aggregate(average=Avg('value'))['average'] or 0
+
+    @property
+    def youtube_video_id(self):
+        if not self.youtube_url:
+            return None
+
+        parsed = urlparse(self.youtube_url.strip())
+        host = parsed.netloc.lower()
+        video_id = None
+
+        if host in {"youtu.be", "www.youtu.be"}:
+            video_id = parsed.path.strip("/").split("/")[0]
+        elif "youtube.com" in host or "youtube-nocookie.com" in host:
+            if parsed.path == "/watch":
+                video_id = parse_qs(parsed.query).get("v", [None])[0]
+            elif parsed.path.startswith("/embed/"):
+                video_id = parsed.path.split("/embed/", 1)[1].split("/")[0]
+            elif parsed.path.startswith("/shorts/"):
+                video_id = parsed.path.split("/shorts/", 1)[1].split("/")[0]
+
+        if not video_id:
+            return None
+
+        if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+            return video_id
+        return None
+
+    @property
+    def youtube_embed_url(self):
+        video_id = self.youtube_video_id
+        if not video_id:
+            return None
+        return f"https://www.youtube.com/embed/{video_id}"
+
+    @property
+    def file_name_lower(self):
+        if not self.file or not self.file.name:
+            return ""
+        return self.file.name.lower()
+
+    @property
+    def is_video_file(self):
+        return self.file_name_lower.endswith(".mp4") or self.file_name_lower.endswith(".mpeg")
+
+    @property
+    def is_audio_file(self):
+        return self.file_name_lower.endswith(".mp3")
+
+    @property
+    def is_image_file(self):
+        return self.file_name_lower.endswith((".jpg", ".jpeg", ".png", ".gif"))
+
+    @property
+    def safe_file_url(self):
+        try:
+            if self.file and self.file.name:
+                return self.file.url
+        except ValueError:
+            return None
+        return None
+
+    @property
+    def safe_thumbnail_url(self):
+        try:
+            if self.thumbnail and self.thumbnail.name:
+                return self.thumbnail.url
+        except ValueError:
+            return None
+        return None
+
+    @property
+    def default_audio_thumbnail_url(self):
+        return static("img/audio-default-thumbnail.svg")
+
+    @property
+    def audio_thumbnail_url(self):
+        return self.safe_thumbnail_url or self.default_audio_thumbnail_url
     
     @property
     def view_count(self):
         """Property to maintain compatibility with templates expecting .views"""
         return self.viewers.count()
+
+    def save(self, *args, **kwargs):
+        if self.thumbnail and hasattr(self.thumbnail, "file"):
+            self.thumbnail = resize_and_crop_thumbnail(self.thumbnail)
+        super().save(*args, **kwargs)
 
 
 
