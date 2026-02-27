@@ -109,8 +109,8 @@ if IS_PRODUCTION:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'ggenre_db',
-            'USER': 'ggenre_user',
+            'NAME': 'ggenre',
+            'USER': 'McArena',
             'PASSWORD': os.getenv('MYSQL_PASSWORD', ''),
             'HOST': 'localhost',
             'PORT': '3306',
