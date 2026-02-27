@@ -47,6 +47,16 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
+def env_float(name: str, default: float) -> float:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    try:
+        return float(raw_value.strip())
+    except ValueError:
+        return default
+
+
 def env_list(name: str, default: list[str] | None = None) -> list[str]:
     raw_value = os.getenv(name)
     if raw_value is None:
@@ -211,7 +221,7 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-repl
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL).strip()
 LOCAL_CONSOLE_EMAIL = env_bool("LOCAL_CONSOLE_EMAIL", default=not IS_PRODUCTION)
 
-if not IS_PRODUCTION and LOCAL_CONSOLE_EMAIL:
+if not IS_PRODUCTION and DEBUG and LOCAL_CONSOLE_EMAIL:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 else:
     EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
@@ -222,6 +232,9 @@ else:
     EMAIL_TIMEOUT = env_int("EMAIL_TIMEOUT", 30)
     if EMAIL_USE_SSL:
         EMAIL_USE_TLS = False
+
+OTP_EMAIL_MAX_RETRIES = env_int("OTP_EMAIL_MAX_RETRIES", 3)
+OTP_EMAIL_RETRY_DELAY_SECONDS = env_float("OTP_EMAIL_RETRY_DELAY_SECONDS", 1.5)
 
 
 LANGUAGE_CODE = os.getenv("LANGUAGE_CODE", "en-us")

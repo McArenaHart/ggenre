@@ -28,6 +28,16 @@ class UserRegistrationForm(UserCreationForm):
         if CustomUser.objects.filter(username=username).exists():
             raise forms.ValidationError("This username is already taken. Please choose another.")
         return username
+
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip().lower()
+        if not email:
+            return email
+
+        email_exists = CustomUser.objects.filter(email__iexact=email).exists()
+        if email_exists:
+            raise forms.ValidationError("An account with this email already exists.")
+        return email
     
     def clean_terms_accepted(self):
         terms_accepted = self.cleaned_data.get('terms_accepted')
@@ -44,6 +54,13 @@ class UserRegistrationForm(UserCreationForm):
             raise forms.ValidationError("Passwords do not match.")
 
         return cleaned_data
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = (self.cleaned_data.get("email") or "").strip().lower()
+        if commit:
+            user.save()
+        return user
     
 
 
@@ -73,9 +90,24 @@ class ProfileUpdateForm(forms.ModelForm):
                 raise ValidationError("Only PNG, JPG, and JPEG formats are allowed.")
         return profile_picture
 
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip().lower()
+        if not email:
+            return email
+
+        email_exists = (
+            CustomUser.objects.filter(email__iexact=email)
+            .exclude(pk=self.instance.pk)
+            .exists()
+        )
+        if email_exists:
+            raise ValidationError("An account with this email already exists.")
+        return email
+
     def save(self, commit=True):
         user = super().save(commit=False)
         password = self.cleaned_data.get('password')
+        user.email = (self.cleaned_data.get("email") or "").strip().lower()
         if password:
             user.set_password(password)
         if commit:

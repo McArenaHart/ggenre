@@ -12,6 +12,10 @@ import random
 from django.http import JsonResponse
 from .models import Announcement, DismissedAnnouncement
 import logging
+import smtplib
+import socket
+import ssl
+import time
 from django.db.models import Avg, Sum, Count, When, IntegerField, Case
 from django.core.mail import send_mail, BadHeaderError
 from django.utils.timezone import now
@@ -63,15 +67,89 @@ def generate_otp():
 
 def send_otp_email(user, otp):
     subject = "Your OTP Code"
-    message = f"Hello {user.username},\n\nYour OTP code is: {otp}\n\nUse this code to verify your account. It expires in 5 minutes."
-    
-    try:
-        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])
-        logger.info(f"✅ OTP {otp} sent to {user.email}")
-    except BadHeaderError:
-        logger.error("❌ Invalid header found while sending OTP email.")
-    except Exception as e:
-        logger.error(f"❌ Failed to send OTP email: {e}")
+    message = (
+        f"Hello {user.username},\n\n"
+        f"Your OTP code is: {otp}\n\n"
+        "Use this code to verify your account. It expires in 5 minutes."
+    )
+    email_backend = getattr(settings, "EMAIL_BACKEND", "")
+
+    if not user.email:
+        logger.error("OTP email skipped because user %s has no email.", user.pk)
+        return False
+
+    if email_backend == "django.core.mail.backends.console.EmailBackend":
+        logger.warning(
+            "OTP email for user %s is using console backend (no real delivery).",
+            user.pk,
+        )
+
+    max_attempts = max(1, int(getattr(settings, "OTP_EMAIL_MAX_RETRIES", 3)))
+    retry_delay_seconds = float(getattr(settings, "OTP_EMAIL_RETRY_DELAY_SECONDS", 1.5))
+    transient_errors = (
+        TimeoutError,
+        socket.timeout,
+        ssl.SSLError,
+        smtplib.SMTPConnectError,
+        smtplib.SMTPServerDisconnected,
+    )
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            sent_count = send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                fail_silently=False,
+            )
+            if sent_count != 1:
+                logger.error(
+                    "OTP email send_mail returned %s for user %s via %s.",
+                    sent_count,
+                    user.pk,
+                    email_backend,
+                )
+                return False
+
+            logger.info(
+                "OTP email sent to user %s (%s) via %s.",
+                user.pk,
+                user.email,
+                email_backend,
+            )
+            return True
+        except transient_errors as e:
+            if attempt < max_attempts:
+                logger.warning(
+                    "Transient OTP email failure for user %s (attempt %s/%s): %s. Retrying...",
+                    user.pk,
+                    attempt,
+                    max_attempts,
+                    e,
+                )
+                time.sleep(retry_delay_seconds * attempt)
+                continue
+
+            logger.exception(
+                "Failed to send OTP email to user %s via %s after %s attempts: %s",
+                user.pk,
+                email_backend,
+                max_attempts,
+                e,
+            )
+            return False
+        except BadHeaderError:
+            logger.exception("Invalid header while sending OTP email to user %s.", user.pk)
+            return False
+        except Exception as e:
+            logger.exception(
+                "Failed to send OTP email to user %s via %s: %s",
+                user.pk,
+                email_backend,
+                e,
+            )
+            return False
 
 
 # Register with OTP Verification (via Email)
@@ -85,13 +163,19 @@ def register(request):
 
             otp_code = generate_otp()
             OTP.objects.create(user=user, otp_code=otp_code)
-            send_otp_email(user, otp_code)
+            otp_sent = send_otp_email(user, otp_code)
 
-            messages.info(request, "OTP sent to your email. Verify to activate your account.")
-            return redirect(reverse('verify_otp', args=[user.id]))  # ✅ FIXED
+            if otp_sent:
+                messages.info(request, "OTP sent to your email. Verify to activate your account.")
+            else:
+                messages.error(
+                    request,
+                    "We could not send your OTP email right now. Use 'Resend OTP' after email settings are fixed.",
+                )
+            return redirect(reverse('verify_otp', args=[user.id]))
     else:
         form = UserRegistrationForm()
-    
+
     return render(request, 'users/register.html', {'form': form})
 
 
@@ -100,13 +184,13 @@ def terms_and_conditions(request):
 
 # OTP Verification
 def verify_otp(request, user_id):
-    user = get_object_or_404(CustomUser, id=user_id)  # ✅ FIXED
+    user = get_object_or_404(CustomUser, id=user_id)
 
     if request.method == 'POST':
         entered_otp = request.POST.get('otp')
         otp_record = OTP.objects.filter(user=user).first()
 
-        if otp_record and otp_record.otp_code == entered_otp and not otp_record.is_expired():  # ✅ FIXED
+        if otp_record and otp_record.otp_code == entered_otp and not otp_record.is_expired():
             user.is_active = True
             user.save()
             otp_record.delete()
@@ -119,17 +203,23 @@ def verify_otp(request, user_id):
 
 # Resend OTP (via Email)
 def resend_otp(request, user_id):
-    user = get_object_or_404(CustomUser, id=user_id)  # ✅ FIXED
+    user = get_object_or_404(CustomUser, id=user_id)
     otp_record = OTP.objects.filter(user=user).first()
-    
-    if otp_record:
-        otp_record.delete()
-    
+
     otp_code = generate_otp()
-    OTP.objects.create(user=user, otp_code=otp_code)
-    send_otp_email(user, otp_code)
-    
-    messages.info(request, "A new OTP has been sent to your email.")
+    otp_sent = send_otp_email(user, otp_code)
+
+    if otp_sent:
+        if otp_record:
+            otp_record.delete()
+        OTP.objects.create(user=user, otp_code=otp_code)
+        messages.info(request, "A new OTP has been sent to your email.")
+    else:
+        messages.error(
+            request,
+            "OTP email was not sent. Please retry after email settings are corrected.",
+        )
+
     return redirect(reverse('verify_otp', args=[user.id]))
 
 # User Login View

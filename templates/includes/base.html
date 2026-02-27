@@ -4,18 +4,26 @@
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
     <meta name="description" content="Genre Genius platform" />
     <meta name="author" content="Genre Genius" />
+    <meta name="application-name" content="Genre Genius" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="GGenre" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#05060d" />
     <title>{% block title %}GGENRE{% endblock %}</title>
     <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}" />
+    <link rel="apple-touch-icon" href="{% static 'img/pwa/icon-180.png' %}" />
+    <link rel="manifest" href="{% url 'web_manifest' %}" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700&display=swap" rel="stylesheet" />
     <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet" />
     <link href="{% static 'vendor/fontawesome-free/css/all.min.css' %}" rel="stylesheet" />
     <link href="{% static 'css/styles.css' %}" rel="stylesheet" />
-    <link href="{% static 'css/app-shell.css' %}?v=20260227a" rel="stylesheet" />
+    <link href="{% static 'css/app-shell.css' %}?v=20260227pwa1" rel="stylesheet" />
     <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.carousel.css' %}" />
     <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.theme.css' %}" />
     {% block extra_css %}{% endblock %}
@@ -25,6 +33,9 @@
     class="app-theme {% if user.is_authenticated %}app-authenticated{% else %}app-guest{% endif %}"
     data-theme="dark"
     data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}"
+    data-current-path="{{ request.path }}"
+    data-service-worker-url="{% url 'service_worker' %}"
+    data-offline-url="{% url 'offline' %}"
     data-announcements-url="{% if user.is_authenticated %}{% url 'get_announcements' %}{% endif %}"
     data-dismiss-announcement-template="{% if user.is_authenticated %}{% url 'dismiss_announcement' 0 %}{% endif %}"
   >
@@ -47,6 +58,9 @@
 
         <button type="button" class="app-theme-toggle d-inline-flex d-lg-none ml-auto mr-2" data-theme-toggle aria-label="Switch color mode">
           <i class="fas fa-sun" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="app-install-trigger d-inline-flex d-lg-none mr-2" data-pwa-install hidden>
+          <i class="fas fa-download" aria-hidden="true"></i>
         </button>
 
         <button
@@ -108,6 +122,12 @@
           </div>
 
           <ul class="navbar-nav ml-auto osahan-right-navbar">
+            <li class="nav-item d-none d-lg-flex align-items-center mr-2">
+              <button type="button" class="app-install-trigger" data-pwa-install hidden>
+                <i class="fas fa-download" aria-hidden="true"></i>
+                <span>Install App</span>
+              </button>
+            </li>
             <li class="nav-item d-none d-lg-flex align-items-center mr-2">
               <button type="button" class="app-theme-toggle" data-theme-toggle aria-label="Switch color mode">
                 <i class="fas fa-sun" aria-hidden="true"></i>
@@ -185,6 +205,10 @@
 
         <main id="content-wrapper" class="content-wrapper app-content app-content-wrapper">
     {% else %}
+        <button type="button" class="app-install-trigger app-install-trigger-guest" data-pwa-install hidden>
+          <i class="fas fa-download" aria-hidden="true"></i>
+          <span>Install App</span>
+        </button>
         <button type="button" class="app-theme-toggle app-theme-toggle-guest" data-theme-toggle aria-label="Switch color mode">
           <i class="fas fa-sun" aria-hidden="true"></i>
           <span data-theme-label>Light</span>
@@ -211,6 +235,87 @@
     {% if user.is_authenticated %}
       </div>
     {% endif %}
+
+    <footer class="app-footer" role="contentinfo">
+      <div class="app-footer__inner">
+        <span class="app-footer__copy">Copyright &copy; McArena2026</span>
+      </div>
+    </footer>
+
+    {% if user.is_authenticated %}
+      <nav class="app-mobile-tabbar d-lg-none" aria-label="Primary">
+        <a class="app-mobile-tab {% if request.path == '/' or request.path|slice:':9' == '/content/' %}is-active{% endif %}" href="{% url 'content_list' %}">
+          <i class="fas fa-home" aria-hidden="true"></i>
+          <span>Home</span>
+        </a>
+        <a class="app-mobile-tab {% if request.path|slice:':14' == '/users/artists' %}is-active{% endif %}" href="{% url 'artist_list' %}">
+          <i class="fas fa-users" aria-hidden="true"></i>
+          <span>Artists</span>
+        </a>
+        {% if user.role == 'artist' %}
+          <a class="app-mobile-tab {% if request.path|slice:':16' == '/content/upload/' %}is-active{% endif %}" href="{% url 'upload_content' %}">
+            <i class="fas fa-plus-circle" aria-hidden="true"></i>
+            <span>Create</span>
+          </a>
+        {% else %}
+          <a class="app-mobile-tab {% if request.path|slice:':14' == '/content/live/' %}is-active{% endif %}" href="{% url 'live_stream_index' %}">
+            <i class="fas fa-broadcast-tower" aria-hidden="true"></i>
+            <span>Live</span>
+          </a>
+        {% endif %}
+        <a class="app-mobile-tab {% if request.path|slice:':20' == '/users/notifications' %}is-active{% endif %}" href="{% url 'notifications' %}">
+          <i class="fas fa-bell" aria-hidden="true"></i>
+          <span>Alerts</span>
+        </a>
+        <a class="app-mobile-tab {% if request.path|slice:':15' == '/users/profile/' %}is-active{% endif %}" href="{% url 'user_profile' user.id %}">
+          <i class="fas fa-user-circle" aria-hidden="true"></i>
+          <span>Profile</span>
+        </a>
+      </nav>
+    {% else %}
+      <nav class="app-mobile-tabbar app-mobile-tabbar-guest d-lg-none" aria-label="Quick links">
+        <a class="app-mobile-tab {% if request.path == '/' %}is-active{% endif %}" href="{% url 'home' %}">
+          <i class="fas fa-home" aria-hidden="true"></i>
+          <span>Home</span>
+        </a>
+        <a class="app-mobile-tab {% if request.path|slice:':9' == '/content/' %}is-active{% endif %}" href="{% url 'content_list' %}">
+          <i class="fas fa-compass" aria-hidden="true"></i>
+          <span>Explore</span>
+        </a>
+        <a class="app-mobile-tab {% if request.path == '/users/login/' %}is-active{% endif %}" href="{% url 'login' %}">
+          <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+          <span>Login</span>
+        </a>
+        <a class="app-mobile-tab {% if request.path == '/users/register/' %}is-active{% endif %}" href="{% url 'register' %}">
+          <i class="fas fa-user-plus" aria-hidden="true"></i>
+          <span>Join</span>
+        </a>
+      </nav>
+    {% endif %}
+
+    <section class="pwa-install-sheet" data-pwa-install-sheet hidden aria-label="Install app prompt">
+      <div class="pwa-install-sheet__icon-wrap">
+        <img src="{% static 'img/pwa/icon-192.png' %}" alt="Genre Genius app icon" class="pwa-install-sheet__icon" />
+      </div>
+      <div class="pwa-install-sheet__copy">
+        <h3 data-pwa-install-title>Install Genre Genius</h3>
+        <p data-pwa-install-text>Open faster, work offline, and use it like a native mobile app.</p>
+      </div>
+      <div class="pwa-install-sheet__actions">
+        <button type="button" class="btn btn-primary btn-sm" data-pwa-install-action>Install</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-pwa-install-dismiss>Not now</button>
+      </div>
+    </section>
+
+    <div class="pwa-update-toast" data-pwa-update-toast hidden role="status" aria-live="polite">
+      <span>A new app version is ready.</span>
+      <div class="pwa-update-toast__actions">
+        <button type="button" class="btn btn-primary btn-sm" data-pwa-update-apply>Update</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-pwa-update-dismiss>Later</button>
+      </div>
+    </div>
+
+    <div class="pwa-network-pill" data-pwa-network-pill hidden role="status" aria-live="polite"></div>
 
     <a class="scroll-to-top rounded" href="#page-top">
       <i class="fas fa-angle-up"></i>
@@ -246,7 +351,7 @@
     <script src="{% static 'vendor/jquery-easing/jquery.easing.min.js' %}"></script>
     <script src="{% static 'vendor/owl-carousel/owl.carousel.js' %}"></script>
     <script src="{% static 'js/custom.js' %}"></script>
-    <script src="{% static 'js/pages/base-shell.js' %}"></script>
+    <script src="{% static 'js/pages/base-shell.js' %}?v=20260227pwa1"></script>
 
     {% block extra_js %}{% endblock %}
   </body>

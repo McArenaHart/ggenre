@@ -62,6 +62,46 @@ class UsersAppTests(TestCase):
         self.assertFalse(new_user.is_active)
         self.assertRedirects(response, reverse("verify_otp", args=[new_user.id]))
 
+    def test_register_rejects_duplicate_email(self):
+        initial_count = CustomUser.objects.count()
+
+        response = self.client.post(
+            self.register_url,
+            {
+                "username": "different_username",
+                "email": self.admin_data["email"],  # Already used by setup user
+                "password1": "anotherpass123",
+                "password2": "anotherpass123",
+                "role": Role.FAN,
+                "terms_accepted": True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "An account with this email already exists.")
+        self.assertEqual(CustomUser.objects.count(), initial_count)
+        self.assertFalse(CustomUser.objects.filter(username="different_username").exists())
+
+    @patch("users.views.send_otp_email", return_value=False)
+    def test_register_view_handles_otp_send_failure(self, _mock_send_otp):
+        response = self.client.post(
+            self.register_url,
+            {
+                "username": "new_user_failed_otp",
+                "email": "new_user_failed_otp@example.com",
+                "password1": "newuserpass123",
+                "password2": "newuserpass123",
+                "role": Role.FAN,
+                "terms_accepted": True,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        new_user = CustomUser.objects.get(username="new_user_failed_otp")
+        self.assertFalse(new_user.is_active)
+        self.assertTrue(OTP.objects.filter(user=new_user).exists())
+        self.assertRedirects(response, reverse("verify_otp", args=[new_user.id]))
+
     def test_login_view(self):
         response = self.client.post(
             self.login_url,
@@ -255,6 +295,24 @@ class UsersAppTests(TestCase):
         self.assertEqual(response.status_code, 302)
         otp = OTP.objects.get(user=pending_user)
         self.assertEqual(otp.otp_code, "987654")
+
+    @patch("users.views.send_otp_email", return_value=False)
+    @patch("users.views.generate_otp", return_value="987654")
+    def test_resend_otp_does_not_rotate_code_when_send_fails(self, _mock_generate, _mock_send):
+        pending_user = CustomUser.objects.create_user(
+            username="resend_user_failed",
+            email="resend_failed@example.com",
+            password="resendpass123",
+            role=Role.FAN,
+            is_active=False,
+        )
+        OTP.objects.create(user=pending_user, otp_code="111111")
+
+        response = self.client.get(reverse("resend_otp", args=[pending_user.id]))
+
+        self.assertEqual(response.status_code, 302)
+        otp = OTP.objects.get(user=pending_user)
+        self.assertEqual(otp.otp_code, "111111")
 
 
 class AnnouncementTests(TestCase):

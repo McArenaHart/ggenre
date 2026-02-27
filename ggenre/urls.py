@@ -20,8 +20,12 @@ from django.conf import settings
 from django.contrib.auth import views as auth_views
 from django.conf.urls.static import static
 from content.views import home  # Import the home view
+from . import views as project_views
 
 urlpatterns = [
+    path("manifest.webmanifest", project_views.web_manifest, name="web_manifest"),
+    path("service-worker.js", project_views.service_worker, name="service_worker"),
+    path("offline/", project_views.offline, name="offline"),
     path('support/', admin.site.urls),
     path('', home, name='home'),  # Home page at the root URL
     path('users/', include('users.urls')),
