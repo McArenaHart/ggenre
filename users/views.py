@@ -66,7 +66,7 @@ def send_otp_email(user, otp):
     message = f"Hello {user.username},\n\nYour OTP code is: {otp}\n\nUse this code to verify your account. It expires in 5 minutes."
     
     try:
-        send_mail(subject, message, settings.EMAIL_HOST_USER, [user.email])
+        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])
         logger.info(f"✅ OTP {otp} sent to {user.email}")
     except BadHeaderError:
         logger.error("❌ Invalid header found while sending OTP email.")

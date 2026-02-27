@@ -1,14 +1,48 @@
-# Database
-*.sqlite3
-*.db
-*.sqlite
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Django runtime artifacts
 db.sqlite3
+*.sqlite3
+*.sqlite
+*.db
+media/
+static_collected/
+*.log
 
-# Environment variables
+# Environment variables and local config
 .env
-.env/*
+.env.*
+!.env.example
 
-# Backups
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDE/editor noise
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Backups and dumps
 *.backup
 *.bak
 datadump.json

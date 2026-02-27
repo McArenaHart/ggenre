@@ -15,4 +15,5 @@ ffmpeg-python==0.2.0
 gunicorn==23.0.0
 pillow==11.0.0
 redis==5.2.1
+PyMySQL==1.1.1
 
