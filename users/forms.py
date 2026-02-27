@@ -26,7 +26,7 @@ class UserRegistrationForm(UserCreationForm):
     def clean_username(self):
         username = self.cleaned_data.get('username')
         if CustomUser.objects.filter(username=username).exists():
-            raise forms.ValidationError("This username is already taken. Please choose another.")
+            raise forms.ValidationError("Unable to register with the provided details.")
         return username
 
     def clean_email(self):
@@ -36,7 +36,7 @@ class UserRegistrationForm(UserCreationForm):
 
         email_exists = CustomUser.objects.filter(email__iexact=email).exists()
         if email_exists:
-            raise forms.ValidationError("An account with this email already exists.")
+            raise forms.ValidationError("Unable to register with the provided details.")
         return email
     
     def clean_terms_accepted(self):

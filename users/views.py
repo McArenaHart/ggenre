@@ -6,7 +6,7 @@ from django.contrib import messages
 from .forms import UserRegistrationForm, LoginForm, ProfileUpdateForm, AnnouncementForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import UpdateView
-from django.urls import reverse_lazy, reverse
+from django.urls import reverse_lazy
 from django.contrib.auth.tokens import default_token_generator
 import random
 from django.http import JsonResponse
@@ -18,6 +18,7 @@ import ssl
 import time
 from django.db.models import Avg, Sum, Count, When, IntegerField, Case
 from django.core.mail import send_mail, BadHeaderError
+from django.core.cache import cache
 from django.utils.timezone import now
 from datetime import timedelta
 from .models import CustomUser, Role, Follow, OTP, TermsAndConditions
@@ -58,6 +59,79 @@ def role_based_redirect(user):
 
 
 CustomUser = get_user_model()  # Ensure correct user model
+
+
+REGISTER_THROTTLE_SCOPE = "register"
+LOGIN_THROTTLE_SCOPE = "login"
+OTP_DISABLED_MESSAGE = "OTP is disabled. Please log in with password."
+
+
+def _positive_int(value, default):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _auth_throttle_config(scope):
+    window_seconds = _positive_int(getattr(settings, "AUTH_THROTTLE_WINDOW_SECONDS", 300), 300)
+    if scope == REGISTER_THROTTLE_SCOPE:
+        limit = _positive_int(getattr(settings, "AUTH_REGISTER_MAX_ATTEMPTS", 5), 5)
+    else:
+        limit = _positive_int(getattr(settings, "AUTH_LOGIN_MAX_ATTEMPTS", 10), 10)
+    return limit, window_seconds
+
+
+def _client_identifier(request):
+    forwarded_for = (request.META.get("HTTP_X_FORWARDED_FOR") or "").split(",")[0].strip()
+    if forwarded_for:
+        return forwarded_for
+
+    remote_addr = (request.META.get("REMOTE_ADDR") or "").strip()
+    if remote_addr:
+        return remote_addr
+
+    return "unknown"
+
+
+def _auth_throttle_key(request, scope):
+    return f"auth-throttle:{scope}:{_client_identifier(request)}"
+
+
+def _is_auth_throttled(request, scope):
+    limit, _ = _auth_throttle_config(scope)
+    attempts = cache.get(_auth_throttle_key(request, scope), 0) or 0
+    return _positive_int(attempts, 0) >= limit
+
+
+def _record_auth_attempt(request, scope):
+    _, window_seconds = _auth_throttle_config(scope)
+    key = _auth_throttle_key(request, scope)
+    if cache.add(key, 1, timeout=window_seconds):
+        return
+    try:
+        cache.incr(key)
+    except Exception:
+        attempts = _positive_int(cache.get(key, 0), 0) + 1
+        cache.set(key, attempts, timeout=window_seconds)
+
+
+def _reset_auth_throttle(request, scope):
+    cache.delete(_auth_throttle_key(request, scope))
+
+
+def _throttled_form_response(request, form, message, template_name):
+    messages.error(request, message)
+    response = render(request, template_name, {"form": form})
+    response.status_code = 429
+    return response
+
+
+def _redirect_otp_disabled(request):
+    messages.info(request, OTP_DISABLED_MESSAGE)
+    return redirect("login")
+
 
 # Generate OTP
 def generate_otp():
@@ -152,88 +226,68 @@ def send_otp_email(user, otp):
             return False
 
 
-# Register with OTP Verification (via Email)
 def register(request):
-    if request.method == 'POST':
+    if request.method == "POST":
         form = UserRegistrationForm(request.POST)
+        if _is_auth_throttled(request, REGISTER_THROTTLE_SCOPE):
+            return _throttled_form_response(
+                request,
+                form,
+                "Too many registration attempts. Please try again later.",
+                "users/register.html",
+            )
+
+        if (request.POST.get("website") or "").strip():
+            _record_auth_attempt(request, REGISTER_THROTTLE_SCOPE)
+            messages.error(request, "Registration failed. Please try again.")
+            response = render(request, "users/register.html", {"form": form})
+            response.status_code = 400
+            return response
+
         if form.is_valid():
             user = form.save(commit=False)
-            user.is_active = False  # User inactive until OTP verification
+            user.is_active = True
             user.save()
+            _reset_auth_throttle(request, REGISTER_THROTTLE_SCOPE)
+            messages.success(request, "Account created successfully. Please sign in.")
+            return redirect("login")
 
-            otp_code = generate_otp()
-            OTP.objects.create(user=user, otp_code=otp_code)
-            otp_sent = send_otp_email(user, otp_code)
-
-            if otp_sent:
-                messages.info(request, "OTP sent to your email. Verify to activate your account.")
-            else:
-                messages.error(
-                    request,
-                    "We could not send your OTP email right now. Use 'Resend OTP' after email settings are fixed.",
-                )
-            return redirect(reverse('verify_otp', args=[user.id]))
+        _record_auth_attempt(request, REGISTER_THROTTLE_SCOPE)
     else:
         form = UserRegistrationForm()
 
-    return render(request, 'users/register.html', {'form': form})
+    return render(request, "users/register.html", {"form": form})
 
-
-def terms_and_conditions(request):
-    return render(request, 'users/terms_and_conditions.html')
-
-# OTP Verification
 def verify_otp(request, user_id):
-    user = get_object_or_404(CustomUser, id=user_id)
+    return _redirect_otp_disabled(request)
 
-    if request.method == 'POST':
-        entered_otp = request.POST.get('otp')
-        otp_record = OTP.objects.filter(user=user).first()
-
-        if otp_record and otp_record.otp_code == entered_otp and not otp_record.is_expired():
-            user.is_active = True
-            user.save()
-            otp_record.delete()
-            messages.success(request, "OTP verified! You can now log in.")
-            return redirect('login')
-        else:
-            messages.error(request, "Invalid or expired OTP.")
-
-    return render(request, 'users/verify_otp.html', {'user_id': user.id})
-
-# Resend OTP (via Email)
 def resend_otp(request, user_id):
-    user = get_object_or_404(CustomUser, id=user_id)
-    otp_record = OTP.objects.filter(user=user).first()
-
-    otp_code = generate_otp()
-    otp_sent = send_otp_email(user, otp_code)
-
-    if otp_sent:
-        if otp_record:
-            otp_record.delete()
-        OTP.objects.create(user=user, otp_code=otp_code)
-        messages.info(request, "A new OTP has been sent to your email.")
-    else:
-        messages.error(
-            request,
-            "OTP email was not sent. Please retry after email settings are corrected.",
-        )
-
-    return redirect(reverse('verify_otp', args=[user.id]))
+    return _redirect_otp_disabled(request)
 
 # User Login View
 def login_view(request):
-    if request.method == 'POST':
+    if request.method == "POST":
         form = LoginForm(data=request.POST)
+        if _is_auth_throttled(request, LOGIN_THROTTLE_SCOPE):
+            return _throttled_form_response(
+                request,
+                form,
+                "Too many login attempts. Please try again later.",
+                "users/login.html",
+            )
+
         if form.is_valid():
             user = form.get_user()
             login(request, user)
-            next_url = request.GET.get('next')
+            _reset_auth_throttle(request, LOGIN_THROTTLE_SCOPE)
+            next_url = request.GET.get("next")
             return redirect(next_url) if next_url else role_based_redirect(user)
+
+        _record_auth_attempt(request, LOGIN_THROTTLE_SCOPE)
+        messages.error(request, "Invalid username or password.")
     else:
         form = LoginForm()
-    return render(request, 'users/login.html', {'form': form})
+    return render(request, "users/login.html", {"form": form})
 
 def logout_view(request):
     logout(request)

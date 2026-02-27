@@ -14,41 +14,15 @@
     <div class="row no-gutters auth-row justify-content-center">
       <div class="col-lg-5 col-md-7 col-sm-10 p-5 full-height auth-form-column auth-otp-column">
         <div class="login-main-left auth-form-panel">
-          <h5 class="mt-3 mb-3 text-center">Verify OTP</h5>
-
-          {% if messages %}
+          <h5 class="mt-3 mb-3 text-center">OTP Disabled</h5>
           <div class="alert alert-info">
-            {% for message in messages %}
-            <p>{{ message }}</p>
-            {% endfor %}
+            OTP is disabled. Please log in with your password.
           </div>
-          {% endif %}
-
-          <form method="POST">
-            {% csrf_token %}
-
-            <div class="form-group">
-              <label for="otp">Enter OTP</label>
-              <input type="text" class="form-control {% if form.errors %}is-invalid{% endif %}"
-                     id="otp" name="otp" placeholder="Enter the OTP sent to your email">
-              {% for error in form.otp.errors %}
-              <div class="invalid-feedback">{{ error }}</div>
-              {% endfor %}
-            </div>
-
-            <div class="mt-3">
-              <button type="submit" class="btn btn-outline-primary btn-block btn-lg auth-submit-btn">
-                Verify OTP
-              </button>
-            </div>
-
-            <div class="text-center mt-2 auth-alt-link">
-              <p class="light-gray mb-0">
-                Didn't receive an OTP? 
-                <a href="{% url 'resend_otp' user_id=user_id %}">Resend OTP</a>
-              </p>
-            </div>
-          </form>
+          <div class="mt-3">
+            <a href="{% url 'login' %}" class="btn btn-outline-primary btn-block btn-lg auth-submit-btn">
+              Go to Login
+            </a>
+          </div>
         </div>
       </div>
     </div>

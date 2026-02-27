@@ -1,10 +1,8 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
-from django.utils import timezone
-from datetime import timedelta
-from unittest.mock import patch
 
 from .models import Announcement, DismissedAnnouncement, OTP, Role
 
@@ -13,6 +11,7 @@ CustomUser = get_user_model()
 
 class UsersAppTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.client = Client()
         self.register_url = reverse("register")
         self.login_url = reverse("login")
@@ -59,8 +58,8 @@ class UsersAppTests(TestCase):
         self.assertEqual(response.status_code, 302)
 
         new_user = CustomUser.objects.get(username="new_user")
-        self.assertFalse(new_user.is_active)
-        self.assertRedirects(response, reverse("verify_otp", args=[new_user.id]))
+        self.assertTrue(new_user.is_active)
+        self.assertRedirects(response, reverse("login"))
 
     def test_register_rejects_duplicate_email(self):
         initial_count = CustomUser.objects.count()
@@ -78,29 +77,43 @@ class UsersAppTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "An account with this email already exists.")
+        self.assertContains(response, "Unable to register with the provided details.")
         self.assertEqual(CustomUser.objects.count(), initial_count)
         self.assertFalse(CustomUser.objects.filter(username="different_username").exists())
 
-    @patch("users.views.send_otp_email", return_value=False)
-    def test_register_view_handles_otp_send_failure(self, _mock_send_otp):
+    def test_register_rejects_honeypot_submission(self):
         response = self.client.post(
             self.register_url,
             {
-                "username": "new_user_failed_otp",
-                "email": "new_user_failed_otp@example.com",
+                "username": "new_user_honeypot",
+                "email": "new_user_honeypot@example.com",
                 "password1": "newuserpass123",
                 "password2": "newuserpass123",
                 "role": Role.FAN,
                 "terms_accepted": True,
+                "website": "spam-bot",
             },
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(CustomUser.objects.filter(username="new_user_honeypot").exists())
 
-        new_user = CustomUser.objects.get(username="new_user_failed_otp")
-        self.assertFalse(new_user.is_active)
-        self.assertTrue(OTP.objects.filter(user=new_user).exists())
-        self.assertRedirects(response, reverse("verify_otp", args=[new_user.id]))
+    @override_settings(AUTH_REGISTER_MAX_ATTEMPTS=2, AUTH_THROTTLE_WINDOW_SECONDS=60)
+    def test_register_rate_limit_blocks_repeated_attempts(self):
+        payload = {
+            "username": "rate_limit_user",
+            "email": "rate_limit_user@example.com",
+            "password1": "newuserpass123",
+            "password2": "different-password123",
+            "role": Role.FAN,
+            "terms_accepted": True,
+        }
+
+        self.client.post(self.register_url, payload)
+        self.client.post(self.register_url, payload)
+        response = self.client.post(self.register_url, payload)
+
+        self.assertEqual(response.status_code, 429)
+        self.assertContains(response, "Too many registration attempts.", status_code=429)
 
     def test_login_view(self):
         response = self.client.post(
@@ -112,6 +125,20 @@ class UsersAppTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.assertIn("_auth_user_id", self.client.session)
+
+    @override_settings(AUTH_LOGIN_MAX_ATTEMPTS=2, AUTH_THROTTLE_WINDOW_SECONDS=60)
+    def test_login_rate_limit_blocks_repeated_attempts(self):
+        payload = {
+            "username": self.admin_user.username,
+            "password": "wrong-password",
+        }
+
+        self.client.post(self.login_url, payload)
+        self.client.post(self.login_url, payload)
+        response = self.client.post(self.login_url, payload)
+
+        self.assertEqual(response.status_code, 429)
+        self.assertContains(response, "Too many login attempts.", status_code=429)
 
     def test_logout_view(self):
         self.client.login(
@@ -238,7 +265,7 @@ class UsersAppTests(TestCase):
         self.assertTrue(otp.is_active)
         self.assertEqual(otp.remaining_votes, 1)
 
-    def test_verify_otp_activates_registered_user(self):
+    def test_verify_otp_redirects_when_disabled(self):
         pending_user = CustomUser.objects.create_user(
             username="pending_user",
             email="pending@example.com",
@@ -246,41 +273,15 @@ class UsersAppTests(TestCase):
             role=Role.FAN,
             is_active=False,
         )
-        OTP.objects.create(user=pending_user, otp_code="111222")
 
-        response = self.client.post(
-            reverse("verify_otp", args=[pending_user.id]),
-            {"otp": "111222"},
-        )
+        response = self.client.get(reverse("verify_otp", args=[pending_user.id]), follow=True)
 
-        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse("login"))
+        self.assertContains(response, "OTP is disabled. Please log in with password.")
         pending_user.refresh_from_db()
-        self.assertTrue(pending_user.is_active)
-        self.assertFalse(OTP.objects.filter(user=pending_user).exists())
+        self.assertFalse(pending_user.is_active)
 
-    def test_verify_otp_rejects_expired_code(self):
-        expired_user = CustomUser.objects.create_user(
-            username="expired_user",
-            email="expired@example.com",
-            password="expiredpass123",
-            role=Role.FAN,
-            is_active=False,
-        )
-        otp = OTP.objects.create(user=expired_user, otp_code="333444")
-        OTP.objects.filter(pk=otp.pk).update(created_at=timezone.now() - timedelta(minutes=6))
-
-        response = self.client.post(
-            reverse("verify_otp", args=[expired_user.id]),
-            {"otp": "333444"},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        expired_user.refresh_from_db()
-        self.assertFalse(expired_user.is_active)
-        self.assertTrue(OTP.objects.filter(user=expired_user).exists())
-
-    @patch("users.views.generate_otp", return_value="987654")
-    def test_resend_otp_replaces_code_for_user(self, _mock_generate):
+    def test_resend_otp_redirects_when_disabled(self):
         pending_user = CustomUser.objects.create_user(
             username="resend_user",
             email="resend@example.com",
@@ -288,30 +289,13 @@ class UsersAppTests(TestCase):
             role=Role.FAN,
             is_active=False,
         )
-        OTP.objects.create(user=pending_user, otp_code="111111")
+        otp = OTP.objects.create(user=pending_user, otp_code="111111")
 
-        response = self.client.get(reverse("resend_otp", args=[pending_user.id]))
+        response = self.client.get(reverse("resend_otp", args=[pending_user.id]), follow=True)
 
-        self.assertEqual(response.status_code, 302)
-        otp = OTP.objects.get(user=pending_user)
-        self.assertEqual(otp.otp_code, "987654")
-
-    @patch("users.views.send_otp_email", return_value=False)
-    @patch("users.views.generate_otp", return_value="987654")
-    def test_resend_otp_does_not_rotate_code_when_send_fails(self, _mock_generate, _mock_send):
-        pending_user = CustomUser.objects.create_user(
-            username="resend_user_failed",
-            email="resend_failed@example.com",
-            password="resendpass123",
-            role=Role.FAN,
-            is_active=False,
-        )
-        OTP.objects.create(user=pending_user, otp_code="111111")
-
-        response = self.client.get(reverse("resend_otp", args=[pending_user.id]))
-
-        self.assertEqual(response.status_code, 302)
-        otp = OTP.objects.get(user=pending_user)
+        self.assertRedirects(response, reverse("login"))
+        self.assertContains(response, "OTP is disabled. Please log in with password.")
+        otp.refresh_from_db()
         self.assertEqual(otp.otp_code, "111111")
 
 

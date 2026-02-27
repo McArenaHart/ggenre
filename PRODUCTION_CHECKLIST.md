@@ -44,6 +44,11 @@ daphne -b 0.0.0.0 -p 8000 ggenre.asgi:application
 
 ## 7) Post-deploy checks
 1. Login/logout flow works.
-2. OTP email delivery works.
+2. Registration completes without OTP and redirects to login.
 3. Static assets and uploaded media are accessible.
 4. Admin dashboard opens at `/support/`.
+
+## OTP Removal
+- User registration is now password-based only; OTP verification/resend routes redirect to login with an informational message.
+- No email delivery is required for account activation.
+- Keep auth throttling enabled via `AUTH_THROTTLE_WINDOW_SECONDS`, `AUTH_REGISTER_MAX_ATTEMPTS`, and `AUTH_LOGIN_MAX_ATTEMPTS`.
