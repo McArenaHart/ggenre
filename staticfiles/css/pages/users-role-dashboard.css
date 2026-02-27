@@ -1,0 +1,32 @@
+.role-dashboard-page .x_panel {
+  margin-bottom: 1rem;
+}
+
+.role-dashboard-page .x_content {
+  overflow: visible;
+}
+
+.role-dashboard-page .table-responsive {
+  margin-top: 0.25rem;
+}
+
+.role-dashboard-page .table thead th {
+  white-space: nowrap;
+}
+
+.role-dashboard-page .table td,
+.role-dashboard-page .table th {
+  vertical-align: middle;
+}
+
+@media (max-width: 991.98px) {
+  .role-dashboard-page .x_content {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .role-dashboard-page .x_title h2 {
+    font-size: 1rem;
+  }
+}

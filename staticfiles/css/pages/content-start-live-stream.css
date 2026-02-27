@@ -1,0 +1,25 @@
+.start-live-page .start-live-card {
+  border-radius: 12px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.start-live-page .start-live-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(5, 10, 25, 0.55);
+}
+
+.start-live-page .btn-primary {
+  border: none;
+  padding: 12px;
+  font-size: 1.05rem;
+}
+
+@media (max-width: 767.98px) {
+  .start-live-page {
+    margin-top: 1rem !important;
+  }
+
+  .start-live-page .start-live-card {
+    padding: 1rem !important;
+  }
+}

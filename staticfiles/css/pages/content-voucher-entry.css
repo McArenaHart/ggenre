@@ -1,0 +1,19 @@
+.voucher-entry-page .voucher-entry-card {
+  border-radius: 12px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.voucher-entry-page .voucher-entry-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(5, 10, 25, 0.55);
+}
+
+@media (max-width: 767.98px) {
+  .voucher-entry-page {
+    margin-top: 1rem !important;
+  }
+
+  .voucher-entry-page .voucher-entry-card {
+    padding: 1rem !important;
+  }
+}

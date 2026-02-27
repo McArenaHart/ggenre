@@ -46,7 +46,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'change-me-in-env-c1f9f77b4f424eb989
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = ['ggenre.com', 'www.ggenre.com', '147.93.95.1', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['ggenre.com', 'www.ggenre.com', '137.184.123.173', 'localhost', '127.0.0.1']
 
 
 # Application definition

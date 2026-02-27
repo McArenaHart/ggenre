@@ -44,25 +44,68 @@
 
   $('[data-toggle="tooltip"]').tooltip();
 
-  $(document).on("scroll", function () {
-    if ($(this).scrollTop() > 100) {
-      $(".scroll-to-top").fadeIn();
-    } else {
-      $(".scroll-to-top").fadeOut();
+  function initSmartScrollButton() {
+    const scrollButton = document.querySelector(".scroll-to-top");
+    if (!scrollButton) {
+      return;
     }
-  });
 
-  $(document).on("click", "a.scroll-to-top", function (event) {
-    const $anchor = $(this);
-    $("html, body").stop().animate(
-      {
-        scrollTop: $($anchor.attr("href")).offset().top,
-      },
-      800,
-      "easeInOutExpo"
-    );
-    event.preventDefault();
-  });
+    const prefersReducedMotion =
+      window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let lastScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    let ticking = false;
+    let idleTimer = null;
+
+    function updateScrollButton() {
+      const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
+      const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
+      const progress = Math.min(1, currentY / maxScroll);
+      const progressDegrees = Math.round(progress * 360);
+      const scrollingDown = currentY > lastScrollY + 2;
+      const showThreshold = 260;
+      const nearBottom = currentY > maxScroll - 160;
+      const shouldShow = currentY > showThreshold && (!scrollingDown || nearBottom);
+
+      scrollButton.style.setProperty("--scroll-progress", progressDegrees + "deg");
+      scrollButton.classList.toggle("is-visible", shouldShow);
+      scrollButton.classList.toggle("is-condensed", shouldShow && scrollingDown && !nearBottom);
+
+      if (idleTimer) {
+        window.clearTimeout(idleTimer);
+      }
+
+      if (shouldShow && !scrollingDown) {
+        idleTimer = window.setTimeout(function () {
+          scrollButton.classList.add("is-condensed");
+        }, 1600);
+      }
+
+      lastScrollY = currentY;
+      ticking = false;
+    }
+
+    function onScrollLikeEvent() {
+      if (ticking) {
+        return;
+      }
+      ticking = true;
+      window.requestAnimationFrame(updateScrollButton);
+    }
+
+    scrollButton.addEventListener("click", function (event) {
+      event.preventDefault();
+      window.scrollTo({
+        top: 0,
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+      });
+    });
+
+    window.addEventListener("scroll", onScrollLikeEvent, { passive: true });
+    window.addEventListener("resize", onScrollLikeEvent);
+    updateScrollButton();
+  }
+
+  initSmartScrollButton();
 })(jQuery);
 
 function incrementViews(contentId) {
@@ -97,6 +140,36 @@ function incrementViews(contentId) {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
+  function getInitials(name) {
+    const base = (name || "").trim();
+    if (!base) {
+      return "U";
+    }
+
+    const parts = base.replace(/[_-]+/g, " ").split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+
+    const cleaned = parts[0].replace(/[^a-zA-Z0-9]/g, "");
+    return (cleaned.slice(0, 2) || "U").toUpperCase();
+  }
+
+  function buildAvatarMarkup(profileUrl, username) {
+    const url = (profileUrl || "").trim();
+    const lowerUrl = url.toLowerCase();
+    const usesDefaultAvatar =
+      !url ||
+      lowerUrl.includes("/static/defaults/profile.png") ||
+      lowerUrl.includes("/static/img/default-profile.png");
+
+    if (usesDefaultAvatar) {
+      return `<span class="rounded-circle gg-avatar-fallback mr-2" style="--gg-avatar-size: 30px;" role="img" aria-label="${username}">${getInitials(username)}</span>`;
+    }
+
+    return `<img src="${url}" alt="${username}" class="rounded-circle gg-avatar mr-2" width="30" height="30">`;
+  }
+
   document.querySelectorAll(".add-comment-form").forEach((form) => {
     form.addEventListener("submit", async function (event) {
       event.preventDefault();
@@ -125,7 +198,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const newComment = document.createElement("div");
         newComment.classList.add("border", "rounded", "p-2", "mb-2", "bg-white", "d-flex", "align-items-center");
         newComment.innerHTML = `
-          <img src="${data.comment.user_profile}" alt="${data.comment.user}" class="rounded-circle mr-2" width="30" height="30">
+          ${buildAvatarMarkup(data.comment.user_profile, data.comment.user)}
           <div>
             <p class="mb-0"><a href="/users/profile/${data.comment.user_id}/"><strong>${data.comment.user}</strong></a> - ${data.comment.timestamp}</p>
             <p class="mb-0">${data.comment.text}</p>

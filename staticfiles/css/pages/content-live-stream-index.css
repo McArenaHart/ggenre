@@ -1,0 +1,42 @@
+.live-index-page .live-index-card {
+  border-radius: 12px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.live-index-page .live-index-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(5, 9, 24, 0.55);
+}
+
+.live-index-page .live-index-item {
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.live-index-page .live-index-item:hover {
+  background-color: rgba(122, 237, 238, 0.08);
+}
+
+.live-index-page .pagination {
+  margin-bottom: 0;
+}
+
+@media (max-width: 767.98px) {
+  .live-index-page {
+    margin-top: 1.25rem !important;
+  }
+
+  .live-index-page .live-index-card {
+    padding: 1rem !important;
+  }
+
+  .live-index-page .live-index-item {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 0.65rem;
+  }
+
+  .live-index-page .live-index-join-btn {
+    width: 100%;
+  }
+}
