@@ -1,8 +1,11 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+
+from content.models import Content, Vote
 
 from .models import Announcement, DismissedAnnouncement, OTP, Role
 
@@ -125,6 +128,22 @@ class UsersAppTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.assertIn("_auth_user_id", self.client.session)
+
+    def test_login_keeps_session_persistent_until_logout(self):
+        response = self.client.post(
+            self.login_url,
+            {
+                "username": self.admin_user.username,
+                "password": self.admin_data["password"],
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(self.client.session.get_expire_at_browser_close())
+        self.assertGreaterEqual(
+            self.client.session.get_expiry_age(),
+            settings.SESSION_COOKIE_AGE - 5,
+        )
 
     @override_settings(AUTH_LOGIN_MAX_ATTEMPTS=2, AUTH_THROTTLE_WINDOW_SECONDS=60)
     def test_login_rate_limit_blocks_repeated_attempts(self):
@@ -297,6 +316,75 @@ class UsersAppTests(TestCase):
         self.assertContains(response, "OTP is disabled. Please log in with password.")
         otp.refresh_from_db()
         self.assertEqual(otp.otp_code, "111111")
+
+    def test_search_results_show_current_view_count(self):
+        content = Content.objects.create(
+            title="Metric Search Content",
+            description="Searchable content",
+            artist=self.artist_user,
+            is_approved=True,
+        )
+        content.viewers.add(self.fan_user)
+
+        response = self.client.get(reverse("search_results"), {"q": "Metric Search"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Metric Search Content")
+        self.assertContains(response, "1 views")
+
+    def test_admin_dashboard_content_ranking_uses_current_vote_metrics(self):
+        ranked_content = Content.objects.create(
+            title="Ranked Content",
+            artist=self.artist_user,
+            is_approved=True,
+        )
+        zero_vote_content = Content.objects.create(
+            title="Zero Vote Content",
+            artist=self.artist_user,
+            is_approved=True,
+        )
+        extra_fan = CustomUser.objects.create_user(
+            username="fan_user_two",
+            email="fan2@example.com",
+            password="fanpass123",
+            role=Role.FAN,
+        )
+
+        Vote.objects.create(
+            content=ranked_content,
+            fan=self.fan_user,
+            base_value=2,
+            value=2,
+            otp_code="111111",
+            is_badge_vote=False,
+        )
+        Vote.objects.create(
+            content=ranked_content,
+            fan=extra_fan,
+            base_value=3,
+            value=6,
+            otp_code="222222",
+            is_badge_vote=True,
+        )
+
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
+        response = self.client.get(reverse("admin_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        ranking = list(response.context["content_ranking"])
+
+        self.assertEqual(ranking[0].pk, ranked_content.pk)
+        self.assertEqual(ranking[0].total_points, 8)
+        self.assertEqual(ranking[0].total_votes, 2)
+        self.assertEqual(ranking[0].badge_votes, 1)
+
+        zero_vote_entry = next(item for item in ranking if item.pk == zero_vote_content.pk)
+        self.assertEqual(zero_vote_entry.total_points, 0)
+        self.assertEqual(zero_vote_entry.total_votes, 0)
+        self.assertEqual(zero_vote_entry.badge_votes, 0)
 
 
 class AnnouncementTests(TestCase):

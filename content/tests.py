@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from users.models import OTP, Role, CustomUser
 
@@ -67,6 +70,76 @@ class ContentViewTest(TestCase):
         response = self.client.get(reverse("content_list"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Test Content")
+
+    def test_content_detail_tracks_unique_view_on_page_load(self):
+        detail_url = reverse("content_detail", args=[self.content.id])
+
+        first_response = self.client.get(detail_url)
+        second_response = self.client.get(detail_url)
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(self.content.viewers.count(), 1)
+
+        second_viewer = CustomUser.objects.create_user(
+            username="fan_viewer",
+            password="password",
+            role=Role.FAN,
+        )
+        self.client.logout()
+        self.client.login(username="fan_viewer", password="password")
+        self.client.get(detail_url)
+
+        self.assertEqual(self.content.viewers.count(), 2)
+
+    def test_increment_views_endpoint_tracks_unique_authenticated_viewers(self):
+        increment_url = reverse("increment_views", args=[self.content.id])
+
+        first_response = self.client.post(increment_url)
+        second_response = self.client.post(increment_url)
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(first_response.json()["new_viewers"], 1)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(second_response.json()["new_viewers"], 1)
+        self.assertEqual(self.content.viewers.count(), 1)
+
+    def test_home_view_shows_up_to_fifty_featured_items(self):
+        base_time = timezone.now()
+        latest_content_pk = None
+
+        for index in range(55):
+            content = Content.objects.create(
+                title=f"Featured Content {index}",
+                description="Test",
+                artist=self.user,
+                file=sample_upload_file(filename=f"featured_{index}.mp4"),
+                is_approved=True,
+            )
+            Content.objects.filter(pk=content.pk).update(
+                upload_date=base_time + timedelta(minutes=index)
+            )
+            if index == 54:
+                latest_content_pk = content.pk
+
+        hidden_content = Content.objects.create(
+            title="Hidden Content",
+            description="Test",
+            artist=self.user,
+            file=sample_upload_file(filename="hidden.mp4"),
+            is_approved=False,
+        )
+        Content.objects.filter(pk=hidden_content.pk).update(
+            upload_date=base_time + timedelta(minutes=56)
+        )
+
+        response = self.client.get(reverse("home"))
+        featured_contents = response.context["featured_contents"]
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(featured_contents), 50)
+        self.assertEqual(featured_contents[0].pk, latest_content_pk)
+        self.assertNotIn(hidden_content, featured_contents)
 
 
 class ContentFormTest(TestCase):

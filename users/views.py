@@ -16,7 +16,8 @@ import smtplib
 import socket
 import ssl
 import time
-from django.db.models import Avg, Sum, Count, When, IntegerField, Case
+from django.db.models import Avg, Sum, Count
+from django.db.models.functions import Coalesce
 from django.core.mail import send_mail, BadHeaderError
 from django.core.cache import cache
 from django.utils.timezone import now
@@ -44,6 +45,14 @@ from io import BytesIO
 
 
 logger = logging.getLogger(__name__)
+
+
+def get_content_ranking_queryset():
+    return Content.objects.annotate(
+        total_points=Coalesce(Sum('votes__value'), 0),
+        total_votes=Count('votes'),
+        badge_votes=Count('votes', filter=Q(votes__is_badge_vote=True)),
+    ).order_by('-total_points', '-total_votes', '-upload_date')
 
 
 # Utility function for role-based redirection
@@ -329,16 +338,7 @@ def admin_dashboard(request):
 
     # Calculate voting statistics for display, even if no form is submitted
     try:
-        content_ranking = Content.objects.annotate(
-            total_points=Sum('votes__value'),
-            total_votes=Count('votes'),
-            badge_votes=Count(
-                Case(
-                    When(votes__is_badge_vote=True, then=1),
-                    output_field=IntegerField()
-                )
-            )
-        ).order_by('-total_points')
+        content_ranking = get_content_ranking_queryset()
     except Exception as e:
         logger.error(f"Error calculating voting statistics: {str(e)}")
         messages.error(request, "An error occurred while calculating voting statistics.")
@@ -850,11 +850,7 @@ def voting_statistics(request):
     if not request.user.has_role(Role.ADMIN):
         return redirect('dashboard')
 
-    content_ranking = Content.objects.annotate(
-        total_points=Sum('votes__value'),
-        total_votes=Count('votes'),
-        badge_votes=Count('votes', filter=Q(votes__is_badge_vote=True))
-    ).order_by('-total_points')
+    content_ranking = get_content_ranking_queryset()
 
     context = {
         'content_ranking': content_ranking,
@@ -874,11 +870,7 @@ def search_results(request):
             Q(username__icontains=query) | 
             Q(email__icontains=query)
         )
-        
-        # Debugging output
-        print("Query:", query)
-        print("Users found:", users)  # Check if users are being retrieved
-        
+
         # Search for content
         content = Content.objects.filter(
             Q(title__icontains=query) | 

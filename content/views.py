@@ -46,6 +46,17 @@ from django.views.decorators.http import require_POST
 logger = logging.getLogger(__name__)
 
 
+def track_content_view(content, user):
+    """
+    Record a unique view for an authenticated user and return the latest count.
+    """
+    if not user.is_authenticated:
+        return content.viewers.count()
+
+    content.viewers.add(user)
+    return content.viewers.count()
+
+
 
 
 @login_required
@@ -249,6 +260,7 @@ def content_detail(request, content_id):
     Display a single content item with detailed information.
     """
     content = get_object_or_404(Content, id=content_id)
+    track_content_view(content, request.user)
     related_contents = Content.objects.filter(is_approved=True).exclude(id=content_id)[:4]  # Show 4 related items
     comments = Comment.objects.filter(content=content).order_by('-timestamp')  # Fetch comments for the content
     average_vote = Vote.objects.filter(content=content).aggregate(Avg('value'))['value__avg'] or 0  # Calculate average vote
@@ -277,11 +289,7 @@ def increment_views(request, content_id):
 
         with transaction.atomic():
             content = get_object_or_404(Content, id=content_id)
-            
-            # Add user to viewers if not already there
-            content.viewers.add(request.user)
-            
-            viewer_count = content.viewers.count()
+            viewer_count = track_content_view(content, request.user)
             
             logger.info(
                 f"Viewer tracked - Content: {content_id}, "
@@ -608,7 +616,7 @@ def home(request):
     """
     # Add any context data you want to pass to the template
     context = {
-        'featured_contents': Content.objects.filter(is_approved=True).order_by('-upload_date')[:6]  # Example: Show 6 featured contents
+        'featured_contents': Content.objects.filter(is_approved=True).order_by('-upload_date')[:50]
     }
     return render(request, 'content/welcome.html', context)
 
