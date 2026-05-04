@@ -134,6 +134,92 @@ def get_up_next_contents(content, limit=4):
     return [suggested_by_id[item_id] for item_id in selected_ids if item_id in suggested_by_id]
 
 
+def get_up_next_sections(content, limit=4):
+    """
+    Return grouped "Up next" content for rendering a structured sidebar.
+    """
+    if limit <= 0:
+        return {
+            "same_creator": [],
+            "related_creators": [],
+            "fallback": [],
+            "all_items": [],
+        }
+
+    base_queryset = (
+        Content.objects.filter(is_approved=True)
+        .exclude(id=content.id)
+        .select_related("artist", "genre")
+        .prefetch_related("votes")
+    )
+
+    same_creator_ids = list(
+        base_queryset.filter(artist=content.artist)
+        .order_by("-upload_date")
+        .values_list("id", flat=True)[:limit]
+    )
+
+    content_tag_names = list(content.tags.names())
+    related_creator_ids = []
+    remaining = limit - len(same_creator_ids)
+    if remaining > 0:
+        related_filter = Q()
+        if content.genre_id:
+            related_filter |= Q(genre_id=content.genre_id)
+        if content_tag_names:
+            related_filter |= Q(tags__name__in=content_tag_names)
+
+        if related_filter:
+            same_genre_match = Case(
+                When(genre_id=content.genre_id, then=1),
+                default=0,
+                output_field=IntegerField(),
+            )
+            related_creator_ids = list(
+                base_queryset.filter(related_filter)
+                .exclude(artist=content.artist)
+                .exclude(id__in=same_creator_ids)
+                .annotate(same_genre_match=same_genre_match)
+                .annotate(shared_tag_count=Count("tags", filter=Q(tags__name__in=content_tag_names), distinct=True))
+                .annotate(shared_vote_count=Count("votes", distinct=True))
+                .order_by(
+                    "-same_genre_match",
+                    "-shared_tag_count",
+                    "-shared_vote_count",
+                    "-upload_date",
+                )
+                .distinct()
+                .values_list("id", flat=True)[:remaining]
+            )
+
+    selected_ids = same_creator_ids + related_creator_ids
+    fallback_ids = []
+    remaining = limit - len(selected_ids)
+    if remaining > 0:
+        fallback_ids = list(
+            base_queryset.exclude(id__in=selected_ids)
+            .order_by("-upload_date")
+            .values_list("id", flat=True)[:remaining]
+        )
+        selected_ids.extend(fallback_ids)
+
+    items_by_id = {
+        item.id: item
+        for item in base_queryset.filter(id__in=selected_ids)
+    }
+
+    same_creator_items = [items_by_id[item_id] for item_id in same_creator_ids if item_id in items_by_id]
+    related_creator_items = [items_by_id[item_id] for item_id in related_creator_ids if item_id in items_by_id]
+    fallback_items = [items_by_id[item_id] for item_id in fallback_ids if item_id in items_by_id]
+
+    return {
+        "same_creator": same_creator_items,
+        "related_creators": related_creator_items,
+        "fallback": fallback_items,
+        "all_items": same_creator_items + related_creator_items + fallback_items,
+    }
+
+
 
 
 @login_required
@@ -338,13 +424,16 @@ def content_detail(request, content_id):
     """
     content = get_object_or_404(Content, id=content_id)
     track_content_view(content, request.user)
-    related_contents = get_up_next_contents(content, limit=4)
+    up_next = get_up_next_sections(content, limit=4)
     comments = Comment.objects.filter(content=content).order_by('-timestamp')  # Fetch comments for the content
     average_vote = Vote.objects.filter(content=content).aggregate(Avg('value'))['value__avg'] or 0  # Calculate average vote
 
     return render(request, 'content/detail.html', {
         'content': content,
-        'related_contents': related_contents,
+        'related_contents': up_next['all_items'],
+        'up_next_same_creator': up_next['same_creator'],
+        'up_next_related_creators': up_next['related_creators'],
+        'up_next_fallback': up_next['fallback'],
         'comments': comments,
         'average_vote': round(average_vote, 1),  # Round to 1 decimal place
     })

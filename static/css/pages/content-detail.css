@@ -313,7 +313,23 @@
   padding: 0.48rem;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.7rem;
+}
+
+.watch-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.watch-sidebar-section-title {
+  margin: 0;
+  padding: 0.15rem 0.35rem 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gg-text-muted);
 }
 
 .watch-sidebar-list::-webkit-scrollbar {
@@ -466,7 +482,7 @@ body.app-theme[data-theme="light"] .watch-related-card:hover {
   .watch-sidebar-list {
     max-height: none;
     padding: 0.45rem;
-    gap: 0.3rem;
+    gap: 0.55rem;
   }
 
   .watch-related-card {
@@ -512,7 +528,7 @@ body.app-theme[data-theme="light"] .watch-related-card:hover {
 
   .watch-sidebar-list {
     padding: 0.5rem;
-    gap: 0.36rem;
+    gap: 0.5rem;
   }
 
   .watch-related-card {
