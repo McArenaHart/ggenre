@@ -13,7 +13,7 @@ from django.views import View
 from django.contrib.auth.models import User
 from django.utils.timezone import now
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Case, When, IntegerField
 from datetime import timedelta
 from users.utils import send_notification  # Ensure this is correctly imported
 import random
@@ -55,6 +55,83 @@ def track_content_view(content, user):
 
     content.viewers.add(user)
     return content.viewers.count()
+
+
+def get_up_next_contents(content, limit=4):
+    """
+    Build "Up next" suggestions with explicit priority:
+    1. More approved content from the same creator.
+    2. Approved content from related creators that share genre or tags.
+    3. Other approved content as a fallback when the first two groups are sparse.
+    """
+    if limit <= 0:
+        return []
+
+    base_queryset = (
+        Content.objects.filter(is_approved=True)
+        .exclude(id=content.id)
+        .select_related("artist", "genre")
+        .prefetch_related("votes")
+    )
+    selected_ids = []
+
+    same_creator_ids = list(
+        base_queryset.filter(artist=content.artist)
+        .order_by("-upload_date")
+        .values_list("id", flat=True)[:limit]
+    )
+    selected_ids.extend(same_creator_ids)
+
+    remaining = limit - len(selected_ids)
+    if remaining > 0:
+        content_tag_names = list(content.tags.names())
+        related_filter = Q()
+        if content.genre_id:
+            related_filter |= Q(genre_id=content.genre_id)
+        if content_tag_names:
+            related_filter |= Q(tags__name__in=content_tag_names)
+
+        if related_filter:
+            same_genre_match = Case(
+                When(genre_id=content.genre_id, then=1),
+                default=0,
+                output_field=IntegerField(),
+            )
+            related_candidate_ids = list(
+                base_queryset.filter(related_filter)
+                .exclude(artist=content.artist)
+                .exclude(id__in=selected_ids)
+                .annotate(same_genre_match=same_genre_match)
+                .annotate(shared_tag_count=Count("tags", filter=Q(tags__name__in=content_tag_names), distinct=True))
+                .annotate(shared_vote_count=Count("votes", distinct=True))
+                .order_by(
+                    "-same_genre_match",
+                    "-shared_tag_count",
+                    "-shared_vote_count",
+                    "-upload_date",
+                )
+                .distinct()
+                .values_list("id", flat=True)[:remaining]
+            )
+            selected_ids.extend(related_candidate_ids)
+
+    remaining = limit - len(selected_ids)
+    if remaining > 0:
+        fallback_ids = list(
+            base_queryset.exclude(id__in=selected_ids)
+            .order_by("-upload_date")
+            .values_list("id", flat=True)[:remaining]
+        )
+        selected_ids.extend(fallback_ids)
+
+    if not selected_ids:
+        return []
+
+    suggested_by_id = {
+        item.id: item
+        for item in base_queryset.filter(id__in=selected_ids)
+    }
+    return [suggested_by_id[item_id] for item_id in selected_ids if item_id in suggested_by_id]
 
 
 
@@ -261,7 +338,7 @@ def content_detail(request, content_id):
     """
     content = get_object_or_404(Content, id=content_id)
     track_content_view(content, request.user)
-    related_contents = Content.objects.filter(is_approved=True).exclude(id=content_id)[:4]  # Show 4 related items
+    related_contents = get_up_next_contents(content, limit=4)
     comments = Comment.objects.filter(content=content).order_by('-timestamp')  # Fetch comments for the content
     average_vote = Vote.objects.filter(content=content).aggregate(Avg('value'))['value__avg'] or 0  # Calculate average vote
 

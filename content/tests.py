@@ -92,6 +92,96 @@ class ContentViewTest(TestCase):
 
         self.assertEqual(self.content.viewers.count(), 2)
 
+    def test_content_detail_up_next_prioritizes_same_creator_then_related_creators(self):
+        shared_genre = Genre.objects.create(name="Afro Fusion")
+        self.content.genre = shared_genre
+        self.content.save(update_fields=["genre"])
+        self.content.tags.add("featured", "live")
+
+        same_artist_newer = Content.objects.create(
+            title="Same Creator One",
+            artist=self.user,
+            genre=shared_genre,
+            file=sample_upload_file(filename="same_creator_1.mp4"),
+            is_approved=True,
+        )
+        same_artist_newer.tags.add("featured")
+
+        same_artist_older = Content.objects.create(
+            title="Same Creator Two",
+            artist=self.user,
+            genre=shared_genre,
+            file=sample_upload_file(filename="same_creator_2.mp4"),
+            is_approved=True,
+        )
+        same_artist_older.tags.add("featured")
+
+        related_artist = CustomUser.objects.create_user(
+            username="related_artist",
+            password="password",
+            role=Role.ARTIST,
+        )
+        related_by_genre = Content.objects.create(
+            title="Related Genre Match",
+            artist=related_artist,
+            genre=shared_genre,
+            file=sample_upload_file(filename="related_genre.mp4"),
+            is_approved=True,
+        )
+
+        tag_artist = CustomUser.objects.create_user(
+            username="tag_artist",
+            password="password",
+            role=Role.ARTIST,
+        )
+        related_by_tag = Content.objects.create(
+            title="Related Tag Match",
+            artist=tag_artist,
+            file=sample_upload_file(filename="related_tag.mp4"),
+            is_approved=True,
+        )
+        related_by_tag.tags.add("live")
+
+        unrelated_artist = CustomUser.objects.create_user(
+            username="unrelated_artist",
+            password="password",
+            role=Role.ARTIST,
+        )
+        Content.objects.create(
+            title="Unrelated Fallback",
+            artist=unrelated_artist,
+            file=sample_upload_file(filename="unrelated.mp4"),
+            is_approved=True,
+        )
+
+        response = self.client.get(reverse("content_detail", args=[self.content.id]))
+
+        self.assertEqual(response.status_code, 200)
+        related_ids = [item.id for item in response.context["related_contents"]]
+        self.assertEqual(
+            related_ids,
+            [same_artist_older.id, same_artist_newer.id, related_by_genre.id, related_by_tag.id],
+        )
+
+    def test_content_detail_up_next_falls_back_when_same_creator_and_related_are_insufficient(self):
+        fallback_artist = CustomUser.objects.create_user(
+            username="fallback_artist",
+            password="password",
+            role=Role.ARTIST,
+        )
+        fallback_content = Content.objects.create(
+            title="Fallback Suggestion",
+            artist=fallback_artist,
+            file=sample_upload_file(filename="fallback.mp4"),
+            is_approved=True,
+        )
+
+        response = self.client.get(reverse("content_detail", args=[self.content.id]))
+
+        self.assertEqual(response.status_code, 200)
+        related_ids = [item.id for item in response.context["related_contents"]]
+        self.assertIn(fallback_content.id, related_ids)
+
     def test_increment_views_endpoint_tracks_unique_authenticated_viewers(self):
         increment_url = reverse("increment_views", args=[self.content.id])
 
