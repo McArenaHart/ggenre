@@ -5,7 +5,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.forms import modelform_factory
-from .models import Content, Vote, LivePerformance, ArtistUploadLimit, Comment, Badge, Voucher, Genre
+from .models import Content, Vote, LivePerformance, ArtistUploadLimit, Comment, Badge, Voucher
 from users.models import  OTP, CustomUser
 from .forms import ContentUploadForm, CommentForm, StartLiveStreamForm, VoucherEntryForm
 from django.db.models import Avg, Sum, Max
@@ -29,7 +29,6 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.utils.timezone import now
 from .forms import ContentUploadForm
-from taggit.models import Tag
 from subscriptions.models import UserSubscription
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
@@ -408,69 +407,21 @@ def send_upload_reset_notification(artist):
 
 
 
-def list_content(request, content_id=None):
-    """
-    Display approved content with search and filtering.
-    Fans can search by content title, description, or artist name.
-    They can also filter by tags.
-    """
-    query = request.GET.get('q', '').strip()
-    filter_tag = request.GET.get('tag', '').strip()
-    selected_genre = request.GET.get('genre', '').strip()
-
-    base_contents = Content.objects.select_related('artist', 'genre').prefetch_related('votes')
-
-    if request.user.is_authenticated and request.user.is_artist():
-        contents = base_contents.filter(Q(is_approved=True) | Q(artist=request.user)).order_by('-upload_date')
-    else:
-        contents = base_contents.filter(is_approved=True).order_by('-upload_date')
-
-    if content_id:
-        contents = contents.filter(id=content_id)
-
-    # Search by title, description, or artist username
-    if query:
-        contents = contents.filter(
-            Q(title__icontains=query) | 
-            Q(description__icontains=query) | 
-            Q(artist__username__icontains=query)
-        )
-
-    # Filter by tag if provided
-    if filter_tag:
-        contents = contents.filter(tags__name=filter_tag)
-
-    if selected_genre:
-        contents = contents.filter(genre__name__iexact=selected_genre)
-
-    # Paginate results (10 per page)
-    paginator = Paginator(contents, 10)
-    page_number = request.GET.get('page')
-    page_contents = paginator.get_page(page_number)
-
-    popular_contents = (
+def get_featured_contents(limit=50):
+    return (
         Content.objects.filter(is_approved=True)
         .select_related('artist', 'genre')
         .prefetch_related('votes')
-        .annotate(total_votes=Count('votes'))
-        .order_by('-total_votes', '-upload_date')[:8]
+        .order_by('-upload_date')[:limit]
     )
 
-    available_genres = (
-        Genre.objects.filter(contents__is_approved=True)
-        .order_by('name')
-        .distinct()
-    )
 
-    return render(request, 'content/list.html', {
-        'contents': page_contents,
-        'query': query,
-        'filter_tag': filter_tag,
-        'selected_genre': selected_genre,
-        'available_genres': available_genres,
-        'popular_contents': popular_contents,
-        'all_tags': Tag.objects.all(),
-        'single_content': content_id is not None
+def list_content(request, content_id=None):
+    """
+    Display the same featured content experience used on the home page.
+    """
+    return render(request, 'content/welcome.html', {
+        'featured_contents': get_featured_contents(),
     })
 
 
@@ -852,9 +803,8 @@ def home(request):
     """
     Renders the welcome page as the home page.
     """
-    # Add any context data you want to pass to the template
     context = {
-        'featured_contents': Content.objects.filter(is_approved=True).order_by('-upload_date')[:50]
+        'featured_contents': get_featured_contents()
     }
     return render(request, 'content/welcome.html', context)
 

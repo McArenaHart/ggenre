@@ -386,6 +386,21 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
+.watch-related-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.watch-related-card.is-next {
+  position: relative;
+  background: rgba(122, 237, 238, 0.055);
+  box-shadow: inset 3px 0 0 rgba(122, 237, 238, 0.62);
+}
+
+.watch-related-card.is-next .watch-related-meta {
+  padding-right: 2.25rem;
+}
+
 .watch-related-meta h6 {
   margin: 0 0 0.2rem;
   font-size: 0.84rem;
@@ -451,6 +466,21 @@ body.app-theme[data-theme="light"] .watch-vote-toggle:focus {
 body.app-theme[data-theme="light"] .watch-related-card:hover {
   border-color: transparent;
   background: rgba(22, 57, 120, 0.08);
+}
+
+body.app-theme[data-theme="light"] .watch-related-card.is-next {
+  background: rgba(22, 57, 120, 0.06);
+  box-shadow: inset 3px 0 0 rgba(22, 57, 120, 0.42);
+}
+
+.watch-sidebar-section + .watch-sidebar-section {
+  margin-top: 0.42rem;
+  padding-top: 0.58rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+body.app-theme[data-theme="light"] .watch-sidebar-section + .watch-sidebar-section {
+  border-top-color: rgba(19, 41, 86, 0.1);
 }
 
 @media (max-width: 1199.98px) {
