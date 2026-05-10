@@ -84,9 +84,13 @@
 }
 
 .content-item .content-card-media {
-  display: block;
+  display: none;
   flex: 0 0 58%;
   min-height: 0;
+}
+
+.content-item .content-card:hover .content-card-media {
+  display: block;
 }
 
 .video-container {
@@ -171,13 +175,17 @@
 }
 
 .content-item .content-card-body {
-  flex: 0 0 42%;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
   overflow: hidden;
   padding: 0.95rem 1.05rem 0.5rem !important;
   min-height: 0;
+}
+
+.content-item .content-card:hover .content-card-body {
+  flex: 0 0 42%;
 }
 
 .content-item .content-card-body h5 {

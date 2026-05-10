@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from content.models import Content, Vote
 
-from .models import Announcement, DismissedAnnouncement, OTP, Role
+from .models import Announcement, DismissedAnnouncement, Notification, OTP, Role
 
 CustomUser = get_user_model()
 
@@ -385,6 +385,44 @@ class UsersAppTests(TestCase):
         self.assertEqual(zero_vote_entry.total_points, 0)
         self.assertEqual(zero_vote_entry.total_votes, 0)
         self.assertEqual(zero_vote_entry.badge_votes, 0)
+
+    def test_admin_dashboard_filters_recent_uploads_by_category(self):
+        music_content = Content.objects.create(
+            title="Music Upload",
+            artist=self.artist_user,
+            category="music",
+            is_approved=True,
+        )
+        art_content = Content.objects.create(
+            title="Art Upload",
+            artist=self.artist_user,
+            category="art",
+            is_approved=True,
+        )
+
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
+        response = self.client.get(reverse("admin_dashboard"), {"category": "music"})
+
+        self.assertEqual(response.status_code, 200)
+        recent_upload_ids = [content.id for content in response.context["recent_uploads"]]
+        self.assertIn(music_content.id, recent_upload_ids)
+        self.assertNotIn(art_content.id, recent_upload_ids)
+
+
+class CustomUserModelTests(TestCase):
+    def test_notify_admin_without_admin_is_noop(self):
+        artist = CustomUser.objects.create_user(
+            username="artist_without_admin",
+            password="artistpass123",
+            role=Role.ARTIST,
+        )
+
+        artist.notify_admin()
+
+        self.assertEqual(Notification.objects.count(), 0)
 
 
 class AnnouncementTests(TestCase):

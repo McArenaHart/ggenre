@@ -13,7 +13,7 @@ from django.views import View
 from django.contrib.auth.models import User
 from django.utils.timezone import now
 from django.core.paginator import Paginator
-from django.db.models import Count, Q, Case, When, IntegerField
+from django.db.models import Count, Q, Case, When, IntegerField, Value
 from datetime import timedelta
 from users.utils import send_notification  # Ensure this is correctly imported
 import random
@@ -57,15 +57,147 @@ def track_content_view(content, user):
     return content.viewers.count()
 
 
-def get_up_next_contents(content, limit=4):
+def get_up_next_contents(content, user=None, limit=4):
     """
-    Build "Up next" suggestions with explicit priority:
-    1. More approved content from the same creator.
-    2. Approved content from related creators that share genre or tags.
-    3. Other approved content as a fallback when the first two groups are sparse.
+    Return the ordered Up Next list without section metadata.
     """
+    return get_up_next_sections(content, user=user, limit=limit)["all_items"]
+
+
+def _empty_up_next_sections():
+    return {
+        "personalized": [],
+        "same_creator": [],
+        "related_creators": [],
+        "fallback": [],
+        "all_items": [],
+    }
+
+
+def _user_interest_profile(user, current_content, sample_size=50):
+    profile = {
+        "followed_artist_ids": set(),
+        "genre_ids": set(),
+        "tag_names": set(),
+    }
+
+    if not user or not user.is_authenticated:
+        return profile
+
+    profile["followed_artist_ids"] = set(
+        user.following.values_list("following_id", flat=True)
+    )
+
+    interest_contents = (
+        Content.objects.filter(Q(viewers=user) | Q(votes__fan=user))
+        .exclude(id=current_content.id)
+        .select_related("genre")
+        .prefetch_related("tags")
+        .distinct()
+        .order_by("-upload_date")[:sample_size]
+    )
+
+    for item in interest_contents:
+        if item.genre_id:
+            profile["genre_ids"].add(item.genre_id)
+        profile["tag_names"].update(item.tags.names())
+
+    return profile
+
+
+def _personalized_up_next_ids(base_queryset, content, user, limit):
     if limit <= 0:
         return []
+
+    profile = _user_interest_profile(user, content)
+    followed_artist_ids = list(profile["followed_artist_ids"])
+    user_genre_ids = list(profile["genre_ids"])
+    user_tag_names = list(profile["tag_names"])
+
+    if not followed_artist_ids and not user_genre_ids and not user_tag_names:
+        return []
+
+    personalized_filter = Q()
+    if followed_artist_ids:
+        personalized_filter |= Q(artist_id__in=followed_artist_ids)
+    if user_genre_ids:
+        personalized_filter |= Q(genre_id__in=user_genre_ids)
+    if user_tag_names:
+        personalized_filter |= Q(tags__name__in=user_tag_names)
+
+    current_tag_names = list(content.tags.names())
+    followed_artist_match = (
+        Case(
+            When(artist_id__in=followed_artist_ids, then=1),
+            default=0,
+            output_field=IntegerField(),
+        )
+        if followed_artist_ids
+        else Value(0, output_field=IntegerField())
+    )
+    user_genre_match = (
+        Case(
+            When(genre_id__in=user_genre_ids, then=1),
+            default=0,
+            output_field=IntegerField(),
+        )
+        if user_genre_ids
+        else Value(0, output_field=IntegerField())
+    )
+    same_current_genre_match = (
+        Case(
+            When(genre_id=content.genre_id, then=1),
+            default=0,
+            output_field=IntegerField(),
+        )
+        if content.genre_id
+        else Value(0, output_field=IntegerField())
+    )
+    interest_tag_count = (
+        Count("tags", filter=Q(tags__name__in=user_tag_names), distinct=True)
+        if user_tag_names
+        else Value(0, output_field=IntegerField())
+    )
+    shared_tag_count = (
+        Count("tags", filter=Q(tags__name__in=current_tag_names), distinct=True)
+        if current_tag_names
+        else Value(0, output_field=IntegerField())
+    )
+
+    return list(
+        base_queryset.filter(personalized_filter)
+        .annotate(
+            followed_artist_match=followed_artist_match,
+            user_genre_match=user_genre_match,
+            same_current_genre_match=same_current_genre_match,
+            interest_tag_count=interest_tag_count,
+            shared_tag_count=shared_tag_count,
+            vote_count=Count("votes", distinct=True),
+            viewer_count=Count("viewers", distinct=True),
+        )
+        .order_by(
+            "-followed_artist_match",
+            "-user_genre_match",
+            "-interest_tag_count",
+            "-same_current_genre_match",
+            "-shared_tag_count",
+            "-vote_count",
+            "-viewer_count",
+            "-upload_date",
+        )
+        .distinct()
+        .values_list("id", flat=True)[:limit]
+    )
+
+
+def get_up_next_sections(content, user=None, limit=4):
+    """
+    Return grouped "Up next" content for rendering a structured sidebar.
+    Logged-in users first get recommendations from follows, viewed content,
+    and voting history before the generic current-content fallbacks.
+    """
+    if limit <= 0:
+        return _empty_up_next_sections()
 
     base_queryset = (
         Content.objects.filter(is_approved=True)
@@ -73,95 +205,22 @@ def get_up_next_contents(content, limit=4):
         .select_related("artist", "genre")
         .prefetch_related("votes")
     )
-    selected_ids = []
+
+    personalized_ids = _personalized_up_next_ids(base_queryset, content, user, limit)
+    selected_ids = list(personalized_ids)
+    remaining = limit - len(selected_ids)
 
     same_creator_ids = list(
         base_queryset.filter(artist=content.artist)
+        .exclude(id__in=selected_ids)
         .order_by("-upload_date")
-        .values_list("id", flat=True)[:limit]
+        .values_list("id", flat=True)[:remaining]
     )
     selected_ids.extend(same_creator_ids)
 
-    remaining = limit - len(selected_ids)
-    if remaining > 0:
-        content_tag_names = list(content.tags.names())
-        related_filter = Q()
-        if content.genre_id:
-            related_filter |= Q(genre_id=content.genre_id)
-        if content_tag_names:
-            related_filter |= Q(tags__name__in=content_tag_names)
-
-        if related_filter:
-            same_genre_match = Case(
-                When(genre_id=content.genre_id, then=1),
-                default=0,
-                output_field=IntegerField(),
-            )
-            related_candidate_ids = list(
-                base_queryset.filter(related_filter)
-                .exclude(artist=content.artist)
-                .exclude(id__in=selected_ids)
-                .annotate(same_genre_match=same_genre_match)
-                .annotate(shared_tag_count=Count("tags", filter=Q(tags__name__in=content_tag_names), distinct=True))
-                .annotate(shared_vote_count=Count("votes", distinct=True))
-                .order_by(
-                    "-same_genre_match",
-                    "-shared_tag_count",
-                    "-shared_vote_count",
-                    "-upload_date",
-                )
-                .distinct()
-                .values_list("id", flat=True)[:remaining]
-            )
-            selected_ids.extend(related_candidate_ids)
-
-    remaining = limit - len(selected_ids)
-    if remaining > 0:
-        fallback_ids = list(
-            base_queryset.exclude(id__in=selected_ids)
-            .order_by("-upload_date")
-            .values_list("id", flat=True)[:remaining]
-        )
-        selected_ids.extend(fallback_ids)
-
-    if not selected_ids:
-        return []
-
-    suggested_by_id = {
-        item.id: item
-        for item in base_queryset.filter(id__in=selected_ids)
-    }
-    return [suggested_by_id[item_id] for item_id in selected_ids if item_id in suggested_by_id]
-
-
-def get_up_next_sections(content, limit=4):
-    """
-    Return grouped "Up next" content for rendering a structured sidebar.
-    """
-    if limit <= 0:
-        return {
-            "same_creator": [],
-            "related_creators": [],
-            "fallback": [],
-            "all_items": [],
-        }
-
-    base_queryset = (
-        Content.objects.filter(is_approved=True)
-        .exclude(id=content.id)
-        .select_related("artist", "genre")
-        .prefetch_related("votes")
-    )
-
-    same_creator_ids = list(
-        base_queryset.filter(artist=content.artist)
-        .order_by("-upload_date")
-        .values_list("id", flat=True)[:limit]
-    )
-
     content_tag_names = list(content.tags.names())
     related_creator_ids = []
-    remaining = limit - len(same_creator_ids)
+    remaining = limit - len(selected_ids)
     if remaining > 0:
         related_filter = Q()
         if content.genre_id:
@@ -178,7 +237,7 @@ def get_up_next_sections(content, limit=4):
             related_creator_ids = list(
                 base_queryset.filter(related_filter)
                 .exclude(artist=content.artist)
-                .exclude(id__in=same_creator_ids)
+                .exclude(id__in=selected_ids)
                 .annotate(same_genre_match=same_genre_match)
                 .annotate(shared_tag_count=Count("tags", filter=Q(tags__name__in=content_tag_names), distinct=True))
                 .annotate(shared_vote_count=Count("votes", distinct=True))
@@ -192,7 +251,7 @@ def get_up_next_sections(content, limit=4):
                 .values_list("id", flat=True)[:remaining]
             )
 
-    selected_ids = same_creator_ids + related_creator_ids
+    selected_ids.extend(related_creator_ids)
     fallback_ids = []
     remaining = limit - len(selected_ids)
     if remaining > 0:
@@ -208,15 +267,17 @@ def get_up_next_sections(content, limit=4):
         for item in base_queryset.filter(id__in=selected_ids)
     }
 
+    personalized_items = [items_by_id[item_id] for item_id in personalized_ids if item_id in items_by_id]
     same_creator_items = [items_by_id[item_id] for item_id in same_creator_ids if item_id in items_by_id]
     related_creator_items = [items_by_id[item_id] for item_id in related_creator_ids if item_id in items_by_id]
     fallback_items = [items_by_id[item_id] for item_id in fallback_ids if item_id in items_by_id]
 
     return {
+        "personalized": personalized_items,
         "same_creator": same_creator_items,
         "related_creators": related_creator_items,
         "fallback": fallback_items,
-        "all_items": same_creator_items + related_creator_items + fallback_items,
+        "all_items": personalized_items + same_creator_items + related_creator_items + fallback_items,
     }
 
 
@@ -312,7 +373,7 @@ def add_comment(request, content_id):
 
 @login_required
 def reset_artist_upload_limit(request, artist_id):
-    if not request.user.is_admin:  # Ensure only admins can reset
+    if not request.user.is_admin():  # Ensure only admins can reset
         messages.error(request, "You don't have permission to reset upload limits.")
         return redirect('dashboard')
 
@@ -424,13 +485,14 @@ def content_detail(request, content_id):
     """
     content = get_object_or_404(Content, id=content_id)
     track_content_view(content, request.user)
-    up_next = get_up_next_sections(content, limit=4)
+    up_next = get_up_next_sections(content, user=request.user, limit=4)
     comments = Comment.objects.filter(content=content).order_by('-timestamp')  # Fetch comments for the content
     average_vote = Vote.objects.filter(content=content).aggregate(Avg('value'))['value__avg'] or 0  # Calculate average vote
 
     return render(request, 'content/detail.html', {
         'content': content,
         'related_contents': up_next['all_items'],
+        'up_next_personalized': up_next['personalized'],
         'up_next_same_creator': up_next['same_creator'],
         'up_next_related_creators': up_next['related_creators'],
         'up_next_fallback': up_next['fallback'],
@@ -655,7 +717,7 @@ def vote_content(request, content_id):
 
         if not otp.use_vote():
             return JsonResponse({'status': 'error', 'message': 'OTP vote limit reached'}, status=403)
-        assign_or_upgrade_badge(request, request.user.id)
+        assign_or_upgrade_badge_for_user(request.user)
 
         return JsonResponse({'status': 'success', 'message': f'Vote {vote_value} recorded!'})
 
@@ -663,6 +725,16 @@ def vote_content(request, content_id):
         logger.error(f"Error in vote_content: {str(e)}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': f'Something went wrong: {str(e)}'}, status=500)
 
+
+
+def assign_or_upgrade_badge_for_user(user, level=None):
+    badge, created = Badge.objects.get_or_create(user=user)
+
+    if level is not None:
+        badge.level = level
+        badge.save()
+
+    return badge
 
 
 @staff_member_required
@@ -691,7 +763,7 @@ def calculate_final_ranking():
     for rank, content in enumerate(content_ranking, start=1):
         matching_votes = Vote.objects.filter(content=content, base_value=rank)
         for vote in matching_votes:
-            assign_or_upgrade_badge(vote.fan)  # Upgrade badge for matching votes
+            assign_or_upgrade_badge_for_user(vote.fan)  # Upgrade badge for matching votes
 
 @login_required
 def delete_content(request, pk):

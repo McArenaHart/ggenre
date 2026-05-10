@@ -5,10 +5,10 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from users.models import OTP, Role, CustomUser
+from users.models import Follow, OTP, Role, CustomUser
 
 from .forms import ContentUploadForm
-from .models import ArtistUploadLimit, Content, Genre, LivePerformance, Vote, Voucher
+from .models import ArtistUploadLimit, Badge, Content, Genre, LivePerformance, Vote, Voucher
 
 
 def sample_upload_file(filename="test.mp4", content_type="video/mp4"):
@@ -34,6 +34,7 @@ class ContentModelTest(TestCase):
     def test_content_creation(self):
         self.assertEqual(self.content.title, "Test Content")
         self.assertEqual(self.content.artist.username, "artist1")
+        self.assertEqual(self.content.category, "other")
 
     def test_upload_limit(self):
         upload_limit = ArtistUploadLimit.objects.create(
@@ -182,6 +183,40 @@ class ContentViewTest(TestCase):
         related_ids = [item.id for item in response.context["related_contents"]]
         self.assertIn(fallback_content.id, related_ids)
 
+    def test_content_detail_up_next_prioritizes_viewer_follow_signals(self):
+        followed_artist = CustomUser.objects.create_user(
+            username="followed_artist",
+            password="password",
+            role=Role.ARTIST,
+        )
+        followed_content = Content.objects.create(
+            title="Followed Artist Pick",
+            artist=followed_artist,
+            file=sample_upload_file(filename="followed.mp4"),
+            is_approved=True,
+        )
+        same_creator_content = Content.objects.create(
+            title="Same Creator Pick",
+            artist=self.user,
+            file=sample_upload_file(filename="same_creator_pick.mp4"),
+            is_approved=True,
+        )
+        fan = CustomUser.objects.create_user(
+            username="personalized_fan",
+            password="password",
+            role=Role.FAN,
+        )
+        Follow.objects.create(follower=fan, following=followed_artist)
+
+        self.client.logout()
+        self.client.login(username="personalized_fan", password="password")
+        response = self.client.get(reverse("content_detail", args=[self.content.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["up_next_personalized"][0].id, followed_content.id)
+        self.assertEqual(response.context["related_contents"][0].id, followed_content.id)
+        self.assertIn(same_creator_content, response.context["up_next_same_creator"])
+
     def test_increment_views_endpoint_tracks_unique_authenticated_viewers(self):
         increment_url = reverse("increment_views", args=[self.content.id])
 
@@ -326,6 +361,20 @@ class AuthenticationTest(TestCase):
         response = self.client.get(reverse("upload_content"))
         self.assertEqual(response.status_code, 302)
 
+    def test_reset_upload_limit_requires_admin_role(self):
+        upload_limit = ArtistUploadLimit.objects.create(
+            artist=self.artist_user,
+            uploads_used=2,
+            upload_limit=5,
+        )
+
+        self.client.login(username="fan1", password="password")
+        response = self.client.get(reverse("reset_upload_limit", args=[self.artist_user.id]))
+
+        self.assertEqual(response.status_code, 302)
+        upload_limit.refresh_from_db()
+        self.assertEqual(upload_limit.uploads_used, 2)
+
 
 class AudioThumbnailFallbackTest(TestCase):
     def setUp(self):
@@ -433,6 +482,22 @@ class VotingFlowTest(TestCase):
         self.assertEqual(self.otp.remaining_votes, 0)
         vote = Vote.objects.get(content=self.content, fan=self.fan)
         self.assertEqual(vote.base_value, 4)
+        self.assertTrue(Badge.objects.filter(user=self.fan).exists())
+
+    def test_calculate_final_ranking_assigns_badge_without_request(self):
+        from content.views import calculate_final_ranking
+
+        Vote.objects.create(
+            content=self.content,
+            fan=self.fan,
+            base_value=1,
+            value=1,
+            otp_code="999999",
+        )
+
+        calculate_final_ranking()
+
+        self.assertTrue(Badge.objects.filter(user=self.fan).exists())
 
     def test_vote_rejected_when_otp_has_no_remaining_votes(self):
         self.otp.remaining_votes = 0

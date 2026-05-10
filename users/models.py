@@ -46,8 +46,12 @@ class CustomUser(AbstractUser):
         Notify admin when an artist wants to participate.
         """
         if self.is_artist():
+            admin_user = CustomUser.objects.filter(role=Role.ADMIN).first()
+            if not admin_user:
+                return
+
             Notification.objects.create(
-                user=CustomUser.objects.filter(role=Role.ADMIN).first(),
+                user=admin_user,
                 message=f"Artist {self.username} wants to participate."
             )
 

@@ -165,6 +165,11 @@
   overflow: hidden;
   background: #0a1022;
   border-bottom: 1px solid var(--gg-border);
+  display: none;
+}
+
+.welcome-media-card:hover .welcome-media-slot {
+  display: block;
 }
 
 .welcome-media-slot > * {

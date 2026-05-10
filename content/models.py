@@ -76,6 +76,7 @@ class Content(models.Model):
     ]
 
     title = models.CharField(max_length=255)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
     genre = models.ForeignKey(Genre, on_delete=models.CASCADE, related_name="contents", null=True, blank=True)
     description = models.TextField(blank=True, null=True)
     file = models.FileField(upload_to='content/', blank=True, null=True)

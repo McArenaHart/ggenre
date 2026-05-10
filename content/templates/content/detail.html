@@ -5,6 +5,7 @@
 
 {% block extra_css %}
 <link href="{% static 'css/pages/content-detail.css' %}?v=20260226d" rel="stylesheet" />
+<link href="{% static 'css/pages/content-autoplay.css' %}" rel="stylesheet" />
 {% endblock extra_css %}
 
 {% block content %}
@@ -53,6 +54,18 @@
             <a href="{% url 'user_profile' content.artist.id %}" class="btn btn-sm btn-outline-primary watch-action-btn">
               <i class="fas fa-user-circle"></i> Artist Profile
             </a>
+
+            <button type="button" class="watch-autoplay-toggle" data-autoplay-toggle="" aria-label="Toggle autoplay" title="Autoplay next content">
+              <i class="fas fa-toggle-off"></i>
+              <span>Autoplay <span data-autoplay-status>Off</span></span>
+            </button>
+
+            {% if related_contents %}
+              <button type="button" class="watch-play-next-btn" onclick="playNextContent()" title="Play next content">
+                <i class="fas fa-play"></i>
+                <span>Play Next</span>
+              </button>
+            {% endif %}
 
             <div class="watch-vote-panel">
               <button class="watch-vote-toggle" type="button" onclick="toggleDetailVoting(this)">
@@ -146,11 +159,44 @@
         </div>
 
         <div class="watch-sidebar-list">
+          {% if up_next_personalized %}
+            <section class="watch-sidebar-section">
+              <p class="watch-sidebar-section-title">Recommended for you</p>
+              {% for related in up_next_personalized %}
+                <a href="{% url 'content_detail' related.id %}" class="watch-related-card{% if forloop.first %} is-next{% endif %}" data-up-next-content-id="{{ related.id }}">
+                  <div class="watch-related-thumb">
+                    {% if related.safe_thumbnail_url %}
+                      <img src="{{ related.safe_thumbnail_url }}" alt="{{ related.title }}" />
+                    {% elif related.youtube_video_id %}
+                      <img src="https://img.youtube.com/vi/{{ related.youtube_video_id }}/mqdefault.jpg" alt="{{ related.title }}" />
+                    {% elif related.is_audio_file %}
+                      <img src="{{ related.audio_thumbnail_url }}" alt="{{ related.title }}" />
+                    {% elif related.is_image_file and related.safe_file_url %}
+                      <img src="{{ related.safe_file_url }}" alt="{{ related.title }}" />
+                    {% else %}
+                      <div class="watch-related-fallback">
+                        <i class="fas fa-photo-video"></i>
+                      </div>
+                    {% endif %}
+                  </div>
+
+                  <div class="watch-related-meta">
+                    <h6>{{ related.title }}</h6>
+                    <p class="watch-related-artist">{{ related.artist.username }}</p>
+                    <p class="watch-related-stats">
+                      {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{ related.votes.count|pluralize }}
+                    </p>
+                  </div>
+                </a>
+              {% endfor %}
+            </section>
+          {% endif %}
+
           {% if up_next_same_creator %}
             <section class="watch-sidebar-section">
               <p class="watch-sidebar-section-title">More from {{ content.artist.username }}</p>
               {% for related in up_next_same_creator %}
-                <a href="{% url 'content_detail' related.id %}" class="watch-related-card">
+                <a href="{% url 'content_detail' related.id %}" class="watch-related-card{% if forloop.first and not up_next_personalized %} is-next{% endif %}" data-up-next-content-id="{{ related.id }}">
                   <div class="watch-related-thumb">
                     {% if related.safe_thumbnail_url %}
                       <img src="{{ related.safe_thumbnail_url }}" alt="{{ related.title }}" />
@@ -183,7 +229,7 @@
             <section class="watch-sidebar-section">
               <p class="watch-sidebar-section-title">Related creators</p>
               {% for related in up_next_related_creators %}
-                <a href="{% url 'content_detail' related.id %}" class="watch-related-card">
+                <a href="{% url 'content_detail' related.id %}" class="watch-related-card{% if forloop.first and not up_next_personalized and not up_next_same_creator %} is-next{% endif %}" data-up-next-content-id="{{ related.id }}">
                   <div class="watch-related-thumb">
                     {% if related.safe_thumbnail_url %}
                       <img src="{{ related.safe_thumbnail_url }}" alt="{{ related.title }}" />
@@ -216,7 +262,7 @@
             <section class="watch-sidebar-section">
               <p class="watch-sidebar-section-title">More to explore</p>
               {% for related in up_next_fallback %}
-                <a href="{% url 'content_detail' related.id %}" class="watch-related-card">
+                <a href="{% url 'content_detail' related.id %}" class="watch-related-card{% if forloop.first and not up_next_personalized and not up_next_same_creator and not up_next_related_creators %} is-next{% endif %}" data-up-next-content-id="{{ related.id }}">
                   <div class="watch-related-thumb">
                     {% if related.safe_thumbnail_url %}
                       <img src="{{ related.safe_thumbnail_url }}" alt="{{ related.title }}" />
@@ -257,4 +303,5 @@
 
 {% block extra_js %}
 <script src="{% static 'js/pages/content-detail.js' %}?v=20260226a"></script>
+<script src="{% static 'js/pages/content-autoplay.js' %}"></script>
 {% endblock extra_js %}
