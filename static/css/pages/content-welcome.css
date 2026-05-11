@@ -151,6 +151,7 @@
     transform var(--gg-transition-fast),
     box-shadow var(--gg-transition-base),
     border-color var(--gg-transition-fast);
+  max-height: 480px;
 }
 
 .welcome-media-card:hover {

@@ -34,7 +34,7 @@
 
 .watch-player .gg-audio-thumb {
   width: 100%;
-  max-height: clamp(280px, 48vh, 460px);
+  max-height: clamp(240px, 35vh, 380px);
   object-fit: cover;
   margin-bottom: 0;
 }
@@ -47,7 +47,7 @@
 }
 
 .watch-player .gg-media-frame {
-  min-height: clamp(380px, 60vh, 700px);
+  min-height: clamp(320px, 45vh, 550px);
 }
 
 .watch-player .gg-youtube-frame {
@@ -64,7 +64,7 @@
 }
 
 .watch-player .gg-media-placeholder {
-  min-height: clamp(340px, 52vh, 560px);
+  min-height: clamp(300px, 40vh, 480px);
 }
 
 .watch-main-body {
@@ -532,7 +532,7 @@ body.app-theme[data-theme="light"] .watch-sidebar-section + .watch-sidebar-secti
   }
 
   .watch-player .gg-media-frame {
-    min-height: clamp(260px, 42vh, 420px);
+    min-height: clamp(220px, 35vh, 350px);
   }
 
   .watch-player .gg-youtube-frame {

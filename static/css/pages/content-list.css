@@ -70,7 +70,7 @@
 }
 
 .content-item .content-card {
-  --content-card-height: clamp(440px, 56vh, 520px);
+  --content-card-height: clamp(400px, 48vh, 480px);
   height: var(--content-card-height);
   min-height: var(--content-card-height);
   max-height: var(--content-card-height);
