@@ -159,6 +159,11 @@
   box-shadow: 0 16px 30px rgba(8, 14, 33, 0.54);
 }
 
+.welcome-detail-link {
+  position: relative;
+  z-index: 2;
+}
+
 .welcome-media-slot {
   position: relative;
   aspect-ratio: 16 / 9;

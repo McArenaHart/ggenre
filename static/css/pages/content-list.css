@@ -30,6 +30,8 @@
   display: block;
   height: 100%;
   color: inherit;
+  position: relative;
+  z-index: 1;
 }
 
 .content-item {
@@ -89,17 +91,19 @@
   min-height: 0;
 }
 
+.content-card-media {
+  position: relative;
+  overflow: hidden;
+}
+
 .content-item .content-card:hover .content-card-media {
   display: block;
 }
 
 .video-container {
   position: relative;
-  height: auto;
-  min-height: 0;
   overflow: hidden;
   background: #0a1022;
-  pointer-events: none;
 }
 
 .content-item .video-container {
