@@ -1,5 +1,9 @@
 .content-watch-page {
   --watch-surface: #121821;
+  max-width: 1260px;
+  margin: 0 auto;
+  padding-top: 1rem;
+  padding-bottom: 1.5rem;
 }
 
 .watch-main-card,
@@ -14,6 +18,8 @@
 .watch-player {
   background: #0f141d;
   margin-top: 0 !important;
+  overflow: hidden;
+  max-height: min(clamp(420px, 55vh, 520px), calc(100vh - 180px));
 }
 
 .watch-player .gg-media-frame,
@@ -47,11 +53,9 @@
 }
 
 .watch-player .gg-media-frame {
-  min-height: clamp(320px, 45vh, 550px);
-}
-
-.watch-player .gg-youtube-frame {
-  padding-top: 62% !important;
+  min-height: clamp(240px, 32vh, 450px);
+  max-height: min(clamp(360px, 55vh, 520px), calc(100vh - 280px));
+  overflow: hidden;
 }
 
 .watch-player .gg-media-frame iframe,
@@ -59,12 +63,16 @@
 .watch-player .gg-media-frame img {
   width: 100%;
   height: 100%;
-  max-height: none;
   object-fit: cover;
 }
 
+.watch-player .gg-youtube-frame {
+  padding-top: 62% !important;
+}
+
 .watch-player .gg-media-placeholder {
-  min-height: clamp(300px, 40vh, 480px);
+  min-height: clamp(240px, 34vh, 420px);
+  max-height: clamp(340px, 48vh, 460px);
 }
 
 .watch-main-body {
@@ -300,16 +308,25 @@
 .watch-sidebar {
   position: sticky;
   top: calc(var(--gg-topbar-height) + 18px);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--gg-topbar-height) - 32px);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .watch-sidebar-header {
   padding: 0.8rem 0.88rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex: 0 0 auto;
 }
 
 .watch-sidebar-list {
-  max-height: calc(100vh - var(--gg-topbar-height) - 90px);
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(100vh - var(--gg-topbar-height) - 140px);
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0.48rem;
   display: flex;
   flex-direction: column;
@@ -353,6 +370,8 @@
   color: inherit;
   background: transparent;
   transition: background 0.2s ease;
+  width: 100%;
+  min-width: 0;
 }
 
 .watch-related-card:hover {
@@ -410,6 +429,8 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   color: var(--gg-text);
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .watch-related-artist,
@@ -417,6 +438,8 @@
   margin: 0;
   font-size: 0.72rem;
   color: var(--gg-text-muted);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 body.app-theme[data-theme="light"] .watch-main-card,
