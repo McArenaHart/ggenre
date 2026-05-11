@@ -166,6 +166,7 @@
   background: #0a1022;
   border-bottom: 1px solid var(--gg-border);
   display: block;
+  pointer-events: none;
 }
 
 .welcome-media-card:hover .welcome-media-slot {

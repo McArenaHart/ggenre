@@ -99,6 +99,7 @@
   min-height: 0;
   overflow: hidden;
   background: #0a1022;
+  pointer-events: none;
 }
 
 .content-item .video-container {
