@@ -1,4 +1,28 @@
-{% if content.youtube_embed_url %}
+{% if content.safe_thumbnail_url %}
+  {# Always show thumbnail if available #}
+  <div class="gg-media-frame">
+    <img src="{{ content.safe_thumbnail_url }}" alt="{{ content.title }} thumbnail" loading="lazy" />
+  </div>
+{% elif content.is_image_file and content.safe_file_url %}
+  {# Show image file as thumbnail #}
+  <div class="gg-media-frame">
+    <img src="{{ content.safe_file_url }}" alt="{{ content.title }}" loading="lazy" />
+  </div>
+{% elif content.is_audio_file %}
+  {# Show audio with default thumbnail #}
+  <div class="gg-audio-wrapper">
+    <img src="{{ content.audio_thumbnail_url }}" alt="{{ content.title }} thumbnail" class="gg-audio-thumb" loading="lazy" />
+  </div>
+{% elif content.safe_file_url %}
+  {# Video file without thumbnail #}
+  <div class="gg-media-frame">
+    <video class="gg-video-preview">
+      <source src="{{ content.safe_file_url }}" type="video/mp4" />
+      Your browser does not support the video tag.
+    </video>
+  </div>
+{% elif content.youtube_embed_url %}
+  {# YouTube video without thumbnail #}
   <div class="gg-media-frame gg-youtube-frame" style="position: relative; padding-top: 56.25%;">
     <iframe
       src="{{ content.youtube_embed_url }}"
@@ -10,29 +34,6 @@
       loading="lazy"
     ></iframe>
   </div>
-{% elif content.safe_file_url %}
-  {% if content.is_video_file %}
-      <div class="gg-media-frame">
-        <video controls {% if not request.user.can_download %}controlsList="nodownload"{% endif %}>
-          <source src="{{ content.safe_file_url }}" type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
-      </div>
-  {% elif content.is_audio_file %}
-      <div class="gg-audio-wrapper">
-        <img src="{{ content.audio_thumbnail_url }}" alt="{{ content.title }} thumbnail" class="gg-audio-thumb" />
-        <audio controls {% if not request.user.can_download %}controlsList="nodownload"{% endif %}>
-          <source src="{{ content.safe_file_url }}" type="audio/mpeg" />
-          Your browser does not support the audio tag.
-        </audio>
-      </div>
-  {% elif content.is_image_file %}
-      <div class="gg-media-frame">
-        <img src="{{ content.safe_file_url }}" alt="{{ content.title }}" />
-      </div>
-  {% else %}
-    <div class="gg-media-placeholder">Unsupported media type</div>
-  {% endif %}
 {% else %}
   <div class="gg-media-placeholder">No media available</div>
 {% endif %}
