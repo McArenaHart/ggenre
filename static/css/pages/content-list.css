@@ -84,7 +84,7 @@
 }
 
 .content-item .content-card-media {
-  display: none;
+  display: block;
   flex: 0 0 58%;
   min-height: 0;
 }
