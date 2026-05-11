@@ -360,6 +360,7 @@
 
 .watch-related-card {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 0.62rem;
   align-items: start;
@@ -372,6 +373,7 @@
   transition: background 0.2s ease;
   width: 100%;
   min-width: 0;
+  overflow: hidden;
 }
 
 .watch-related-card:hover {
@@ -382,7 +384,9 @@
 
 .watch-related-thumb {
   width: 168px;
+  max-width: 168px;
   flex: 0 0 168px;
+  min-width: 0;
   aspect-ratio: 16 / 9;
   border-radius: 10px;
   overflow: hidden;
@@ -406,8 +410,9 @@
 }
 
 .watch-related-meta {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
 }
 
 .watch-related-card.is-next {
@@ -431,6 +436,7 @@
   color: var(--gg-text);
   word-break: break-word;
   overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .watch-related-artist,
@@ -440,6 +446,7 @@
   color: var(--gg-text-muted);
   overflow-wrap: anywhere;
   word-break: break-word;
+  white-space: normal;
 }
 
 body.app-theme[data-theme="light"] .watch-main-card,
