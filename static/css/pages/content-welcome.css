@@ -160,7 +160,9 @@
 }
 
 .welcome-detail-link {
-  position: relative;
+  position: absolute;
+  inset: 0;
+  display: block;
   z-index: 2;
 }
 
