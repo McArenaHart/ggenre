@@ -60,7 +60,9 @@ def subscribe(request, plan_id):
 
 @login_required
 def manage_subscription(request):
-    subscriptions = UserSubscription.objects.filter(user=request.user)
+    subscriptions = UserSubscription.objects.filter(user=request.user).order_by(
+        "-start_date", "-id"
+    )
 
     # Pagination
     paginator = Paginator(subscriptions, 10)  # 10 items per page
@@ -109,9 +111,6 @@ def admin_payments(request):
     return render(request, 'subscriptions/admin_payments.html', {'payments': payments})
 
 
-def is_admin(user):
-    return user.is_superuser
-
 @user_passes_test(is_admin)
 def toggle_limit_suspension(request, user_id, target):
     """
@@ -138,9 +137,8 @@ def toggle_limit_suspension(request, user_id, target):
     return render(request, 'subscriptions/confirm_toggle_limit.html', {'user_id': user_id, 'target': target})
 
 
+@user_passes_test(is_admin)
 def confirm_toggle_limit(request, user_id, target):
-    print(f"User ID: {user_id}, Target: {target}")  # Debugging
-
     if target == 'artist':
         user_limit = get_object_or_404(ArtistUploadLimit, artist_id=user_id)
         user = user_limit.artist  # Use `artist` for artists
@@ -150,9 +148,6 @@ def confirm_toggle_limit(request, user_id, target):
     else:
         messages.error(request, "Invalid user type.")
         return redirect('admin_dashboard')
-
-    print(f"User Limit: {user_limit}")  # Debugging
-    print(f"User ID: {user.id}, Username: {user.username}")  # Debugging
 
     return render(request, 'subscriptions/confirm_toggle_limit.html', {
         'user_limit': user_limit,

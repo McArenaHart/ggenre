@@ -22,7 +22,7 @@ from django.core.mail import send_mail, BadHeaderError
 from django.core.cache import cache
 from django.utils.timezone import now
 from datetime import timedelta
-from .models import CustomUser, Role, Follow, OTP, TermsAndConditions
+from .models import CustomUser, Role, Follow, OTP, TermsAndConditions, VotingTokenPolicy
 from content.models import Content, Comment, Badge, Voucher
 from subscriptions.models import UserSubscription
 from content.models import ArtistUploadLimit, LivePerformance
@@ -318,6 +318,7 @@ def admin_dashboard(request):
     fans = CustomUser.objects.filter(role=Role.FAN).order_by("username")
     generated_otp = None  # Store OTP to display in template
     generated_voucher = None  # Store OTP to display in template
+    voting_token_policy = VotingTokenPolicy.current()
 
     # Fetch announcements for admin review
     announcements = Announcement.objects.all().order_by("-created_at")
@@ -410,6 +411,23 @@ def admin_dashboard(request):
                 request,
                 f"Assigned category '{category}' to {len(content_ids)} content items.",
             )
+
+    # Handle OTP access controls
+    if request.method == "POST" and request.POST.get("token_policy_action"):
+        token_policy_action = request.POST.get("token_policy_action")
+        if token_policy_action == "pause":
+            voting_token_policy.tokens_paused = True
+            voting_token_policy.updated_by = request.user
+            voting_token_policy.save(update_fields=["tokens_paused", "updated_by", "updated_at"])
+            messages.success(request, "Voting tokens paused. Fans can vote without OTP codes.")
+        elif token_policy_action == "resume":
+            voting_token_policy.tokens_paused = False
+            voting_token_policy.updated_by = request.user
+            voting_token_policy.save(update_fields=["tokens_paused", "updated_by", "updated_at"])
+            messages.success(request, "Voting tokens resumed. Fans must use OTP codes to vote.")
+        else:
+            messages.error(request, "Invalid token policy action.")
+        return redirect("admin_dashboard")
 
     # Handle OTP access controls
     if request.method == "POST" and request.POST.get("otp_action"):
@@ -516,6 +534,7 @@ def admin_dashboard(request):
         "generated_otp": generated_otp,
         "fan_otp_statuses": fan_otp_statuses,
         "generated_voucher": generated_voucher,
+        "voting_token_policy": voting_token_policy,
         "recent_uploads": recent_uploads.order_by("-upload_date")[:10],
         "query": query,
         "filter_status": filter_status,
@@ -681,20 +700,59 @@ def dashboard(request):
     return role_based_redirect(request.user)
 
 
+def _profile_context(profile_user, viewer, form):
+    followers = profile_user.followers.all().select_related("follower")
+    following = profile_user.following.all().select_related("following")
+
+    context = {
+        "profile_user": profile_user,
+        "is_following": Follow.objects.filter(
+            follower=viewer, following=profile_user
+        ).exists(),
+        "form": form,
+        "followers_count": followers.count(),
+        "following_count": following.count(),
+        "followers": followers,
+        "following": following,
+        "subscription_status": "Inactive",
+        "upload_limit": 0,
+        "vote_limit": 0,
+        "badge": Badge.objects.filter(user=profile_user).first(),
+    }
+
+    if profile_user == viewer:
+        user_subscription = UserSubscription.objects.filter(user=profile_user).first()
+        if user_subscription and user_subscription.is_active:
+            context.update(
+                {
+                    "subscription_status": "Active",
+                    "upload_limit": user_subscription.upload_limit,
+                    "vote_limit": user_subscription.vote_limit,
+                }
+            )
+
+    if profile_user.is_artist():
+        context.update(
+            {
+                "user_content": Content.objects.filter(artist=profile_user),
+                "is_artist": True,
+            }
+        )
+    else:
+        context.update(
+            {
+                "followed_artists": profile_user.following.filter(
+                    following__role=Role.ARTIST
+                ).select_related("following"),
+                "is_artist": False,
+            }
+        )
+
+    return context
+
+
 @login_required
 def profile(request):
-    user_subscription = UserSubscription.objects.filter(user=request.user).first()
-    subscription_status = "Inactive"
-    upload_limit = 0
-    vote_limit = 0
-
-    if user_subscription and user_subscription.is_active:
-        subscription_status = "Active"
-        upload_limit = user_subscription.upload_limit
-        vote_limit = user_subscription.vote_limit
-
-    badge = Badge.objects.filter(user=request.user).first()
-
     if request.method == "POST":
         form = ProfileUpdateForm(request.POST, request.FILES, instance=request.user)
         if form.is_valid():
@@ -704,13 +762,7 @@ def profile(request):
     else:
         form = ProfileUpdateForm(instance=request.user)
 
-    context = {
-        "form": form,
-        "subscription_status": subscription_status,
-        "upload_limit": upload_limit,
-        "vote_limit": vote_limit,
-        "badge": badge,
-    }
+    context = _profile_context(request.user, request.user, form)
     return render(request, "users/profile.html", context)
 
 
@@ -720,7 +772,7 @@ def user_profile(request, user_id):
     is_following = Follow.objects.filter(follower=request.user, following=user).exists()
 
     # Handle Follow/Unfollow action
-    if "follow" in request.POST:
+    if "follow" in request.POST and request.user != user:
         if is_following:
             Follow.objects.filter(follower=request.user, following=user).delete()
             messages.success(request, f"You have unfollowed {user.username}.")
@@ -731,6 +783,8 @@ def user_profile(request, user_id):
 
     # Handle Profile Update action
     if "update_profile" in request.POST:
+        if request.user != user:
+            return HttpResponseForbidden("You cannot update another user's profile.")
         form = ProfileUpdateForm(request.POST, request.FILES, instance=user)
         if form.is_valid():
             form.save()
@@ -739,46 +793,7 @@ def user_profile(request, user_id):
     else:
         form = ProfileUpdateForm(instance=user)
 
-    # Get follower/following counts
-    followers_count = Follow.objects.filter(following=user).count()
-    following_count = Follow.objects.filter(follower=user).count()
-
-    # Get followers and following users
-    followers = user.followers.all().select_related(
-        "follower"
-    )  # Users following this user
-    following = user.following.all().select_related(
-        "following"
-    )  # Users this user follows
-
-    # Prepare context data
-    context = {
-        "profile_user": user,
-        "is_following": is_following,
-        "form": form,
-        "followers_count": followers_count,
-        "following_count": following_count,
-        "followers": followers,
-        "following": following,
-    }
-
-    # Add artist-specific data if the user is an artist
-    if user.is_artist():
-        user_content = Content.objects.filter(artist=user)
-        context.update(
-            {
-                "user_content": user_content,
-                "is_artist": True,
-            }
-        )
-    else:
-        followed_artists = user.following.filter(following__role=Role.ARTIST)
-        context.update(
-            {
-                "followed_artists": followed_artists,
-                "is_artist": False,
-            }
-        )
+    context = _profile_context(user, request.user, form)
 
     return render(request, "users/profile.html", context)
 

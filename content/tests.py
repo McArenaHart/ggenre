@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from users.models import Follow, OTP, Role, CustomUser
+from users.models import Follow, OTP, Role, CustomUser, VotingTokenPolicy
 
 from .forms import ContentUploadForm
 from .models import ArtistUploadLimit, Badge, Content, Genre, LivePerformance, Vote, Voucher
@@ -511,6 +511,52 @@ class VotingFlowTest(TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertFalse(Vote.objects.filter(content=self.content, fan=self.fan).exists())
+
+    def test_vote_without_otp_when_tokens_are_paused(self):
+        policy = VotingTokenPolicy.current()
+        policy.tokens_paused = True
+        policy.save(update_fields=["tokens_paused", "updated_at"])
+
+        response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 4, "voter_tag": "free"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.otp.refresh_from_db()
+        self.assertEqual(self.otp.remaining_votes, 1)
+        vote = Vote.objects.get(content=self.content, fan=self.fan)
+        self.assertEqual(vote.base_value, 4)
+        self.assertEqual(vote.otp_code, "FREE")
+
+    def test_paused_tokens_preserve_rank_reuse_rule(self):
+        policy = VotingTokenPolicy.current()
+        policy.tokens_paused = True
+        policy.save(update_fields=["tokens_paused", "updated_at"])
+        other_content = Content.objects.create(
+            title="Second Vote Target",
+            artist=self.artist,
+            genre=self.genre,
+            file=sample_upload_file(filename="target-two.mp4", content_type="video/mp4"),
+            is_approved=True,
+        )
+        Vote.objects.create(
+            content=self.content,
+            fan=self.fan,
+            base_value=4,
+            value=4,
+            otp_code="FREE",
+        )
+
+        response = self.client.post(
+            reverse("vote_content", args=[other_content.id]),
+            data='{"vote_value": 4, "voter_tag": "free"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(Vote.objects.filter(content=other_content, fan=self.fan).exists())
 
 
 class LiveStreamVoucherFlowTest(TestCase):

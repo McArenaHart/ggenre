@@ -73,8 +73,10 @@
               </button>
 
               <div class="watch-vote-options">
-                <div class="watch-vote-inputs">
-                  <input type="text" id="otpCode_{{ content.id }}" placeholder="OTP code" class="form-control form-control-sm" />
+                <div class="watch-vote-inputs" data-tokens-paused="{{ tokens_paused|yesno:'true,false' }}">
+                  {% if not tokens_paused %}
+                    <input type="text" id="otpCode_{{ content.id }}" placeholder="OTP code" class="form-control form-control-sm" />
+                  {% endif %}
                   <input type="text" id="voterTag_{{ content.id }}" placeholder="Your tag" class="form-control form-control-sm" />
                 </div>
 

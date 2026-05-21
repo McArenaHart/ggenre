@@ -340,6 +340,39 @@
     </div>
   </div>
 
+  <!-- Voting Token Controls -->
+<div class="row">
+  <div class="col-md-12 col-sm-12 col-xs-12">
+      <div class="x_panel">
+          <div class="x_title">
+              <h2>Voting Token Controls</h2>
+              <div class="clearfix"></div>
+          </div>
+          <div class="x_content">
+              {% if voting_token_policy.tokens_paused %}
+                <div class="alert alert-warning">
+                  Voting tokens are paused. Fans can vote without OTP codes while normal ranking rules still apply.
+                </div>
+                <form method="POST">
+                  {% csrf_token %}
+                  <input type="hidden" name="token_policy_action" value="resume">
+                  <button type="submit" class="btn btn-primary">Resume Token Voting</button>
+                </form>
+              {% else %}
+                <div class="alert alert-info">
+                  Voting tokens are required. Fans must use active OTP codes with remaining votes.
+                </div>
+                <form method="POST">
+                  {% csrf_token %}
+                  <input type="hidden" name="token_policy_action" value="pause">
+                  <button type="submit" class="btn btn-warning">Pause Tokens for Free Voting</button>
+                </form>
+              {% endif %}
+          </div>
+      </div>
+  </div>
+</div>
+
   <!-- OTP Generation Form -->
 <div class="row">
   <div class="col-md-12 col-sm-12 col-xs-12">

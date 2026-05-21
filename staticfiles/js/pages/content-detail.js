@@ -17,15 +17,17 @@
   async function submitDetailVote(button, contentId) {
     const voteValue = parseInt(button.dataset.value, 10);
     const voteUrl = button.dataset.url;
+    const inputGroup = button.closest(".watch-vote-options")?.querySelector(".watch-vote-inputs");
+    const tokensPaused = inputGroup?.dataset.tokensPaused === "true";
     const otpCode = (document.getElementById("otpCode_" + contentId)?.value || "").trim();
     const voterTag = (document.getElementById("voterTag_" + contentId)?.value || "").trim();
     const messageElem = document.getElementById("voteMessage_" + contentId);
 
-    if (!otpCode || !voterTag) {
+    if ((!tokensPaused && !otpCode) || !voterTag) {
       if (messageElem) {
         messageElem.style.display = "block";
         messageElem.className = "small mt-2 mb-0 text-danger";
-        messageElem.textContent = "OTP and voter tag are required.";
+        messageElem.textContent = tokensPaused ? "Voter tag is required." : "OTP and voter tag are required.";
       }
       return;
     }

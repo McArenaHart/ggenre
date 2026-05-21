@@ -91,6 +91,10 @@ ALLOWED_HOSTS = env_list(
     "DJANGO_ALLOWED_HOSTS",
     default=["ggenre.com", "www.ggenre.com", "137.184.123.173", "localhost", "127.0.0.1"],
 )
+if not IS_PRODUCTION:
+    for local_host in ["localhost", "127.0.0.1", "testserver"]:
+        if local_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(local_host)
 
 CSRF_TRUSTED_ORIGINS = env_list(
     "DJANGO_CSRF_TRUSTED_ORIGINS",

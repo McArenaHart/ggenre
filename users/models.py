@@ -156,6 +156,35 @@ class OTP(models.Model):
         return f"OTP for {self.user.username} ({self.remaining_votes} votes left, {status})"
 
 
+class VotingTokenPolicy(models.Model):
+    tokens_paused = models.BooleanField(default=False)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_voting_token_policies",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Voting Token Policy"
+        verbose_name_plural = "Voting Token Policy"
+
+    @classmethod
+    def current(cls):
+        policy, _ = cls.objects.get_or_create(pk=1)
+        return policy
+
+    @classmethod
+    def tokens_are_paused(cls):
+        return cls.current().tokens_paused
+
+    def __str__(self):
+        status = "paused" if self.tokens_paused else "required"
+        return f"Voting tokens {status}"
+
+
 class Announcement(models.Model):
     title = models.CharField(max_length=255)
     message = models.TextField()

@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from content.models import Content, Vote
 
-from .models import Announcement, DismissedAnnouncement, Notification, OTP, Role
+from .models import Announcement, DismissedAnnouncement, Notification, OTP, Role, VotingTokenPolicy
 
 CustomUser = get_user_model()
 
@@ -283,6 +283,31 @@ class UsersAppTests(TestCase):
         otp.refresh_from_db()
         self.assertTrue(otp.is_active)
         self.assertEqual(otp.remaining_votes, 1)
+
+    def test_admin_can_pause_and_resume_voting_tokens(self):
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
+
+        pause_response = self.client.post(
+            reverse("admin_dashboard"),
+            {"token_policy_action": "pause"},
+        )
+
+        self.assertEqual(pause_response.status_code, 302)
+        policy = VotingTokenPolicy.current()
+        self.assertTrue(policy.tokens_paused)
+        self.assertEqual(policy.updated_by, self.admin_user)
+
+        resume_response = self.client.post(
+            reverse("admin_dashboard"),
+            {"token_policy_action": "resume"},
+        )
+
+        self.assertEqual(resume_response.status_code, 302)
+        policy.refresh_from_db()
+        self.assertFalse(policy.tokens_paused)
 
     def test_verify_otp_redirects_when_disabled(self):
         pending_user = CustomUser.objects.create_user(

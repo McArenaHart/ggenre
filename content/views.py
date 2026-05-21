@@ -6,7 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.forms import modelform_factory
 from .models import Content, Vote, LivePerformance, ArtistUploadLimit, Comment, Badge, Voucher
-from users.models import  OTP, CustomUser
+from users.models import OTP, CustomUser, VotingTokenPolicy
 from .forms import ContentUploadForm, CommentForm, StartLiveStreamForm, VoucherEntryForm
 from django.db.models import Avg, Sum, Max
 from django.views import View
@@ -449,6 +449,7 @@ def content_detail(request, content_id):
         'up_next_fallback': up_next['fallback'],
         'comments': comments,
         'average_vote': round(average_vote, 1),  # Round to 1 decimal place
+        'tokens_paused': VotingTokenPolicy.tokens_are_paused(),
     })
 
 
@@ -633,14 +634,17 @@ def vote_content(request, content_id):
         if vote_value not in range(1, 9):
             return JsonResponse({'status': 'error', 'message': 'Invalid rank (1-8 only)'}, status=400)
 
-        otp = OTP.objects.filter(
-            user=request.user,
-            otp_code=otp_code,
-            is_active=True,
-            remaining_votes__gt=0
-        ).first()
-        if not otp:
-            return JsonResponse({'status': 'error', 'message': 'Invalid/expired OTP'}, status=403)
+        tokens_paused = VotingTokenPolicy.tokens_are_paused()
+        otp = None
+        if not tokens_paused:
+            otp = OTP.objects.filter(
+                user=request.user,
+                otp_code=otp_code,
+                is_active=True,
+                remaining_votes__gt=0
+            ).first()
+            if not otp:
+                return JsonResponse({'status': 'error', 'message': 'Invalid/expired OTP'}, status=403)
 
         existing_vote = Vote.objects.filter(fan=request.user, content__genre=content.genre, base_value=vote_value).exists()
         if existing_vote:
@@ -660,13 +664,13 @@ def vote_content(request, content_id):
             defaults={
                 'base_value': vote_value,
                 'value': calculated_value,
-                'otp_code': otp_code,
+                'otp_code': "FREE" if tokens_paused else otp_code,
                 'tag': voter_tag,
                 'is_badge_vote': bool(badge)
             }
         )
 
-        if not otp.use_vote():
+        if otp and not otp.use_vote():
             return JsonResponse({'status': 'error', 'message': 'OTP vote limit reached'}, status=403)
         assign_or_upgrade_badge_for_user(request.user)
 
