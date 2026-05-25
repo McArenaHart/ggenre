@@ -28,7 +28,9 @@
             <form method="POST">
               {% csrf_token %}
               <input type="hidden" name="token_policy_action" value="resume">
-              <button type="submit" class="btn btn-primary">Resume OTP Token Voting</button>
+              <button type="submit" class="btn btn-primary">
+                <i class="fas fa-play-circle"></i> Resume OTP Token Voting
+              </button>
             </form>
           {% else %}
             <div class="alert alert-info">
@@ -37,7 +39,9 @@
             <form method="POST">
               {% csrf_token %}
               <input type="hidden" name="token_policy_action" value="pause">
-              <button type="submit" class="btn btn-warning">Pause OTP Tokens for Free Voting</button>
+              <button type="submit" class="btn btn-warning">
+                <i class="fas fa-pause-circle"></i> Pause OTP Tokens for Free Voting
+              </button>
             </form>
           {% endif %}
         </div>
