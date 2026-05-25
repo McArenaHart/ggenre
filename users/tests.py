@@ -190,6 +190,22 @@ class UsersAppTests(TestCase):
         response = self.client.get(self.dashboard_url)
         self.assertRedirects(response, reverse("fan_dashboard"))
 
+    def test_admin_navigation_links_to_admin_dashboard(self):
+        self.client.force_login(self.admin_user)
+        response = self.client.get(reverse("content_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("admin_dashboard"))
+        self.assertContains(response, "Admin Dashboard")
+
+        self.client.force_login(self.artist_user)
+        response = self.client.get(reverse("content_list"))
+        self.assertNotContains(response, reverse("admin_dashboard"))
+
+        self.client.force_login(self.fan_user)
+        response = self.client.get(reverse("content_list"))
+        self.assertNotContains(response, reverse("admin_dashboard"))
+
     def test_profile_update(self):
         self.client.login(
             username=self.artist_user.username,
