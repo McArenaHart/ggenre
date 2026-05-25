@@ -120,7 +120,7 @@
               {% elif user.role == 'admin' %}
                 <li class="nav-item">
                   <a class="nav-link" href="{% url 'admin_dashboard' %}">
-                    <i class="fas fa-fw fa-tools"></i>
+                    <i class="fas fa-fw fa-tachometer-alt"></i>
                     <span>Admin Dashboard</span>
                   </a>
                 </li>
@@ -160,7 +160,7 @@
                 </a>
                 {% if user.role == 'admin' %}
                   <a class="dropdown-item" href="{% url 'admin_dashboard' %}">
-                    <i class="fas fa-fw fa-tools"></i> Admin Dashboard
+                    <i class="fas fa-fw fa-tachometer-alt"></i> Admin Dashboard
                   </a>
                 {% endif %}
                 {% if user.badge %}
@@ -215,7 +215,7 @@
           {% elif user.role == 'admin' %}
             <li class="nav-item">
               <a class="nav-link" href="{% url 'admin_dashboard' %}">
-                <i class="fas fa-fw fa-tools"></i>
+                <i class="fas fa-fw fa-tachometer-alt"></i>
                 <span>Admin Dashboard</span>
               </a>
             </li>
@@ -278,7 +278,7 @@
           </a>
         {% elif user.role == 'admin' %}
           <a class="app-mobile-tab {% if request.path|slice:':23' == '/users/admin_dashboard/' %}is-active{% endif %}" href="{% url 'admin_dashboard' %}">
-            <i class="fas fa-tools" aria-hidden="true"></i>
+            <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
             <span>Admin</span>
           </a>
         {% else %}
