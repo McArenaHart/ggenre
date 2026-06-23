@@ -214,7 +214,7 @@ class ParticipationRequest(models.Model):
 class Vote(models.Model):
     content = models.ForeignKey(Content, on_delete=models.CASCADE, related_name='votes')
     fan = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='user_votes')
-    base_value = models.IntegerField()  # Original vote (1-8)
+    base_value = models.IntegerField()  # Original rating (1-10)
     value = models.IntegerField()  # base_value * multiplier
     timestamp = models.DateTimeField(auto_now_add=True)
     otp_code = models.CharField(max_length=6)

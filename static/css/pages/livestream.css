@@ -1,0 +1,299 @@
+.livestream-page,
+.livestream-room {
+  padding: 1.5rem;
+}
+
+.livestream-header,
+.livestream-room-header,
+.livestream-panel-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.livestream-header h1,
+.livestream-room-header h1,
+.livestream-panel h1 {
+  font-size: 1.65rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.livestream-header p,
+.livestream-room-header p,
+.livestream-panel-header p {
+  color: var(--app-muted, #7c8597);
+  margin: 0.25rem 0 0;
+}
+
+.livestream-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+}
+
+.livestream-card,
+.livestream-panel,
+.livestream-stage,
+.livestream-chat {
+  background: var(--app-surface, #101827);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.livestream-card,
+.livestream-panel {
+  padding: 1rem;
+}
+
+.livestream-card h2 {
+  font-size: 1.1rem;
+  font-weight: 800;
+  margin: 0.75rem 0 0.35rem;
+}
+
+.livestream-card p {
+  color: var(--app-muted, #7c8597);
+}
+
+.livestream-status {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-right: 0.35rem;
+  padding: 0.2rem 0.55rem;
+}
+
+.livestream-status-live {
+  background: rgba(29, 185, 84, 0.18);
+  color: #49df83;
+}
+
+.livestream-meta {
+  color: var(--app-muted, #7c8597);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-bottom: 0.9rem;
+}
+
+.livestream-room-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.livestream-room-layout {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.livestream-stage {
+  aspect-ratio: 16 / 9;
+  min-height: 360px;
+  overflow: hidden;
+  position: relative;
+}
+
+.livestream-stage video {
+  background: #03050a;
+  height: 100%;
+  inset: 0;
+  object-fit: cover;
+  position: absolute;
+  width: 100%;
+}
+
+.livestream-stage video[data-local-video] {
+  display: none;
+}
+
+.livestream-room[data-is-host="1"] video[data-local-video] {
+  display: block;
+}
+
+.livestream-room[data-is-host="1"] video[data-remote-video] {
+  display: none;
+}
+
+.livestream-stage-empty {
+  align-items: center;
+  color: var(--app-muted, #7c8597);
+  display: flex;
+  flex-direction: column;
+  font-weight: 700;
+  gap: 0.7rem;
+  height: 100%;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.livestream-stage-empty i {
+  font-size: 2.4rem;
+}
+
+.livestream-stage-controls {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 8px;
+  bottom: 0.75rem;
+  display: flex;
+  gap: 0.7rem;
+  left: 0.75rem;
+  padding: 0.5rem;
+  position: absolute;
+  z-index: 3;
+}
+
+.livestream-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  padding: 1rem;
+}
+
+.livestream-chat h2 {
+  font-size: 1rem;
+  font-weight: 800;
+  margin: 0 0 0.75rem;
+}
+
+.livestream-chat-messages {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.livestream-chat .chat-message {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  max-width: 88%;
+  padding: 0.65rem 0.75rem;
+}
+
+.livestream-chat .chat-message.is-own {
+  align-self: flex-end;
+  background: rgba(36, 124, 255, 0.22);
+}
+
+.livestream-chat .chat-message strong {
+  display: block;
+  font-size: 0.82rem;
+  margin-bottom: 0.2rem;
+}
+
+.livestream-chat .chat-message p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.livestream-chat .chat-compose {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  position: relative;
+}
+
+.livestream-chat .chat-send-button {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 44px;
+  height: 38px;
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+  width: 44px;
+}
+
+.livestream-chat .chat-emoji-picker {
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.livestream-chat .chat-emoji-toggle {
+  align-items: center;
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  padding: 0;
+  width: 42px;
+}
+
+.livestream-chat .chat-emoji-menu {
+  background: var(--app-surface, #101827);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  bottom: calc(100% + 0.45rem);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+  display: grid;
+  gap: 0.25rem;
+  grid-template-columns: repeat(5, 32px);
+  left: 0;
+  padding: 0.45rem;
+  position: absolute;
+  z-index: 20;
+}
+
+.livestream-chat .chat-emoji-menu[hidden] {
+  display: none;
+}
+
+.livestream-chat .chat-emoji-option {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  display: inline-flex;
+  font-size: 1rem;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  width: 32px;
+}
+
+.livestream-chat .chat-emoji-option:hover,
+.livestream-chat .chat-emoji-option:focus {
+  background: rgba(122, 237, 238, 0.16);
+}
+
+.livestream-access-form {
+  align-items: center;
+  display: flex;
+  gap: 0.6rem;
+}
+
+@media (max-width: 991.98px) {
+  .livestream-room-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .livestream-page,
+  .livestream-room {
+    padding: 1rem;
+  }
+
+  .livestream-header,
+  .livestream-room-header,
+  .livestream-panel-header,
+  .livestream-access-form {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .livestream-stage {
+    min-height: 260px;
+  }
+}

@@ -16,8 +16,10 @@
                 <div class="card shadow-sm p-3 d-flex align-items-center">
                     {% include "partials/user_avatar.html" with avatar_user=user size=60 class_name="mb-2" alt_text=user.username %}
                     <h6 class="font-weight-bold">{{ user.username }}</h6>
-                    <p class="text-muted">{{ user.email }}</p>
-                    <a href="{% url 'user_profile' user.id %}" class="btn btn-outline-primary btn-sm mt-2">View Profile</a>
+                    <p class="text-muted">{{ user.get_role_display }}</p>
+                    <div class="d-flex flex-wrap justify-content-center mt-2">
+                        <a href="{% url 'user_profile' user.id %}" class="btn btn-outline-primary btn-sm mr-2 mb-2">View Profile</a>
+                    </div>
                 </div>
             </div>
             {% endfor %}

@@ -1,0 +1,62 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Stream Access{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/livestream.css' %}" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<div class="container py-4 livestream-page">
+  <section class="livestream-panel">
+    <div class="livestream-panel-header">
+      <div>
+        <h1>Access Controls</h1>
+        <p>{{ stream.title }}</p>
+      </div>
+      <a href="{% url 'livestream:room' stream.stream_key %}" class="btn btn-outline-primary">Back to Stream</a>
+    </div>
+
+    <form method="post" class="livestream-access-form">
+      {% csrf_token %}
+      {{ form.user }}
+      <button type="submit" class="btn btn-primary">Grant Access</button>
+    </form>
+
+    <div class="table-responsive mt-4">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Status</th>
+            <th>Granted By</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for grant in grants %}
+            <tr>
+              <td>{{ grant.user.username }}</td>
+              <td>{% if grant.is_active %}Active{% else %}Revoked{% endif %}</td>
+              <td>{% if grant.granted_by %}{{ grant.granted_by.username }}{% else %}-{% endif %}</td>
+              <td class="text-right">
+                {% if grant.is_active %}
+                  <form method="post" action="{% url 'livestream:revoke_access' stream.stream_key grant.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="text-center">No individual access grants yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

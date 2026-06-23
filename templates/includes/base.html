@@ -23,9 +23,12 @@
     <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet" />
     <link href="{% static 'vendor/fontawesome-free/css/all.min.css' %}" rel="stylesheet" />
     <link href="{% static 'css/styles.css' %}" rel="stylesheet" />
-    <link href="{% static 'css/app-shell.css' %}?v=20260227pwa1" rel="stylesheet" />
+    <link href="{% static 'css/app-shell.css' %}?v=20260623contrast3" rel="stylesheet" />
     <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.carousel.css' %}" />
     <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.theme.css' %}" />
+    {% if admin_contact_user and other_user != admin_contact_user %}
+      <link href="{% static 'css/pages/admin-contact-chat.css' %}?v=20260623otp2" rel="stylesheet" />
+    {% endif %}
     {% block extra_css %}{% endblock %}
   </head>
   <body
@@ -33,11 +36,16 @@
     class="app-theme {% if user.is_authenticated %}app-authenticated{% else %}app-guest{% endif %}"
     data-theme="dark"
     data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}"
+    data-user-role="{% if user.is_authenticated %}{{ user.role }}{% endif %}"
     data-current-path="{{ request.path }}"
     data-service-worker-url="{% url 'service_worker' %}"
     data-offline-url="{% url 'offline' %}"
     data-announcements-url="{% if user.is_authenticated %}{% url 'get_announcements' %}{% endif %}"
     data-dismiss-announcement-template="{% if user.is_authenticated %}{% url 'dismiss_announcement' 0 %}{% endif %}"
+    data-admin-chat-unread-url="{% if user.is_authenticated and user.role == 'admin' %}{% url 'chatapp:admin_unread_count' %}{% endif %}"
+    data-admin-chat-inbox-url="{% if user.is_authenticated and user.role == 'admin' %}{% url 'chatapp:admin_inbox' %}{% endif %}"
+    data-admin-contact-unread-url="{% if user.is_authenticated and user.role != 'admin' %}{% url 'chatapp:admin_contact_unread_count' %}{% endif %}"
+    data-admin-contact-mark-read-url="{% if user.is_authenticated and user.role != 'admin' %}{% url 'chatapp:mark_admin_contact_read' %}{% endif %}"
   >
     {% if user.is_authenticated %}
       <div id="announcement-container"></div>
@@ -104,6 +112,15 @@
                   <span>Artists</span>
                 </a>
               </li>
+              {% if user.role != 'admin' %}
+                <li class="nav-item">
+                  <a class="nav-link" href="{% url 'chatapp:index' %}">
+                    <i class="fas fa-fw fa-comments"></i>
+                    <span>Messages</span>
+                    <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count }}</span>
+                  </a>
+                </li>
+              {% endif %}
               {% if user.role == 'artist' %}
                 <li class="nav-item">
                   <a class="nav-link" href="{% url 'upload_content' %}">
@@ -112,7 +129,7 @@
                   </a>
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link" href="{% url 'start_live_stream' %}">
+                  <a class="nav-link" href="{% url 'livestream:create' %}">
                     <i class="fas fa-fw fa-video"></i>
                     <span>Go Live</span>
                   </a>
@@ -122,6 +139,13 @@
                   <a class="nav-link" href="{% url 'admin_dashboard' %}">
                     <i class="fas fa-fw fa-tachometer-alt"></i>
                     <span>Admin Dashboard</span>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="{% url 'chatapp:admin_inbox' %}">
+                    <i class="fas fa-fw fa-inbox"></i>
+                    <span>Inbox</span>
+                    <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
                   </a>
                 </li>
               {% endif %}
@@ -158,9 +182,19 @@
                 <a class="dropdown-item" href="{% url 'user_profile' user.id %}">
                   <i class="fas fa-fw fa-user-circle"></i> My Account
                 </a>
+                {% if user.role != 'admin' %}
+                  <a class="dropdown-item" href="{% url 'chatapp:index' %}">
+                    <i class="fas fa-fw fa-comments"></i> Messages
+                    <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count }}</span>
+                  </a>
+                {% endif %}
                 {% if user.role == 'admin' %}
                   <a class="dropdown-item" href="{% url 'admin_dashboard' %}">
                     <i class="fas fa-fw fa-tachometer-alt"></i> Admin Dashboard
+                  </a>
+                  <a class="dropdown-item" href="{% url 'chatapp:admin_inbox' %}">
+                    <i class="fas fa-fw fa-inbox"></i> Inbox
+                    <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
                   </a>
                 {% endif %}
                 {% if user.badge %}
@@ -199,6 +233,15 @@
               <span>Artists</span>
             </a>
           </li>
+          {% if user.role != 'admin' %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'chatapp:index' %}">
+                <i class="fas fa-fw fa-comments"></i>
+                <span>Messages</span>
+                <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count }}</span>
+              </a>
+            </li>
+          {% endif %}
           {% if user.role == 'artist' %}
             <li class="nav-item">
               <a class="nav-link" href="{% url 'upload_content' %}">
@@ -207,7 +250,7 @@
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{% url 'start_live_stream' %}">
+              <a class="nav-link" href="{% url 'livestream:create' %}">
                 <i class="fas fa-fw fa-video"></i>
                 <span>Go Live</span>
               </a>
@@ -217,6 +260,13 @@
               <a class="nav-link" href="{% url 'admin_dashboard' %}">
                 <i class="fas fa-fw fa-tachometer-alt"></i>
                 <span>Admin Dashboard</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'chatapp:admin_inbox' %}">
+                <i class="fas fa-fw fa-inbox"></i>
+                <span>Inbox</span>
+                <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
               </a>
             </li>
           {% endif %}
@@ -282,19 +332,34 @@
             <span>Admin</span>
           </a>
         {% else %}
-          <a class="app-mobile-tab {% if request.path|slice:':14' == '/content/live/' %}is-active{% endif %}" href="{% url 'live_stream_index' %}">
+          <a class="app-mobile-tab {% if request.path|slice:':13' == '/livestreams/' %}is-active{% endif %}" href="{% url 'livestream:index' %}">
             <i class="fas fa-broadcast-tower" aria-hidden="true"></i>
             <span>Live</span>
           </a>
         {% endif %}
-        <a class="app-mobile-tab {% if request.path|slice:':20' == '/users/notifications' %}is-active{% endif %}" href="{% url 'notifications' %}">
-          <i class="fas fa-bell" aria-hidden="true"></i>
-          <span>Alerts</span>
-        </a>
-        <a class="app-mobile-tab {% if request.path|slice:':15' == '/users/profile/' %}is-active{% endif %}" href="{% url 'user_profile' user.id %}">
-          <i class="fas fa-user-circle" aria-hidden="true"></i>
-          <span>Profile</span>
-        </a>
+        {% if user.role != 'admin' %}
+          <a class="app-mobile-tab {% if request.path == '/chat/' or request.path|slice:':8' == '/chat/u/' %}is-active{% endif %}" href="{% url 'chatapp:index' %}">
+            <span class="app-mobile-tab-icon">
+              <i class="fas fa-comments" aria-hidden="true"></i>
+              <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count }}</span>
+            </span>
+            <span>Messages</span>
+          </a>
+        {% endif %}
+        {% if user.role == 'admin' %}
+          <a class="app-mobile-tab {% if request.path|slice:':18' == '/chat/admin-inbox' %}is-active{% endif %}" href="{% url 'chatapp:admin_inbox' %}">
+            <span class="app-mobile-tab-icon">
+              <i class="fas fa-inbox" aria-hidden="true"></i>
+              <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
+            </span>
+            <span>Inbox</span>
+          </a>
+        {% else %}
+          <a class="app-mobile-tab {% if request.path|slice:':20' == '/users/notifications' %}is-active{% endif %}" href="{% url 'notifications' %}">
+            <i class="fas fa-bell" aria-hidden="true"></i>
+            <span>Alerts</span>
+          </a>
+        {% endif %}
       </nav>
     {% else %}
       <nav class="app-mobile-tabbar app-mobile-tabbar-guest d-lg-none" aria-label="Quick links">
@@ -341,6 +406,44 @@
 
     <div class="pwa-network-pill" data-pwa-network-pill hidden role="status" aria-live="polite"></div>
 
+    {% if admin_contact_user and other_user != admin_contact_user %}
+      <section
+        class="admin-contact-chat"
+        data-direct-chat-user="{{ admin_contact_user.id }}"
+        data-current-user-id="{{ user.id }}"
+        data-current-user="{{ user.username }}"
+        data-chat-widget="admin-contact"
+        data-admin-contact-unread="{{ admin_contact_unread_count|default:0 }}"
+        data-admin-contact-otp-code="{{ admin_contact_otp.otp_code|default:'' }}"
+        data-admin-contact-otp-votes="{{ admin_contact_otp.remaining_votes|default:'' }}"
+        aria-label="Contact admin chat"
+      >
+        <button type="button" class="btn btn-primary admin-contact-toggle" data-chat-toggle aria-expanded="false">
+          <i class="fas fa-headset" aria-hidden="true"></i>
+          <span>Admin</span>
+          <span class="admin-contact-badge" data-admin-contact-badge {% if not admin_contact_unread_count %}hidden{% endif %}>{{ admin_contact_unread_count }}</span>
+        </button>
+        <div class="admin-contact-panel" data-chat-panel>
+          <header class="admin-contact-header">
+            <div class="admin-contact-title">
+              <strong>Contact Admin</strong>
+              <span>{{ admin_contact_user.username }}</span>
+            </div>
+            <button type="button" class="btn btn-outline-primary admin-contact-close" data-chat-close aria-label="Close admin chat" title="Close admin chat">
+              <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+          </header>
+          <div class="admin-contact-messages" data-chat-messages></div>
+          <form class="admin-contact-compose" data-chat-form>
+            <input type="text" class="form-control" data-chat-input maxlength="2000" autocomplete="off" placeholder="Message admin..." />
+            <button type="submit" class="btn btn-primary chat-send-button" aria-label="Send admin message" title="Send admin message">
+              <i class="fas fa-paper-plane" aria-hidden="true"></i>
+            </button>
+          </form>
+        </div>
+      </section>
+    {% endif %}
+
     <a class="scroll-to-top rounded" href="#page-top">
       <i class="fas fa-angle-up"></i>
     </a>
@@ -375,7 +478,10 @@
     <script src="{% static 'vendor/jquery-easing/jquery.easing.min.js' %}"></script>
     <script src="{% static 'vendor/owl-carousel/owl.carousel.js' %}"></script>
     <script src="{% static 'js/custom.js' %}"></script>
-    <script src="{% static 'js/pages/base-shell.js' %}?v=20260227pwa1"></script>
+    <script src="{% static 'js/pages/base-shell.js' %}?v=20260623role1"></script>
+    {% if admin_contact_user and other_user != admin_contact_user %}
+      <script src="{% static 'js/pages/chatapp.js' %}?v=20260623otp1"></script>
+    {% endif %}
 
     {% block extra_js %}{% endblock %}
   </body>

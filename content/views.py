@@ -20,7 +20,7 @@ import random
 from django.db.models import F
 import string
 from django.urls import reverse
-from django.http import JsonResponse
+from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.core.mail import send_mail
 from django.conf import settings
@@ -43,6 +43,18 @@ from django.views.decorators.http import require_POST
 
 # Set up logging configuration
 logger = logging.getLogger(__name__)
+
+
+def public_content_queryset():
+    return Content.objects.filter(is_approved=True, is_visible=True)
+
+
+def can_view_content(user, content):
+    if content.is_approved and content.is_visible:
+        return True
+    if not user.is_authenticated:
+        return False
+    return user.is_admin() or content.artist_id == user.id
 
 
 def track_content_view(content, user):
@@ -88,7 +100,7 @@ def _user_interest_profile(user, current_content, sample_size=50):
     )
 
     interest_contents = (
-        Content.objects.filter(Q(viewers=user) | Q(votes__fan=user))
+        public_content_queryset().filter(Q(viewers=user) | Q(votes__fan=user))
         .exclude(id=current_content.id)
         .select_related("genre")
         .prefetch_related("tags")
@@ -199,7 +211,7 @@ def get_up_next_sections(content, user=None, limit=4):
         return _empty_up_next_sections()
 
     base_queryset = (
-        Content.objects.filter(is_approved=True)
+        public_content_queryset()
         .exclude(id=content.id)
         .select_related("artist", "genre")
         .prefetch_related("votes")
@@ -315,11 +327,7 @@ def upload_content(request):
                 upload_limit.save()
 
             
-            # Send notifications to followers
-            message = f"{request.user.username} just uploaded new content: {content.title}"
-            send_notification_to_followers(request.user, message)
-
-            messages.success(request, "Content uploaded successfully!")
+            messages.success(request, "Content uploaded successfully and is pending review.")
             return redirect('artist_content', artist_id=request.user.id)
 
     else:
@@ -332,40 +340,40 @@ def upload_content(request):
 
 
 @login_required
+@require_POST
 def add_comment(request, content_id):
     content = get_object_or_404(Content, id=content_id)
+    if not can_view_content(request.user, content):
+        return JsonResponse({"status": "error", "message": "Content is not available."}, status=404)
 
-    if request.method == "POST":
-        text = request.POST.get("text", "").strip()
+    text = request.POST.get("text", "").strip()
 
-        if not text:
-            return JsonResponse({"status": "error", "message": "Comment text cannot be empty."}, status=400)
+    if not text:
+        return JsonResponse({"status": "error", "message": "Comment text cannot be empty."}, status=400)
 
-        comment = Comment.objects.create(
-            content=content,
-            user=request.user,
-            text=text,
-            timestamp=now()
-        )
+    comment = Comment.objects.create(
+        content=content,
+        user=request.user,
+        text=text,
+        timestamp=now()
+    )
 
-        # Send notification to content owner (if commenter isn't the owner)
-        if request.user != content.artist:
-            send_notification(content.artist, f"{request.user.username} commented on your content: {content.title}")
+    # Send notification to content owner (if commenter isn't the owner)
+    if request.user != content.artist:
+        send_notification(content.artist, f"{request.user.username} commented on your content: {content.title}")
 
-        # Return JSON response with new comment count
-        return JsonResponse({
-            "status": "success",
-            "comment": {
-                "user": request.user.username,
-                "user_id": request.user.id,
-                "user_profile": request.user.get_profile_picture(),
-                "text": comment.text,
-                "timestamp": comment.timestamp.strftime("%b %d, %Y %H:%M"),
-            },
-            "comment_count": content.comments.count()  # Send updated comment count
-        })
-
-    return JsonResponse({"status": "error", "message": "Invalid request method."}, status=405)
+    # Return JSON response with new comment count
+    return JsonResponse({
+        "status": "success",
+        "comment": {
+            "user": request.user.username,
+            "user_id": request.user.id,
+            "user_profile": request.user.get_profile_picture(),
+            "text": comment.text,
+            "timestamp": comment.timestamp.strftime("%b %d, %Y %H:%M"),
+        },
+        "comment_count": content.comments.count()
+    })
 
 
 
@@ -409,7 +417,7 @@ def send_upload_reset_notification(artist):
 
 def get_featured_contents(limit=50):
     return (
-        Content.objects.filter(is_approved=True)
+        public_content_queryset()
         .select_related('artist', 'genre')
         .prefetch_related('votes')
         .order_by('-upload_date')[:limit]
@@ -435,10 +443,15 @@ def content_detail(request, content_id):
     Display a single content item with detailed information.
     """
     content = get_object_or_404(Content, id=content_id)
+    if not can_view_content(request.user, content):
+        messages.error(request, "This content is not available.")
+        return redirect("content_list")
+
     track_content_view(content, request.user)
     up_next = get_up_next_sections(content, user=request.user, limit=4)
     comments = Comment.objects.filter(content=content).order_by('-timestamp')  # Fetch comments for the content
     average_vote = Vote.objects.filter(content=content).aggregate(Avg('value'))['value__avg'] or 0  # Calculate average vote
+    voting_suspended = VotingTokenPolicy.voting_is_suspended()
 
     return render(request, 'content/detail.html', {
         'content': content,
@@ -449,7 +462,14 @@ def content_detail(request, content_id):
         'up_next_fallback': up_next['fallback'],
         'comments': comments,
         'average_vote': round(average_vote, 1),  # Round to 1 decimal place
-        'tokens_paused': VotingTokenPolicy.tokens_are_paused(),
+        'tokens_paused': VotingTokenPolicy.tokens_are_paused() or request.user.has_free_pass,
+        'voting_suspended': voting_suspended,
+        'can_vote': (
+            content.is_approved
+            and content.is_visible
+            and content.is_approved_for_voting
+            and not voting_suspended
+        ),
     })
 
 
@@ -469,6 +489,11 @@ def increment_views(request, content_id):
 
         with transaction.atomic():
             content = get_object_or_404(Content, id=content_id)
+            if not can_view_content(request.user, content):
+                return JsonResponse({
+                    "status": "error",
+                    "message": "Content is not available"
+                }, status=404)
             viewer_count = track_content_view(content, request.user)
             
             logger.info(
@@ -623,18 +648,46 @@ def voucher_entry(request, room_name):
 def vote_content(request, content_id):
     if not request.user.is_authenticated:
         return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=403)
+    if getattr(request.user, "is_suspended_by_admin", False):
+        return JsonResponse({'status': 'error', 'message': 'Your account is suspended.'}, status=403)
+
+    def vote_error(message, status_code=200):
+        return JsonResponse({'status': 'error', 'message': message}, status=status_code)
 
     try:
-        data = json.loads(request.body)
-        vote_value = int(data.get('vote_value'))
+        if (request.content_type or "").startswith("application/json"):
+            try:
+                data = json.loads(request.body or "{}")
+            except json.JSONDecodeError:
+                return vote_error('Invalid vote payload', status_code=400)
+        else:
+            data = request.POST
+
+        try:
+            vote_value = int(data.get('vote_value'))
+        except (TypeError, ValueError):
+            return vote_error('Invalid rating (1-10 only)')
+
         otp_code = data.get('otp_code', '').strip()
         voter_tag = data.get('voter_tag', '').strip()
         content = get_object_or_404(Content, id=content_id)
 
-        if vote_value not in range(1, 9):
-            return JsonResponse({'status': 'error', 'message': 'Invalid rank (1-8 only)'}, status=400)
+        if not can_view_content(request.user, content):
+            return vote_error('Content is not available', status_code=404)
 
-        tokens_paused = VotingTokenPolicy.tokens_are_paused()
+        if not content.is_approved_for_voting:
+            return vote_error('Voting is not open for this content')
+
+        if VotingTokenPolicy.voting_is_suspended():
+            return vote_error('Voting is suspended by admin')
+
+        if vote_value not in range(1, 11):
+            return vote_error('Invalid rating (1-10 only)')
+
+        if not voter_tag:
+            return vote_error('Voter tag is required')
+
+        tokens_paused = VotingTokenPolicy.tokens_are_paused() or request.user.has_free_pass
         otp = None
         if not tokens_paused:
             otp = OTP.objects.filter(
@@ -644,38 +697,80 @@ def vote_content(request, content_id):
                 remaining_votes__gt=0
             ).first()
             if not otp:
-                return JsonResponse({'status': 'error', 'message': 'Invalid/expired OTP'}, status=403)
+                return vote_error('Invalid/expired OTP')
 
-        existing_vote = Vote.objects.filter(fan=request.user, content__genre=content.genre, base_value=vote_value).exists()
+        active_vote_cutoff = now() - timedelta(days=1)
+        active_votes = Vote.objects.filter(
+            fan=request.user,
+            content__genre=content.genre,
+            timestamp__gte=active_vote_cutoff,
+        )
+        existing_vote = active_votes.filter(base_value=vote_value).exists()
         if existing_vote:
-            return JsonResponse({'status': 'error', 'message': f'Rank {vote_value} already used in this genre'}, status=409)
+            return vote_error(f'Rank {vote_value} already used in this genre')
 
-        highest_previous_vote = Vote.objects.filter(fan=request.user, content__genre=content.genre).aggregate(Max('base_value'))['base_value__max'] or 9
+        highest_previous_vote = active_votes.aggregate(Max('base_value'))['base_value__max'] or 10
         if vote_value > highest_previous_vote:
-            return JsonResponse({'status': 'error', 'message': f'You must rank lower than or equal to {highest_previous_vote}'}, status=409)
+            return vote_error(f'You must rank lower than or equal to {highest_previous_vote}')
 
         badge = getattr(request.user, 'badge', None)
         vote_multiplier = badge.vote_multiplier() if badge else 1
         calculated_value = vote_value * vote_multiplier
 
-        vote, created = Vote.objects.update_or_create(
-            content=content,
-            fan=request.user,  
-            defaults={
-                'base_value': vote_value,
-                'value': calculated_value,
-                'otp_code': "FREE" if tokens_paused else otp_code,
-                'tag': voter_tag,
-                'is_badge_vote': bool(badge)
+        chat_url = None
+        with transaction.atomic():
+            if otp:
+                locked_otp = OTP.objects.select_for_update().filter(
+                    pk=otp.pk,
+                    user=request.user,
+                    is_active=True,
+                    remaining_votes__gt=0,
+                ).first()
+                if not locked_otp or not locked_otp.use_vote():
+                    return vote_error('OTP vote limit reached')
+
+            vote, created = Vote.objects.update_or_create(
+                content=content,
+                fan=request.user,
+                defaults={
+                    'base_value': vote_value,
+                    'value': calculated_value,
+                    'otp_code': "FREE" if tokens_paused else otp_code,
+                    'tag': voter_tag,
+                    'is_badge_vote': bool(badge)
+                }
+            )
+            if not created:
+                Vote.objects.filter(pk=vote.pk).update(timestamp=now())
+                vote.refresh_from_db(fields=["timestamp"])
+
+            assign_or_upgrade_badge_for_user(request.user)
+            if content.artist_id != request.user.id and not request.user.is_admin():
+                try:
+                    from chatapp.services import record_match_rating
+
+                    chat_result = record_match_rating(
+                        rater=request.user,
+                        rated=content.artist,
+                        score=vote_value,
+                        source_content=content,
+                    )
+                    if chat_result.get("thread"):
+                        chat_url = reverse("chatapp:direct", args=[content.artist_id])
+                except ValueError:
+                    pass
+
+        return JsonResponse(
+            {
+                'status': 'success',
+                'message': f'Vote {vote_value} recorded!',
+                'chat_url': chat_url,
+                'inbox_url': reverse("chatapp:index") if chat_url else None,
             }
         )
 
-        if otp and not otp.use_vote():
-            return JsonResponse({'status': 'error', 'message': 'OTP vote limit reached'}, status=403)
-        assign_or_upgrade_badge_for_user(request.user)
-
-        return JsonResponse({'status': 'success', 'message': f'Vote {vote_value} recorded!'})
-
+    except Http404:
+        raise
     except Exception as e:
         logger.error(f"Error in vote_content: {str(e)}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': f'Something went wrong: {str(e)}'}, status=500)
@@ -721,6 +816,7 @@ def calculate_final_ranking():
             assign_or_upgrade_badge_for_user(vote.fan)  # Upgrade badge for matching votes
 
 @login_required
+@require_POST
 def delete_content(request, pk):
     content = get_object_or_404(Content, pk=pk)
 
@@ -736,6 +832,7 @@ def delete_content(request, pk):
 
 
 @login_required
+@require_POST
 def toggle_content_approval(request, content_id, action):
     if not request.user.is_admin():
         messages.error(request, "You do not have permission to manage content approval.")
@@ -747,6 +844,10 @@ def toggle_content_approval(request, content_id, action):
         if not content.is_approved:
             content.is_approved = True
             content.save()
+            send_notification_to_followers(
+                content.artist,
+                f"{content.artist.username} just published new content: {content.title}",
+            )
             messages.success(request, f'Content "{content.title}" has been approved.')
     elif action == "disapprove":
         if content.is_approved:
@@ -757,6 +858,29 @@ def toggle_content_approval(request, content_id, action):
         messages.error(request, "Invalid action.")
     
     return redirect('dashboard')
+
+
+@login_required
+@require_POST
+def toggle_content_visibility(request, content_id, action):
+    if not request.user.is_admin():
+        messages.error(request, "You do not have permission to manage content visibility.")
+        return redirect('dashboard')
+
+    content = get_object_or_404(Content, id=content_id)
+
+    if action == "show":
+        content.is_visible = True
+        content.save(update_fields=["is_visible"])
+        messages.success(request, f'Content "{content.title}" is now visible.')
+    elif action == "hide":
+        content.is_visible = False
+        content.save(update_fields=["is_visible"])
+        messages.success(request, f'Content "{content.title}" is now hidden.')
+    else:
+        messages.error(request, "Invalid action.")
+
+    return redirect('admin_dashboard')
 
 
 
@@ -773,7 +897,7 @@ def recommend_content(request):
     user_tags = request.user.tags.values_list('name', flat=True)
 
     recommendations = (
-    Content.objects.filter(is_approved=True)
+    public_content_queryset()
     .filter(Q(tags__name__in=user_tags))
     .annotate(vote_count=Count('votes'))
     .order_by('-vote_count')[:10]
@@ -830,7 +954,7 @@ def classify_content(request, content_id):
     else:
         form = ContentClassificationForm(instance=content)
 
-    return render(request, 'users/classify.html', {'form': form, 'content': content})
+    return render(request, 'content/classify.html', {'form': form, 'content': content})
 
 
 

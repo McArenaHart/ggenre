@@ -1,7 +1,8 @@
 from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
 from django.contrib.auth import login, authenticate, logout, get_user_model
 from django.contrib.auth.decorators import login_required, permission_required
-from django.db.models import Q
+from django.views.decorators.http import require_POST
+from django.db.models import F, Q
 from django.contrib import messages
 from .forms import UserRegistrationForm, LoginForm, ProfileUpdateForm, AnnouncementForm
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -26,6 +27,12 @@ from .models import CustomUser, Role, Follow, OTP, TermsAndConditions, VotingTok
 from content.models import Content, Comment, Badge, Voucher
 from subscriptions.models import UserSubscription
 from content.models import ArtistUploadLimit, LivePerformance
+from chatapp.models import AdminChatThread, PeerChatThread
+from chatapp.services import (
+    allow_peer_chat_by_admin,
+    reset_content_rating_chat_access,
+    revoke_admin_peer_chat,
+)
 from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -77,6 +84,68 @@ def _positive_int(value, default):
     except (TypeError, ValueError):
         return default
     return parsed if parsed > 0 else default
+
+
+def _deliver_otp_admin_contact(user, admin_user, otp, action_label):
+    thread, created = AdminChatThread.objects.get_or_create(
+        admin=admin_user,
+        user=user,
+        defaults={
+            "user_unread_count": 1,
+            "last_contact_at": timezone.now(),
+        },
+    )
+    if not created:
+        AdminChatThread.objects.filter(pk=thread.pk).update(
+            user_unread_count=F("user_unread_count") + 1,
+            last_contact_at=timezone.now(),
+        )
+    Notification.objects.create(
+        user=user,
+        message=(
+            f"Admin {action_label} your voting OTP: {otp.otp_code} "
+            f"({otp.remaining_votes} vote(s) available)."
+        ),
+    )
+
+
+def _apply_otp_management_action(user, admin_user, action, vote_count, regenerate_code=False):
+    otp, _ = OTP.objects.get_or_create(
+        user=user,
+        defaults={
+            "otp_code": generate_otp(),
+            "remaining_votes": 0,
+            "is_active": True,
+        },
+    )
+
+    generated_code = None
+    should_deliver = False
+    action_label = "updated"
+    if action == "grant":
+        otp.reset_votes(votes=vote_count, regenerate_code=generate_otp())
+        generated_code = otp.otp_code
+        should_deliver = True
+        action_label = "generated"
+    elif action == "extend":
+        otp.grant_votes(votes=vote_count)
+        generated_code = otp.otp_code
+        should_deliver = True
+        action_label = "extended"
+    elif action == "cancel":
+        otp.cancel_access()
+    elif action == "reset":
+        new_code = generate_otp() if regenerate_code else None
+        otp.reset_votes(votes=vote_count, regenerate_code=new_code)
+        generated_code = otp.otp_code
+        should_deliver = True
+        action_label = "reset"
+    else:
+        raise ValueError("Invalid OTP action.")
+
+    if should_deliver:
+        _deliver_otp_admin_contact(user, admin_user, otp, action_label)
+    return otp, generated_code
 
 
 def _auth_throttle_config(scope):
@@ -291,6 +360,10 @@ def login_view(request):
 
         if form.is_valid():
             user = form.get_user()
+            if user.is_suspended_by_admin and not user.is_admin():
+                _record_auth_attempt(request, LOGIN_THROTTLE_SCOPE)
+                messages.error(request, "Your account is suspended. Contact support for access.")
+                return render(request, "users/login.html", {"form": form})
             login(request, user)
             _reset_auth_throttle(request, LOGIN_THROTTLE_SCOPE)
             next_url = request.GET.get("next")
@@ -316,6 +389,8 @@ def admin_dashboard(request):
 
     # Admin-specific data
     fans = CustomUser.objects.filter(role=Role.FAN).order_by("username")
+    managed_users = CustomUser.objects.exclude(role=Role.ADMIN).order_by("role", "username")
+    otp_users = managed_users.filter(is_active=True, is_suspended_by_admin=False)
     generated_otp = None  # Store OTP to display in template
     generated_voucher = None  # Store OTP to display in template
     voting_token_policy = VotingTokenPolicy.current()
@@ -391,6 +466,19 @@ def admin_dashboard(request):
             messages.success(
                 request, f"Disapproved {len(content_ids)} content items for voting."
             )
+        elif action == "reset_content_votes" and content_ids:
+            contents = Content.objects.filter(id__in=content_ids)
+            vote_count = Vote.objects.filter(content__in=contents).delete()[0]
+            rating_count = 0
+            for content in contents:
+                rating_count += reset_content_rating_chat_access(content)
+            messages.success(
+                request,
+                (
+                    f"Reset {vote_count} vote(s) and {rating_count} chat unlock(s) "
+                    "for selected content."
+                ),
+            )
 
         if action == "approve" and content_ids:
             Content.objects.filter(id__in=content_ids).update(is_approved=True)
@@ -425,8 +513,100 @@ def admin_dashboard(request):
             voting_token_policy.updated_by = request.user
             voting_token_policy.save(update_fields=["tokens_paused", "updated_by", "updated_at"])
             messages.success(request, "Voting tokens resumed. Fans must use OTP codes to vote.")
+        elif token_policy_action == "suspend_voting":
+            voting_token_policy.voting_suspended = True
+            voting_token_policy.updated_by = request.user
+            voting_token_policy.save(update_fields=["voting_suspended", "updated_by", "updated_at"])
+            messages.warning(request, "Voting suspended. Fans cannot vote until voting is resumed.")
+        elif token_policy_action == "resume_voting":
+            voting_token_policy.voting_suspended = False
+            voting_token_policy.updated_by = request.user
+            voting_token_policy.save(update_fields=["voting_suspended", "updated_by", "updated_at"])
+            messages.success(request, "Voting resumed.")
         else:
             messages.error(request, "Invalid token policy action.")
+        return redirect("admin_dashboard")
+
+    if request.method == "POST" and request.POST.get("user_access_action"):
+        access_action = request.POST.get("user_access_action")
+        user = get_object_or_404(
+            CustomUser.objects.exclude(role=Role.ADMIN),
+            id=request.POST.get("user_id"),
+        )
+
+        if access_action == "grant_free_pass":
+            user.has_free_pass = True
+            user.save(update_fields=["has_free_pass"])
+            messages.success(request, f"Free pass granted to {user.username}.")
+        elif access_action == "revoke_free_pass":
+            user.has_free_pass = False
+            user.save(update_fields=["has_free_pass"])
+            messages.success(request, f"Free pass revoked for {user.username}.")
+        elif access_action == "suspend":
+            user.is_suspended_by_admin = True
+            user.save(update_fields=["is_suspended_by_admin"])
+            messages.warning(request, f"{user.username} has been suspended.")
+        elif access_action == "reinstate":
+            user.is_suspended_by_admin = False
+            user.save(update_fields=["is_suspended_by_admin"])
+            messages.success(request, f"{user.username} has been reinstated.")
+        else:
+            messages.error(request, "Invalid user access action.")
+
+        return redirect("admin_dashboard")
+
+    if request.method == "POST" and request.POST.get("peer_chat_action"):
+        peer_chat_action = request.POST.get("peer_chat_action")
+        first_user = get_object_or_404(
+            CustomUser.objects.exclude(role=Role.ADMIN),
+            id=request.POST.get("first_user_id"),
+        )
+        second_user = get_object_or_404(
+            CustomUser.objects.exclude(role=Role.ADMIN),
+            id=request.POST.get("second_user_id"),
+        )
+
+        try:
+            if peer_chat_action == "allow":
+                allow_peer_chat_by_admin(first_user, second_user, request.user)
+                messages.success(
+                    request,
+                    f"Chat unlocked for {first_user.username} and {second_user.username}.",
+                )
+            elif peer_chat_action == "revoke":
+                revoke_admin_peer_chat(first_user, second_user)
+                messages.warning(
+                    request,
+                    (
+                        f"Admin chat override revoked for {first_user.username} "
+                        f"and {second_user.username}."
+                    ),
+                )
+            else:
+                messages.error(request, "Invalid peer chat action.")
+        except ValueError as exc:
+            messages.error(request, str(exc))
+
+        return redirect("admin_dashboard")
+
+    if request.method == "POST" and request.POST.get("artist_limit_action"):
+        limit = get_object_or_404(
+            ArtistUploadLimit.objects.select_related("artist"),
+            artist_id=request.POST.get("artist_id"),
+        )
+        limit_action = request.POST.get("artist_limit_action")
+
+        if limit_action == "suspend_uploads":
+            limit.suspended_by_admin = True
+            limit.save(update_fields=["suspended_by_admin"])
+            messages.warning(request, f"Uploads suspended for {limit.artist.username}.")
+        elif limit_action == "reinstate_uploads":
+            limit.suspended_by_admin = False
+            limit.save(update_fields=["suspended_by_admin"])
+            messages.success(request, f"Uploads reinstated for {limit.artist.username}.")
+        else:
+            messages.error(request, "Invalid artist upload action.")
+
         return redirect("admin_dashboard")
 
     # Handle OTP access controls
@@ -441,41 +621,63 @@ def admin_dashboard(request):
         except (TypeError, ValueError):
             vote_count = 1
 
-        fan = get_object_or_404(CustomUser, id=user_id, role=Role.FAN)
-        otp, _ = OTP.objects.get_or_create(
-            user=fan,
-            defaults={
-                "otp_code": generate_otp(),
-                "remaining_votes": 0,
-                "is_active": True,
-            },
-        )
+        otp_user = get_object_or_404(otp_users, id=user_id)
 
-        if otp_action == "grant":
-            otp.reset_votes(votes=vote_count, regenerate_code=generate_otp())
-            generated_otp = otp.otp_code
+        try:
+            otp, generated_otp = _apply_otp_management_action(
+                user=otp_user,
+                admin_user=request.user,
+                action=otp_action,
+                vote_count=vote_count,
+                regenerate_code=regenerate_code,
+            )
+        except ValueError:
+            messages.error(request, "Invalid OTP action.")
+            return redirect("admin_dashboard")
+
+        if otp_action == "cancel":
+            messages.warning(request, f"Cancelled OTP access for {otp_user.username}.")
+        else:
             messages.success(
                 request,
-                f"OTP access granted to {fan.username} with {vote_count} vote(s).",
+                (
+                    f"OTP {otp_action} applied to {otp_user.username}: "
+                    f"{otp.otp_code} with {otp.remaining_votes} vote(s)."
+                ),
             )
-        elif otp_action == "extend":
-            otp.grant_votes(votes=vote_count)
-            messages.success(
-                request, f"Extended {fan.username}'s OTP by {vote_count} vote(s)."
-            )
-        elif otp_action == "cancel":
-            otp.cancel_access()
-            messages.warning(request, f"Cancelled OTP access for {fan.username}.")
-        elif otp_action == "reset":
-            new_code = generate_otp() if regenerate_code else None
-            otp.reset_votes(votes=vote_count, regenerate_code=new_code)
-            generated_otp = otp.otp_code
-            messages.success(
-                request, f"Reset OTP votes for {fan.username} to {vote_count}."
-            )
-        else:
-            messages.error(request, "Invalid OTP action.")
 
+        return redirect("admin_dashboard")
+
+    if request.method == "POST" and request.POST.get("bulk_otp_action"):
+        bulk_action = request.POST.get("bulk_otp_action")
+        selected_ids = request.POST.getlist("bulk_user_ids")
+        vote_count = _positive_int(request.POST.get("bulk_vote_count"), 1)
+        regenerate_code = request.POST.get("bulk_regenerate_code") == "1"
+        selected_users = list(otp_users.filter(id__in=selected_ids))
+
+        if not selected_users:
+            messages.error(request, "Select at least one active non-admin user.")
+            return redirect("admin_dashboard")
+
+        updated_count = 0
+        for selected_user in selected_users:
+            try:
+                _apply_otp_management_action(
+                    user=selected_user,
+                    admin_user=request.user,
+                    action=bulk_action,
+                    vote_count=vote_count,
+                    regenerate_code=regenerate_code,
+                )
+                updated_count += 1
+            except ValueError:
+                messages.error(request, "Invalid bulk OTP action.")
+                return redirect("admin_dashboard")
+
+        messages.success(
+            request,
+            f"Bulk OTP {bulk_action} completed for {updated_count} user(s).",
+        )
         return redirect("admin_dashboard")
 
     if request.method == "POST" and "generate_voucher" in request.POST:
@@ -522,17 +724,23 @@ def admin_dashboard(request):
 
     otp_by_user = {
         otp.user_id: otp
-        for otp in OTP.objects.filter(user__in=fans).select_related("user")
+        for otp in OTP.objects.filter(user__in=otp_users).select_related("user")
     }
-    fan_otp_statuses = [{"fan": fan, "otp": otp_by_user.get(fan.id)} for fan in fans]
+    otp_user_statuses = [{"user": user, "otp": otp_by_user.get(user.id)} for user in otp_users]
 
     # Prepare context
     context = {
         "announcements": announcements,
         "artists": artists,
         "fans": fans,
+        "otp_users": otp_users,
+        "managed_users": managed_users,
+        "peer_chat_overrides": PeerChatThread.objects.filter(
+            admin_approved=True,
+        ).select_related("user_one", "user_two", "approved_by"),
         "generated_otp": generated_otp,
-        "fan_otp_statuses": fan_otp_statuses,
+        "fan_otp_statuses": [{"fan": fan, "otp": otp_by_user.get(fan.id)} for fan in fans],
+        "otp_user_statuses": otp_user_statuses,
         "generated_voucher": generated_voucher,
         "voting_token_policy": voting_token_policy,
         "recent_uploads": recent_uploads.order_by("-upload_date")[:10],
@@ -668,7 +876,7 @@ def artist_content(request, artist_id):
     # Other users can only see approved content.
     artist_content = Content.objects.filter(artist=artist).order_by("-upload_date")
     if request.user != artist and not request.user.is_admin():
-        artist_content = artist_content.filter(is_approved=True)
+        artist_content = artist_content.filter(is_approved=True, is_visible=True)
 
     # Pass the artist and their content to the template
     context = {
@@ -732,19 +940,54 @@ def _profile_context(profile_user, viewer, form):
             )
 
     if profile_user.is_artist():
+        user_content = Content.objects.filter(artist=profile_user)
+        if profile_user != viewer and not viewer.is_admin():
+            user_content = user_content.filter(is_approved=True, is_visible=True)
         context.update(
             {
-                "user_content": Content.objects.filter(artist=profile_user),
+                "user_content": user_content,
                 "is_artist": True,
             }
         )
+
+    if profile_user != viewer and not viewer.is_admin() and not profile_user.is_admin():
+        try:
+            from chatapp.models import MatchRating
+            from chatapp.services import get_match_score, users_can_peer_chat
+
+            context.update(
+                {
+                    "viewer_match_rating": MatchRating.objects.filter(
+                        rater=viewer,
+                        rated=profile_user,
+                    ).first(),
+                    "profile_user_match_rating": MatchRating.objects.filter(
+                        rater=profile_user,
+                        rated=viewer,
+                    ).first(),
+                    "can_peer_chat": users_can_peer_chat(viewer, profile_user),
+                    "match_score": get_match_score(viewer, profile_user),
+                }
+            )
+        except Exception:
+            context.update(
+                {
+                    "viewer_match_rating": None,
+                    "profile_user_match_rating": None,
+                    "can_peer_chat": False,
+                    "match_score": None,
+                }
+            )
     else:
         context.update(
             {
                 "followed_artists": profile_user.following.filter(
                     following__role=Role.ARTIST
                 ).select_related("following"),
-                "is_artist": False,
+                "can_peer_chat": False,
+                "match_score": None,
+                "viewer_match_rating": None,
+                "profile_user_match_rating": None,
             }
         )
 
@@ -799,6 +1042,7 @@ def user_profile(request, user_id):
 
 
 @login_required
+@require_POST
 def follow_user(request, user_id):
     user_to_follow = get_object_or_404(CustomUser, id=user_id)
     if request.user != user_to_follow:
@@ -808,6 +1052,7 @@ def follow_user(request, user_id):
 
 
 @login_required
+@require_POST
 def unfollow_user(request, user_id):
     user_to_unfollow = get_object_or_404(CustomUser, id=user_id)
     Follow.objects.filter(follower=request.user, following=user_to_unfollow).delete()
@@ -887,13 +1132,34 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
 
 
 @login_required
+@require_POST
 def toggle_content_voting(request, content_id, action):
     if not request.user.has_role(Role.ADMIN):
         return HttpResponseForbidden()
 
     content = get_object_or_404(Content, id=content_id)
+    if action == "reset":
+        vote_count = Vote.objects.filter(content=content).delete()[0]
+        rating_count = reset_content_rating_chat_access(content)
+        messages.success(
+            request,
+            (
+                f"Reset {vote_count} vote(s) and {rating_count} chat unlock(s) "
+                f"for {content.title}."
+            ),
+        )
+        return redirect("admin_dashboard")
+
+    if action not in {"approve", "disapprove"}:
+        messages.error(request, "Invalid voting action.")
+        return redirect("admin_dashboard")
+
     content.is_approved_for_voting = action == "approve"
-    content.save()
+    content.save(update_fields=["is_approved_for_voting"])
+    messages.success(
+        request,
+        f"Voting {'approved' if content.is_approved_for_voting else 'disapproved'} for {content.title}.",
+    )
     return redirect("admin_dashboard")
 
 
@@ -923,7 +1189,7 @@ def search_results(request):
         # Search for content
         content = Content.objects.filter(
             Q(title__icontains=query) | Q(description__icontains=query)
-        )
+        ).filter(is_approved=True, is_visible=True)
 
     return render(
         request,
@@ -967,6 +1233,7 @@ def dismiss_announcement(request, announcement_id):
 
 
 @login_required
+@require_POST
 def delete_announcement(request, announcement_id):
     if not request.user.has_role(Role.ADMIN):
         return redirect("dashboard")

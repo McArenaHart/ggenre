@@ -10,7 +10,7 @@ const PRECACHE_URLS = [
   "/manifest.webmanifest",
   "{% url 'content_list' %}",
   "{% url 'artist_list' %}",
-  "{% url 'live_stream_index' %}",
+  "{% url 'livestream:index' %}",
   OFFLINE_URL,
   "{% static 'css/styles.css' %}",
   "{% static 'css/app-shell.css' %}",

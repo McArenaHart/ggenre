@@ -1,0 +1,76 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Admin Chat Inbox{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260620a" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid chat-page">
+  <header class="chat-header">
+    <div>
+      <h1>Admin Inbox</h1>
+      <p>User support conversations</p>
+    </div>
+    <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-primary">
+      <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
+      <span>Admin Dashboard</span>
+    </a>
+  </header>
+
+  <section class="chat-inbox-shell chat-admin-inbox-shell" aria-label="Admin chat inbox">
+    <aside class="chat-inbox-sidebar">
+      <div class="chat-inbox-toolbar">
+        <div>
+          <h2>Conversations</h2>
+          <span>{{ thread_count }} thread{{ thread_count|pluralize }}</span>
+        </div>
+        {% if total_unread %}
+          <span class="chat-unread-badge">{{ total_unread }}</span>
+        {% endif %}
+      </div>
+
+      <div class="chat-peer-list">
+        {% for thread in threads %}
+          <a class="chat-peer-row {% if thread.unread_count %}is-unread{% endif %}" href="{% url 'chatapp:direct' thread.user.id %}">
+            {% include "partials/user_avatar.html" with avatar_user=thread.user size=44 class_name="chat-inbox-avatar" alt_text=thread.user.username %}
+            <span class="chat-peer-main">
+              <span class="chat-peer-name">{{ thread.user.username }}</span>
+              <span class="chat-peer-meta">
+                {{ thread.user.get_role_display }} &middot; <time datetime="{{ thread.last_contact_at|date:'c' }}">{{ thread.last_contact_at|date:"M d, H:i" }}</time>
+              </span>
+            </span>
+            <span class="chat-peer-state">
+              {% if thread.unread_count %}
+                <span class="chat-unread-badge">{{ thread.unread_count }}</span>
+              {% else %}
+                <i class="fas fa-chevron-right" aria-hidden="true"></i>
+              {% endif %}
+            </span>
+          </a>
+        {% empty %}
+          <div class="app-empty chat-empty-state">
+            <i class="fas fa-inbox" aria-hidden="true"></i>
+            <strong>No admin chat messages yet.</strong>
+            <span>When users contact admin from the floating chat, their thread will appear here.</span>
+          </div>
+        {% endfor %}
+      </div>
+    </aside>
+
+    <section class="chat-inbox-preview" aria-label="Admin inbox status">
+      <div class="chat-preview-icon">
+        <i class="fas fa-headset" aria-hidden="true"></i>
+      </div>
+      <h2>Select a support chat</h2>
+      <p>Open a user conversation to reply from the admin account.</p>
+      <div class="chat-preview-stats">
+        <span>{{ thread_count }} total</span>
+        <span>{{ total_unread }} unread</span>
+      </div>
+    </section>
+  </section>
+</div>
+{% endblock %}

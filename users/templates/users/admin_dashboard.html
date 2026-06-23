@@ -4,7 +4,7 @@
 {% block title %}Admin Dashboard{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/users-admin-dashboard.css' %}?v=20260227a" rel="stylesheet" />
+<link href="{% static 'css/pages/users-admin-dashboard.css' %}?v=20260623otp1" rel="stylesheet" />
 {% endblock extra_css %}
 
 {% block content %}
@@ -21,6 +21,30 @@
           <div class="clearfix"></div>
         </div>
         <div class="x_content">
+          {% if voting_token_policy.voting_suspended %}
+            <div class="alert alert-danger">
+              Voting is suspended. Vote buttons are hidden and direct vote requests are blocked.
+            </div>
+            <form method="POST" class="mb-3">
+              {% csrf_token %}
+              <input type="hidden" name="token_policy_action" value="resume_voting">
+              <button type="submit" class="btn btn-success">
+                <i class="fas fa-play-circle"></i> Resume All Voting
+              </button>
+            </form>
+          {% else %}
+            <div class="alert alert-success">
+              Voting is active. Per-content voting approval and OTP rules still apply.
+            </div>
+            <form method="POST" class="mb-3">
+              {% csrf_token %}
+              <input type="hidden" name="token_policy_action" value="suspend_voting">
+              <button type="submit" class="btn btn-danger">
+                <i class="fas fa-ban"></i> Suspend All Voting
+              </button>
+            </form>
+          {% endif %}
+
           {% if voting_token_policy.tokens_paused %}
             <div class="alert alert-warning">
               OTP tokens are paused. Fans can vote without OTP codes while normal ranking rules still apply.
@@ -205,7 +229,82 @@
       </div>
     </div>
   </div>
-</div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-12 col-sm-12 col-xs-12">
+      <div class="x_panel">
+        <div class="x_title">
+          <h2>Peer Chat Access</h2>
+          <div class="clearfix"></div>
+        </div>
+        <div class="x_content">
+          <form method="post" class="admin-peer-chat-form">
+            {% csrf_token %}
+            <input type="hidden" name="peer_chat_action" value="allow">
+            <div class="form-group">
+              <label for="peer_chat_first_user">First user</label>
+              <select id="peer_chat_first_user" name="first_user_id" class="form-control" required>
+                {% for managed_user in managed_users %}
+                  <option value="{{ managed_user.id }}">{{ managed_user.username }} - {{ managed_user.get_role_display }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="peer_chat_second_user">Second user</label>
+              <select id="peer_chat_second_user" name="second_user_id" class="form-control" required>
+                {% for managed_user in managed_users %}
+                  <option value="{{ managed_user.id }}">{{ managed_user.username }} - {{ managed_user.get_role_display }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary">
+              <i class="fa fa-unlock"></i> Allow Peer Chat
+            </button>
+          </form>
+
+          <div class="table-responsive">
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th>User One</th>
+                  <th>User Two</th>
+                  <th>Approved By</th>
+                  <th>Approved At</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for thread in peer_chat_overrides %}
+                  <tr>
+                    <td>{{ thread.user_one.username }}</td>
+                    <td>{{ thread.user_two.username }}</td>
+                    <td>{{ thread.approved_by.username|default:"Admin" }}</td>
+                    <td>{{ thread.approved_at|date:"M d, Y H:i"|default:"-" }}</td>
+                    <td>
+                      <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="peer_chat_action" value="revoke">
+                        <input type="hidden" name="first_user_id" value="{{ thread.user_one.id }}">
+                        <input type="hidden" name="second_user_id" value="{{ thread.user_two.id }}">
+                        <button type="submit" class="btn btn-warning btn-sm">
+                          <i class="fa fa-lock"></i> Revoke Override
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="5" class="text-center">No admin-unlocked peer chats.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
 
   <!-- Search and Filter Section -->
@@ -263,13 +362,15 @@
           </select>
 
           <!-- Content Table -->
-          <div class="table-responsive">
+          <div class="table-responsive admin-content-table-wrap">
             <table class="table table-striped" id="contentTable">
               <thead>
                 <tr>
                   <th>Title</th>
                   <th>Artist</th>
                   <th>Status</th>
+                  <th>Visibility</th>
+                  <th>Voting</th>
                   <th>Category</th>
                   <th>Uploaded On</th>
                   <th>Actions</th>
@@ -287,45 +388,95 @@
                         <span class="label label-warning">Pending</span>
                       {% endif %}
                     </td>
+                    <td>
+                      {% if content.is_visible %}
+                        <span class="label label-success">Visible</span>
+                      {% else %}
+                        <span class="label label-danger">Hidden</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if content.is_approved_for_voting %}
+                        <span class="label label-success">Open</span>
+                      {% else %}
+                        <span class="label label-default">Closed</span>
+                      {% endif %}
+                    </td>
                     <td>{{ content.category }}</td>
                     <td>{{ content.upload_date }}</td>
-                    <!-- Updated Actions Dropdown -->
+                    <!-- Content Actions -->
 <td>
-  <div class="btn-group">
-    <button type="button" class="btn btn-sm btn-default dropdown-toggle" data-toggle="dropdown">
-      Actions <span class="caret"></span>
-    </button>
-    <ul class="dropdown-menu dropdown-menu-right custom-dropdown">
-      <li>
-        <a href="{% url 'toggle_content_approval' content.id 'approve' %}" class="approve">
-          <i class="fa fa-check text-success"></i> Approve Content
-        </a>
-      </li>
-      <li>
-        <a href="{% url 'toggle_content_approval' content.id 'disapprove' %}" class="disapprove">
-          <i class="fa fa-times text-danger"></i> Disapprove Content
-        </a>
-      </li>
-      <li class="divider"></li>
+  <details class="admin-actions-menu">
+    <summary class="admin-actions-toggle">
+      Actions
+      <span class="caret"></span>
+    </summary>
+    <div class="custom-dropdown">
+      <div class="admin-dropdown-scroll">
+        <div class="admin-dropdown-section">
+          <a class="admin-dropdown-action" href="{% url 'content_detail' content.id %}">
+            <i class="fa fa-eye text-info"></i> View
+          </a>
+        </div>
+        <div class="admin-dropdown-section">
+          <form method="post" action="{% url 'toggle_content_approval' content.id 'approve' %}">
+            {% csrf_token %}
+            <button type="submit" class="admin-dropdown-action approve">
+              <i class="fa fa-check text-success"></i> Approve Content
+            </button>
+          </form>
+          <form method="post" action="{% url 'toggle_content_approval' content.id 'disapprove' %}">
+            {% csrf_token %}
+            <button type="submit" class="admin-dropdown-action disapprove">
+              <i class="fa fa-times text-danger"></i> Disapprove Content
+            </button>
+          </form>
+        </div>
 
-      <li>
-        <a href="{% url 'toggle_content_voting' content.id 'approve' %}" class="vote-approve">
-          <i class="fa fa-thumbs-up text-primary"></i> Approve Voting
-        </a>
-      </li>
-      <li>
-        <a href="{% url 'toggle_content_voting' content.id 'disapprove' %}" class="vote-disapprove">
-          <i class="fa fa-thumbs-down text-warning"></i> Disapprove Voting
-        </a>
-      </li>
-    </ul>
-  </div>
+        <div class="admin-dropdown-section">
+          <form method="post" action="{% url 'toggle_content_visibility' content.id 'show' %}">
+            {% csrf_token %}
+            <button type="submit" class="admin-dropdown-action">
+              <i class="fa fa-eye text-success"></i> Show Content
+            </button>
+          </form>
+          <form method="post" action="{% url 'toggle_content_visibility' content.id 'hide' %}">
+            {% csrf_token %}
+            <button type="submit" class="admin-dropdown-action">
+              <i class="fa fa-eye-slash text-danger"></i> Hide Content
+            </button>
+          </form>
+        </div>
+
+        <div class="admin-dropdown-section">
+          <form method="post" action="{% url 'toggle_content_voting' content.id 'approve' %}">
+            {% csrf_token %}
+            <button type="submit" class="admin-dropdown-action vote-approve">
+              <i class="fa fa-thumbs-up text-primary"></i> Approve Voting
+            </button>
+          </form>
+          <form method="post" action="{% url 'toggle_content_voting' content.id 'disapprove' %}">
+            {% csrf_token %}
+            <button type="submit" class="admin-dropdown-action vote-disapprove">
+              <i class="fa fa-thumbs-down text-warning"></i> Disapprove Voting
+            </button>
+          </form>
+          <form method="post" action="{% url 'toggle_content_voting' content.id 'reset' %}">
+            {% csrf_token %}
+            <button type="submit" class="admin-dropdown-action vote-reset">
+              <i class="fa fa-refresh text-danger"></i> Reset Votes & Chats
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </details>
 </td>
 
                   </tr>
                 {% empty %}
                   <tr>
-                    <td colspan="6" class="text-center">No content found.</td>
+                    <td colspan="8" class="text-center">No content found.</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -356,6 +507,8 @@
                     <th>Artist</th>
                     <th>Uploads Used</th>
                     <th>Upload Limit</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -365,6 +518,28 @@
                       <td>{{ artist.artist.username }}</td>
                       <td>{{ artist.uploads_used }}</td>
                       <td>{{ artist.upload_limit }}</td>
+                      <td>
+                        {% if artist.suspended_by_admin %}
+                          <span class="label label-danger">Suspended</span>
+                        {% else %}
+                          <span class="label label-success">Active</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        <form method="post" class="d-inline">
+                          {% csrf_token %}
+                          <input type="hidden" name="artist_id" value="{{ artist.artist.id }}">
+                          {% if artist.suspended_by_admin %}
+                            <button type="submit" name="artist_limit_action" value="reinstate_uploads" class="btn btn-success btn-sm">
+                              Reinstate Uploads
+                            </button>
+                          {% else %}
+                            <button type="submit" name="artist_limit_action" value="suspend_uploads" class="btn btn-danger btn-sm">
+                              Suspend Uploads
+                            </button>
+                          {% endif %}
+                        </form>
+                      </td>
                     </tr>
                   {% endfor %}
                 </tbody>
@@ -377,35 +552,136 @@
     </div>
   </div>
 
-  <!-- OTP Generation Form -->
+  <!-- User Access Controls -->
+  <div class="row">
+    <div class="col-md-12 col-sm-12 col-xs-12">
+      <div class="x_panel">
+        <div class="x_title">
+          <h2>User Access Controls</h2>
+          <div class="clearfix"></div>
+        </div>
+        <div class="x_content">
+          <div class="table-responsive">
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Free Pass</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for managed_user in managed_users %}
+                  <tr>
+                    <td>{{ managed_user.username }}</td>
+                    <td>{{ managed_user.get_role_display }}</td>
+                    <td>
+                      {% if managed_user.has_free_pass %}
+                        <span class="label label-success">Enabled</span>
+                      {% else %}
+                        <span class="label label-default">Off</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if managed_user.is_suspended_by_admin %}
+                        <span class="label label-danger">Suspended</span>
+                      {% else %}
+                        <span class="label label-success">Active</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <div class="btn-group btn-group-sm" role="group">
+                        <a href="{% url 'user_profile' managed_user.id %}" class="btn btn-default">
+                          <i class="fa fa-eye"></i> View
+                        </a>
+                        <form method="post" class="d-inline">
+                          {% csrf_token %}
+                          <input type="hidden" name="user_id" value="{{ managed_user.id }}">
+                          {% if managed_user.has_free_pass %}
+                            <button type="submit" name="user_access_action" value="revoke_free_pass" class="btn btn-warning">
+                              Revoke Free Pass
+                            </button>
+                          {% else %}
+                            <button type="submit" name="user_access_action" value="grant_free_pass" class="btn btn-primary">
+                              Grant Free Pass
+                            </button>
+                          {% endif %}
+                        </form>
+                        <form method="post" class="d-inline">
+                          {% csrf_token %}
+                          <input type="hidden" name="user_id" value="{{ managed_user.id }}">
+                          {% if managed_user.is_suspended_by_admin %}
+                            <button type="submit" name="user_access_action" value="reinstate" class="btn btn-success">
+                              Reinstate
+                            </button>
+                          {% else %}
+                            <button type="submit" name="user_access_action" value="suspend" class="btn btn-danger">
+                              Suspend
+                            </button>
+                          {% endif %}
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="5" class="text-center">No users available.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OTP Management -->
 <div class="row">
   <div class="col-md-12 col-sm-12 col-xs-12">
       <div class="x_panel">
           <div class="x_title">
-              <h2>Generate OTP for Fan</h2>
+              <h2>Voting OTP Manager</h2>
               <div class="clearfix"></div>
           </div>
           <div class="x_content">
-              <form method="POST">
+              <form method="POST" class="mb-4">
                   {% csrf_token %}
-                  <input type="hidden" name="generate_otp" value="1">
-
                   <div class="form-group">
-                    <label>Select Fan:</label>
-                    <select name="user_id" class="form-control" required>
-                        {% for fan in fans %}
-                        <option value="{{ fan.id }}">{{ fan.username }}</option>
+                    <label>Select Users</label>
+                    <select name="bulk_user_ids" class="form-control" multiple required size="8">
+                        {% for otp_user in otp_users %}
+                        <option value="{{ otp_user.id }}">{{ otp_user.username }} &mdash; {{ otp_user.get_role_display }}</option>
                         {% endfor %}
                     </select>
+                    <small class="form-text">Hold Ctrl or Cmd to select multiple users.</small>
                   </div>
-                
 
                   <div class="form-group">
-                      <label>Number of Votes:</label>
-                      <input type="number" name="remaining_votes" class="form-control" required min="1">
+                    <label>Bulk Action</label>
+                    <select name="bulk_otp_action" class="form-control" required>
+                      <option value="grant">Generate new OTP and reset votes</option>
+                      <option value="extend">Extend existing OTP votes</option>
+                      <option value="reset">Reset votes on existing OTP</option>
+                      <option value="cancel">Cancel OTP access</option>
+                    </select>
                   </div>
 
-                  <button type="submit" class="btn btn-primary">Generate OTP</button>
+                  <div class="form-group">
+                      <label>Number of Votes</label>
+                      <input type="number" name="bulk_vote_count" class="form-control" value="1" required min="1">
+                  </div>
+
+                  <div class="custom-control custom-checkbox mb-3">
+                    <input type="checkbox" class="custom-control-input" id="bulk_regenerate_code" name="bulk_regenerate_code" value="1">
+                    <label class="custom-control-label" for="bulk_regenerate_code">Regenerate code when resetting existing OTPs</label>
+                  </div>
+
+                  <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-paper-plane"></i> Apply and Send via Contact Admin
+                  </button>
               </form>
 
               {% if generated_otp %}
@@ -413,6 +689,53 @@
                   <strong>OTP Generated:</strong> {{ generated_otp }}
               </div>
               {% endif %}
+
+              <div class="table-responsive">
+                <table class="table table-striped">
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Role</th>
+                      <th>OTP</th>
+                      <th>Votes</th>
+                      <th>Status</th>
+                      <th>Single User Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in otp_user_statuses %}
+                      <tr>
+                        <td>{{ row.user.username }}</td>
+                        <td>{{ row.user.get_role_display }}</td>
+                        <td>{% if row.otp %}{{ row.otp.otp_code }}{% else %}-{% endif %}</td>
+                        <td>{% if row.otp %}{{ row.otp.remaining_votes }}{% else %}0{% endif %}</td>
+                        <td>
+                          {% if row.otp and row.otp.is_active and row.otp.remaining_votes > 0 %}
+                            <span class="badge badge-success">Active</span>
+                          {% else %}
+                            <span class="badge badge-secondary">Inactive</span>
+                          {% endif %}
+                        </td>
+                        <td>
+                          <form method="POST" class="admin-otp-inline-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="user_id" value="{{ row.user.id }}">
+                            <input type="number" name="vote_count" class="form-control" value="1" min="1" aria-label="Vote count">
+                            <button type="submit" name="otp_action" value="grant" class="btn btn-primary btn-sm">Generate</button>
+                            <button type="submit" name="otp_action" value="extend" class="btn btn-info btn-sm">Extend</button>
+                            <button type="submit" name="otp_action" value="reset" class="btn btn-warning btn-sm">Reset</button>
+                            <button type="submit" name="otp_action" value="cancel" class="btn btn-danger btn-sm">Cancel</button>
+                          </form>
+                        </td>
+                      </tr>
+                    {% empty %}
+                      <tr>
+                        <td colspan="6" class="text-center text-muted">No active users available for OTP management.</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
           </div>
       </div>
   </div>

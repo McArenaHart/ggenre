@@ -40,6 +40,8 @@ class CustomUser(AbstractUser):
     subscription_expiry = models.DateField(null=True, blank=True)
     wants_to_participate = models.BooleanField(default=False)
     can_download_content = models.BooleanField(default=False)
+    has_free_pass = models.BooleanField(default=False)
+    is_suspended_by_admin = models.BooleanField(default=False)
 
     def notify_admin(self):
         """
@@ -75,7 +77,7 @@ class CustomUser(AbstractUser):
         if self.profile_picture:
             return self.profile_picture.url
         else:
-            return "/static/defaults/profile.png"  # Ensure this path exists
+            return "/static/img/user.png"
 
     def __str__(self):
         return self.username
@@ -158,6 +160,7 @@ class OTP(models.Model):
 
 class VotingTokenPolicy(models.Model):
     tokens_paused = models.BooleanField(default=False)
+    voting_suspended = models.BooleanField(default=False)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -180,7 +183,13 @@ class VotingTokenPolicy(models.Model):
     def tokens_are_paused(cls):
         return cls.current().tokens_paused
 
+    @classmethod
+    def voting_is_suspended(cls):
+        return cls.current().voting_suspended
+
     def __str__(self):
+        if self.voting_suspended:
+            return "Voting suspended"
         status = "paused" if self.tokens_paused else "required"
         return f"Voting tokens {status}"
 

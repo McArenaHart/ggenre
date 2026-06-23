@@ -1,0 +1,74 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Messages{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260620a" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid chat-page">
+  <header class="chat-header">
+    <div>
+      <h1>Messages</h1>
+      <p>Unlocked conversations</p>
+    </div>
+  </header>
+
+  <section class="chat-inbox-shell" aria-label="Peer inbox">
+    <aside class="chat-inbox-sidebar">
+      <div class="chat-inbox-toolbar">
+        <div>
+          <h2>Inbox</h2>
+          <span>{{ thread_count }} conversation{{ thread_count|pluralize }}</span>
+        </div>
+        {% if total_unread %}
+          <span class="chat-unread-badge">{{ total_unread }}</span>
+        {% endif %}
+      </div>
+
+      <div class="chat-peer-list">
+        {% for row in thread_rows %}
+          <a class="chat-peer-row {% if row.unread_count %}is-unread{% endif %}" href="{% url 'chatapp:direct' row.user.id %}">
+            {% include "partials/user_avatar.html" with avatar_user=row.user size=46 class_name="chat-inbox-avatar" alt_text=row.user.username %}
+            <span class="chat-peer-main">
+              <span class="chat-peer-name">{{ row.user.username }}</span>
+              <span class="chat-peer-meta">
+                {% if row.unread_count %}
+                  New message
+                {% else %}
+                  Last active <time datetime="{{ row.thread.last_contact_at|date:'c' }}">{{ row.thread.last_contact_at|date:"M d, H:i" }}</time>
+                {% endif %}
+              </span>
+            </span>
+            <span class="chat-peer-state">
+              {% if row.unread_count %}
+                <span class="chat-unread-badge">{{ row.unread_count }}</span>
+              {% else %}
+                <i class="fas fa-chevron-right" aria-hidden="true"></i>
+              {% endif %}
+            </span>
+          </a>
+        {% endfor %}
+
+        {% if not thread_rows %}
+          <div class="app-empty chat-empty-state">
+            <i class="fas fa-comments" aria-hidden="true"></i>
+            <strong>No unlocked chats yet.</strong>
+            <span>Matched users and admin-approved conversations will appear here.</span>
+          </div>
+        {% endif %}
+      </div>
+    </aside>
+
+    <section class="chat-inbox-preview" aria-label="Inbox status">
+      <div class="chat-preview-icon">
+        <i class="fas fa-comments" aria-hidden="true"></i>
+      </div>
+      <h2>Select a conversation</h2>
+      <p>Choose a person from the inbox to open your chat.</p>
+    </section>
+  </section>
+</div>
+{% endblock %}

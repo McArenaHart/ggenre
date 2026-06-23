@@ -1,0 +1,173 @@
+import json
+
+from asgiref.sync import sync_to_async
+from channels.generic.websocket import AsyncWebsocketConsumer
+from django.contrib.auth import get_user_model
+from django.db.models import F
+from django.utils import timezone
+
+from users.models import Notification, Role
+
+from .models import AdminChatThread, PeerChatThread
+from .services import users_can_peer_chat
+
+User = get_user_model()
+
+
+class DirectChatConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.user = self.scope["user"]
+        self.other_user_id = int(self.scope["url_route"]["kwargs"]["user_id"])
+
+        if not self.user.is_authenticated:
+            await self.close(code=4401)
+            return
+        if getattr(self.user, "is_suspended_by_admin", False):
+            await self.close(code=4403)
+            return
+
+        self.other_user = await self.get_other_user()
+        if not self.other_user or self.other_user.id == self.user.id:
+            await self.close(code=4403)
+            return
+
+        self.is_user_contacting_admin = self.other_user.has_role(
+            Role.ADMIN
+        ) and not self.user.has_role(Role.ADMIN)
+        self.is_admin_replying_to_user = self.user.has_role(
+            Role.ADMIN
+        ) and not self.other_user.has_role(Role.ADMIN)
+        self.is_peer_chat = (
+            not self.user.has_role(Role.ADMIN)
+            and not self.other_user.has_role(Role.ADMIN)
+            and await self.can_peer_chat()
+        )
+        if not (
+            self.is_user_contacting_admin
+            or self.is_admin_replying_to_user
+            or self.is_peer_chat
+        ):
+            await self.close(code=4403)
+            return
+
+        user_ids = sorted([self.user.id, self.other_user.id])
+        self.group_name = f"direct_chat_{user_ids[0]}_{user_ids[1]}"
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        if hasattr(self, "group_name"):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def receive(self, text_data=None, bytes_data=None):
+        if not text_data:
+            return
+
+        try:
+            data = json.loads(text_data)
+        except json.JSONDecodeError:
+            return
+
+        body = (data.get("message") or "").strip()
+        if not body:
+            return
+
+        if self.is_user_contacting_admin:
+            await self.record_admin_contact()
+        elif self.is_admin_replying_to_user:
+            await self.record_admin_reply()
+        elif self.is_peer_chat:
+            await self.record_peer_contact()
+
+        message = {
+            "body": body[:2000],
+            "sender": self.user.username,
+            "sender_id": self.user.id,
+            "recipient_id": self.other_user.id,
+            "created_at": timezone.now().isoformat(),
+        }
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                "type": "direct.message",
+                "message": message,
+            },
+        )
+
+    async def direct_message(self, event):
+        await self.send(text_data=json.dumps(event["message"]))
+
+    @sync_to_async
+    def get_other_user(self):
+        return (
+            User.objects.exclude(is_suspended_by_admin=True)
+            .filter(is_active=True)
+            .filter(id=self.other_user_id)
+            .first()
+        )
+
+    @sync_to_async
+    def can_peer_chat(self):
+        return users_can_peer_chat(self.user, self.other_user)
+
+    @sync_to_async
+    def record_admin_contact(self):
+        thread, created = AdminChatThread.objects.get_or_create(
+            admin=self.other_user,
+            user=self.user,
+            defaults={"unread_count": 1},
+        )
+        if not created:
+            AdminChatThread.objects.filter(pk=thread.pk).update(
+                unread_count=F("unread_count") + 1,
+                last_contact_at=timezone.now(),
+            )
+        Notification.objects.create(
+            user=self.other_user,
+            message=f"{self.user.username} sent you an admin chat message.",
+        )
+
+    @sync_to_async
+    def record_admin_reply(self):
+        thread, created = AdminChatThread.objects.get_or_create(
+            admin=self.user,
+            user=self.other_user,
+            defaults={"user_unread_count": 1, "last_contact_at": timezone.now()},
+        )
+        if not created:
+            AdminChatThread.objects.filter(pk=thread.pk).update(
+                user_unread_count=F("user_unread_count") + 1,
+                last_contact_at=timezone.now(),
+            )
+        Notification.objects.create(
+            user=self.other_user,
+            message=f"Admin sent you a contact message.",
+        )
+
+    @sync_to_async
+    def record_peer_contact(self):
+        thread, created = PeerChatThread.get_or_create_for_users(
+            self.user,
+            self.other_user,
+        )
+        update_fields = {"last_contact_at": timezone.now()}
+        if self.other_user_id == thread.user_one_id:
+            update_fields["unread_count_user_one"] = F("unread_count_user_one") + 1
+        else:
+            update_fields["unread_count_user_two"] = F("unread_count_user_two") + 1
+
+        if created:
+            for field_name, value in update_fields.items():
+                setattr(
+                    thread,
+                    field_name,
+                    1 if field_name.startswith("unread") else value,
+                )
+            thread.save(update_fields=list(update_fields.keys()))
+        else:
+            PeerChatThread.objects.filter(pk=thread.pk).update(**update_fields)
+
+        Notification.objects.create(
+            user=self.other_user,
+            message=f"{self.user.username} sent you a message.",
+        )

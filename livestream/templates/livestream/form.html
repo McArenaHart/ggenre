@@ -1,0 +1,24 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Create Live Stream{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/livestream.css' %}" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<div class="container py-4 livestream-page">
+  <section class="livestream-panel">
+    <h1>Create Live Stream</h1>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-video"></i> Create Stream
+      </button>
+      <a href="{% url 'livestream:index' %}" class="btn btn-outline-secondary">Cancel</a>
+    </form>
+  </section>
+</div>
+{% endblock %}

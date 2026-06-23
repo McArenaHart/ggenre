@@ -6,6 +6,8 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from content.models import Content, Vote
+from chatapp.models import AdminChatThread, MatchRating, PeerChatThread
+from chatapp.services import record_match_rating
 
 from .models import Announcement, DismissedAnnouncement, Notification, OTP, Role, VotingTokenPolicy
 
@@ -206,6 +208,56 @@ class UsersAppTests(TestCase):
         response = self.client.get(reverse("content_list"))
         self.assertNotContains(response, reverse("admin_dashboard"))
 
+    def test_fan_shell_has_floating_admin_chat_widget(self):
+        self.client.force_login(self.fan_user)
+        response = self.client.get(reverse("content_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "admin-contact-chat")
+        self.assertContains(response, f'data-direct-chat-user="{self.admin_user.id}"')
+        self.assertContains(response, "Contact Admin")
+
+    def test_admin_shell_does_not_show_admin_contact_widget(self):
+        self.client.force_login(self.admin_user)
+        response = self.client.get(reverse("content_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "admin-contact-chat")
+        self.assertContains(response, reverse("chatapp:admin_inbox"))
+
+    def test_admin_dashboard_does_not_show_message_shortcuts(self):
+        self.client.force_login(self.admin_user)
+        response = self.client.get(reverse("admin_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("chatapp:direct", args=[self.artist_user.id]))
+        self.assertNotContains(response, reverse("chatapp:direct", args=[self.fan_user.id]))
+
+    def test_profile_does_not_show_message_shortcut(self):
+        self.client.force_login(self.admin_user)
+        response = self.client.get(reverse("user_profile", args=[self.fan_user.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("chatapp:direct", args=[self.fan_user.id]))
+
+    def test_profile_hides_peer_message_shortcut_until_rating_unlock(self):
+        self.client.force_login(self.artist_user)
+        response = self.client.get(reverse("user_profile", args=[self.fan_user.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("chatapp:direct", args=[self.fan_user.id]))
+        self.assertContains(response, reverse("chatapp:rate_user", args=[self.fan_user.id]))
+
+    def test_profile_shows_peer_message_shortcut_for_rating_unlocked_users(self):
+        record_match_rating(self.artist_user, self.fan_user, 8)
+
+        self.client.force_login(self.artist_user)
+        response = self.client.get(reverse("user_profile", args=[self.fan_user.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("chatapp:direct", args=[self.fan_user.id]))
+        self.assertContains(response, "Message")
+
     def test_profile_update(self):
         self.client.login(
             username=self.artist_user.username,
@@ -324,6 +376,124 @@ class UsersAppTests(TestCase):
         self.assertEqual(resume_response.status_code, 302)
         policy.refresh_from_db()
         self.assertFalse(policy.tokens_paused)
+
+    def test_admin_can_bulk_generate_otps_and_deliver_contact_notifications(self):
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
+
+        response = self.client.post(
+            reverse("admin_dashboard"),
+            {
+                "bulk_otp_action": "grant",
+                "bulk_user_ids": [str(self.fan_user.id), str(self.artist_user.id)],
+                "bulk_vote_count": "3",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        fan_otp = OTP.objects.get(user=self.fan_user)
+        artist_otp = OTP.objects.get(user=self.artist_user)
+        self.assertEqual(fan_otp.remaining_votes, 3)
+        self.assertEqual(artist_otp.remaining_votes, 3)
+        self.assertTrue(fan_otp.is_active)
+        self.assertTrue(artist_otp.is_active)
+
+        fan_thread = AdminChatThread.objects.get(admin=self.admin_user, user=self.fan_user)
+        artist_thread = AdminChatThread.objects.get(admin=self.admin_user, user=self.artist_user)
+        self.assertEqual(fan_thread.user_unread_count, 1)
+        self.assertEqual(artist_thread.user_unread_count, 1)
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.fan_user,
+                message__contains=fan_otp.otp_code,
+            ).exists()
+        )
+
+    def test_user_contact_admin_unread_endpoint_returns_database_otp(self):
+        otp = OTP.objects.create(
+            user=self.fan_user,
+            otp_code="987654",
+            remaining_votes=2,
+            is_active=True,
+        )
+        AdminChatThread.objects.create(
+            admin=self.admin_user,
+            user=self.fan_user,
+            user_unread_count=2,
+        )
+        self.client.login(
+            username=self.fan_user.username,
+            password=self.fan_data["password"],
+        )
+
+        response = self.client.get(reverse("chatapp:admin_contact_unread_count"))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["unread_count"], 2)
+        self.assertEqual(payload["otp"]["code"], otp.otp_code)
+        self.assertEqual(payload["otp"]["remaining_votes"], 2)
+
+        mark_read_response = self.client.post(reverse("chatapp:mark_admin_contact_read"))
+        self.assertEqual(mark_read_response.status_code, 200)
+        thread = AdminChatThread.objects.get(admin=self.admin_user, user=self.fan_user)
+        self.assertEqual(thread.user_unread_count, 0)
+
+    def test_admin_can_suspend_and_resume_all_voting(self):
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
+
+        suspend_response = self.client.post(
+            reverse("admin_dashboard"),
+            {"token_policy_action": "suspend_voting"},
+        )
+
+        self.assertEqual(suspend_response.status_code, 302)
+        policy = VotingTokenPolicy.current()
+        self.assertTrue(policy.voting_suspended)
+        self.assertEqual(policy.updated_by, self.admin_user)
+
+        resume_response = self.client.post(
+            reverse("admin_dashboard"),
+            {"token_policy_action": "resume_voting"},
+        )
+
+        self.assertEqual(resume_response.status_code, 302)
+        policy.refresh_from_db()
+        self.assertFalse(policy.voting_suspended)
+
+    def test_admin_dashboard_can_allow_peer_chat(self):
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
+
+        response = self.client.post(
+            reverse("admin_dashboard"),
+            {
+                "peer_chat_action": "allow",
+                "first_user_id": self.artist_user.id,
+                "second_user_id": self.fan_user.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        thread = PeerChatThread.objects.get(
+            user_one=min(self.artist_user, self.fan_user, key=lambda user: user.id),
+            user_two=max(self.artist_user, self.fan_user, key=lambda user: user.id),
+        )
+        self.assertTrue(thread.admin_approved)
+        self.assertEqual(thread.approved_by, self.admin_user)
+
+        self.client.force_login(self.artist_user)
+        direct_response = self.client.get(
+            reverse("chatapp:direct", args=[self.fan_user.id])
+        )
+        self.assertEqual(direct_response.status_code, 200)
 
     def test_verify_otp_redirects_when_disabled(self):
         pending_user = CustomUser.objects.create_user(
@@ -451,6 +621,32 @@ class UsersAppTests(TestCase):
         recent_upload_ids = [content.id for content in response.context["recent_uploads"]]
         self.assertIn(music_content.id, recent_upload_ids)
         self.assertNotIn(art_content.id, recent_upload_ids)
+
+    def test_admin_dashboard_content_actions_render_standard_menu(self):
+        Content.objects.create(
+            title="Action Menu Upload",
+            artist=self.artist_user,
+            is_approved=True,
+            is_approved_for_voting=True,
+        )
+
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
+        response = self.client.get(reverse("admin_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "admin-content-table-wrap")
+        self.assertContains(response, "admin-actions-menu")
+        self.assertContains(response, "admin-actions-toggle")
+        self.assertContains(response, "admin-dropdown-scroll")
+        self.assertContains(response, "<details", count=1)
+        self.assertContains(response, "admin-dropdown-section", count=4)
+        self.assertContains(response, "admin-dropdown-action", count=8)
+        self.assertNotContains(response, "dropdown-toggle admin-actions-toggle")
+        self.assertContains(response, "Approve Voting")
+        self.assertContains(response, "Reset Votes & Chats")
 
 
 class CustomUserModelTests(TestCase):

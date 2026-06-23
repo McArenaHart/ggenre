@@ -11,6 +11,7 @@ urlpatterns = [
     path('vote_content/<int:content_id>/', views.vote_content, name='vote_content'),
     path('delete/<int:pk>/', views.delete_content, name='delete_content'),  # New URL for content deletion
     path('content/toggle/<int:content_id>/<str:action>/', views.toggle_content_approval, name='toggle_content_approval'),
+    path('content/visibility/<int:content_id>/<str:action>/', views.toggle_content_visibility, name='toggle_content_visibility'),
     path('live/', views.live_stream_index, name="live_stream_index"),
     path('live/start/', views.start_live_stream, name='start_live_stream'),
     path('live/<str:room_name>/', views.live_stream_room, name="live_stream_room"),

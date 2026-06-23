@@ -1,0 +1,46 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Live Streams{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/livestream.css' %}" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid livestream-page">
+  <header class="livestream-header">
+    <div>
+      <h1>Live Streams</h1>
+      <p>Watch artists perform live without a third-party streaming API.</p>
+    </div>
+    {% if request.user.is_artist or request.user.is_admin %}
+      <a href="{% url 'livestream:create' %}" class="btn btn-primary">
+        <i class="fas fa-video"></i> Start Stream
+      </a>
+    {% endif %}
+  </header>
+
+  <section class="livestream-grid">
+    {% for stream in streams %}
+      <article class="livestream-card">
+        <div>
+          <span class="livestream-status livestream-status-{{ stream.status }}">{{ stream.get_status_display }}</span>
+          {% if stream.is_restricted %}<span class="livestream-status">Restricted</span>{% endif %}
+        </div>
+        <h2>{{ stream.title }}</h2>
+        <p>{{ stream.description|default:"No description provided."|truncatechars:120 }}</p>
+        <div class="livestream-meta">
+          <span><i class="fas fa-user"></i> {{ stream.host.username }}</span>
+          {% if stream.scheduled_for %}<span><i class="far fa-clock"></i> {{ stream.scheduled_for|date:"M d, H:i" }}</span>{% endif %}
+        </div>
+        <a href="{% url 'livestream:room' stream.stream_key %}" class="btn btn-outline-primary btn-sm">
+          Open Stream
+        </a>
+      </article>
+    {% empty %}
+      <div class="app-empty">No streams are live right now.</div>
+    {% endfor %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Chat with {{ other_user.username }}{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260620a" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<div
+  class="container-fluid chat-page"
+  data-direct-chat-user="{{ other_user.id }}"
+  data-current-user-id="{{ request.user.id }}"
+  data-current-user="{{ request.user.username }}"
+  data-other-user="{{ other_user.username }}"
+>
+  <header class="chat-header chat-direct-nav">
+    {% if request.user.is_admin %}
+    <a href="{% url 'chatapp:admin_inbox' %}" class="btn btn-outline-primary chat-back-button" aria-label="Back to admin inbox">
+      <i class="fas fa-arrow-left" aria-hidden="true"></i>
+      <span>Admin Inbox</span>
+    </a>
+    {% elif chat_channel == "peer" %}
+    <a href="{% url 'chatapp:index' %}" class="btn btn-outline-primary chat-back-button" aria-label="Back to messages">
+      <i class="fas fa-arrow-left" aria-hidden="true"></i>
+      <span>Messages</span>
+    </a>
+    {% else %}
+    <a href="{% url 'content_list' %}" class="btn btn-outline-primary chat-back-button" aria-label="Back home">
+      <i class="fas fa-arrow-left" aria-hidden="true"></i>
+      <span>Home</span>
+    </a>
+    {% endif %}
+  </header>
+
+  <section class="chat-panel chat-room-panel">
+    <header class="chat-room-header">
+      <div class="chat-room-user">
+        {% include "partials/user_avatar.html" with avatar_user=other_user size=44 class_name="chat-room-avatar" alt_text=other_user.username %}
+        <div>
+          <h1>{{ other_user.username }}</h1>
+          <p>{{ other_user.get_role_display }}</p>
+        </div>
+      </div>
+      <span class="chat-room-status" data-chat-status-pill>
+        <span aria-hidden="true"></span>
+        Connecting
+      </span>
+    </header>
+    <div class="chat-messages" data-chat-messages>
+      <div class="chat-day-divider"><span>Today</span></div>
+    </div>
+    <form class="chat-compose" data-chat-form>
+      <input type="text" class="form-control" data-chat-input maxlength="2000" autocomplete="off" placeholder="Message {{ other_user.username }}" />
+      <button type="submit" class="btn btn-primary chat-send-button" aria-label="Send message" title="Send message">
+        <i class="fas fa-paper-plane" aria-hidden="true"></i>
+      </button>
+    </form>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pages/chatapp.js' %}?v=20260623otp1"></script>
+{% endblock %}

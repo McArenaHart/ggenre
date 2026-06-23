@@ -1,24 +1,12 @@
 /* Autoplay Toggle Button */
 .watch-autoplay-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.85rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(11, 18, 33, 0.72);
   color: rgba(232, 238, 252, 0.85);
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
 }
 
 .watch-autoplay-toggle:hover,
 .watch-autoplay-toggle:focus {
   border-color: rgba(122, 237, 238, 0.6);
-  background: rgba(15, 25, 45, 0.9);
+  background: rgba(122, 237, 238, 0.1);
   color: var(--gg-neon-cyan);
 }
 
@@ -40,18 +28,9 @@
 
 /* Play Next Button */
 .watch-play-next-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.85rem;
-  border-radius: 999px;
   border: 1px solid rgba(122, 237, 238, 0.6);
   background: rgba(122, 237, 238, 0.1);
   color: var(--gg-neon-cyan);
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
 .watch-play-next-btn:hover,
@@ -164,7 +143,6 @@ body.app-theme[data-theme="light"] .watch-related-card.is-next::before {
 
   .watch-autoplay-toggle,
   .watch-play-next-btn {
-    flex: 1;
     justify-content: center;
   }
 }

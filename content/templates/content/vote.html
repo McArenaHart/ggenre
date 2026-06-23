@@ -20,12 +20,24 @@
     {% if request.user.is_fan %}
       <form method="post" action="{% url 'vote_content' content.id %}" class="mt-4">
         {% csrf_token %}
-        <label for="vote_value">Rate this content (1-5):</label>
+        <label for="vote_value">Rate this content (1-10):</label>
         <select id="vote_value" name="vote_value" class="form-control vote-select">
-          {% for i in "12345" %}
-            <option value="{{ i }}" {% if vote_value == i %}selected{% endif %}>{{ i }}</option>
+          {% for i in "123456789X"|make_list %}
+            {% if i == "X" %}
+              <option value="10" {% if vote_value == 10 %}selected{% endif %}>10</option>
+            {% else %}
+              <option value="{{ i }}" {% if vote_value == i %}selected{% endif %}>{{ i }}</option>
+            {% endif %}
           {% endfor %}
         </select>
+
+        {% if not tokens_paused %}
+          <label for="otp_code" class="mt-3">Voting token</label>
+          <input id="otp_code" name="otp_code" class="form-control" autocomplete="one-time-code" required>
+        {% endif %}
+
+        <label for="voter_tag" class="mt-3">Voting tag</label>
+        <input id="voter_tag" name="voter_tag" class="form-control" placeholder="Example: fan, artist, reviewer" required>
 
         <button type="submit" class="btn btn-primary mt-3">Submit Vote</button>
       </form>

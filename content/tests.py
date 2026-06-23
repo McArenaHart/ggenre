@@ -1,18 +1,32 @@
 from datetime import timedelta
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.template.loader import render_to_string
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from chatapp.models import MatchRating, PeerChatThread
 from users.models import Follow, OTP, Role, CustomUser, VotingTokenPolicy
 
 from .forms import ContentUploadForm
-from .models import ArtistUploadLimit, Badge, Content, Genre, LivePerformance, Vote, Voucher
+from .models import ArtistUploadLimit, Badge, Comment, Content, Genre, LivePerformance, Vote, Voucher
 
 
 def sample_upload_file(filename="test.mp4", content_type="video/mp4"):
     return SimpleUploadedFile(filename, b"fake-video-content", content_type=content_type)
+
+
+def sample_image_file(filename="poster.gif", content_type="image/gif"):
+    return SimpleUploadedFile(
+        filename,
+        (
+            b"\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00"
+            b"\x00\x00\x00\xFF\xFF\xFF\x21\xF9\x04\x01\x00\x00\x01\x00"
+            b"\x2C\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x4C\x01\x00\x3B"
+        ),
+        content_type=content_type,
+    )
 
 
 class ContentModelTest(TestCase):
@@ -409,6 +423,50 @@ class AudioThumbnailFallbackTest(TestCase):
         self.assertContains(response, "img/audio-default-thumbnail.svg")
 
 
+class MediaDisplayTemplateTest(TestCase):
+    def setUp(self):
+        self.artist = CustomUser.objects.create_user(
+            username="media_artist",
+            password="password",
+            role=Role.ARTIST,
+        )
+
+    def test_uploaded_video_renders_native_controls_with_thumbnail_as_poster(self):
+        content = Content.objects.create(
+            title="Controlled Video",
+            artist=self.artist,
+            file=sample_upload_file(filename="clip.mp4", content_type="video/mp4"),
+            thumbnail=sample_image_file(),
+            is_approved=True,
+        )
+
+        html = render_to_string("partials/media_display.html", {"content": content})
+
+        self.assertIn("<video", html)
+        self.assertIn("controls", html)
+        self.assertIn('controlsList="nodownload"', html)
+        self.assertIn("disablePictureInPicture", html)
+        self.assertIn('oncontextmenu="return false"', html)
+        self.assertIn("poster=", html)
+        self.assertIn("<source", html)
+
+    def test_uploaded_audio_renders_native_controls(self):
+        content = Content.objects.create(
+            title="Controlled Audio",
+            artist=self.artist,
+            file=sample_upload_file(filename="track.mp3", content_type="audio/mpeg"),
+            is_approved=True,
+        )
+
+        html = render_to_string("partials/media_display.html", {"content": content})
+
+        self.assertIn("<audio", html)
+        self.assertIn("controls", html)
+        self.assertIn('controlsList="nodownload"', html)
+        self.assertIn('oncontextmenu="return false"', html)
+        self.assertIn("<source", html)
+
+
 class ContentUploadFlowTest(TestCase):
     def setUp(self):
         self.artist = CustomUser.objects.create_user(
@@ -461,6 +519,7 @@ class VotingFlowTest(TestCase):
             genre=self.genre,
             file=sample_upload_file(filename="target.mp4", content_type="video/mp4"),
             is_approved=True,
+            is_approved_for_voting=True,
         )
         self.otp = OTP.objects.create(
             user=self.fan,
@@ -484,6 +543,96 @@ class VotingFlowTest(TestCase):
         self.assertEqual(vote.base_value, 4)
         self.assertTrue(Badge.objects.filter(user=self.fan).exists())
 
+    def test_content_rating_accepts_ten_and_records_match_rating(self):
+        response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 10, "otp_code": "123456", "voter_tag": "top"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        vote = Vote.objects.get(content=self.content, fan=self.fan)
+        self.assertEqual(vote.base_value, 10)
+        self.assertEqual(response.json()["chat_url"], reverse("chatapp:direct", args=[self.artist.id]))
+        self.assertEqual(response.json()["inbox_url"], reverse("chatapp:index"))
+        self.assertTrue(
+            MatchRating.objects.filter(
+                rater=self.fan,
+                rated=self.artist,
+                score=10,
+                source_content=self.content,
+            ).exists()
+        )
+        thread = PeerChatThread.objects.get()
+        self.assertGreater(thread.unlocked_until, timezone.now())
+
+        inbox_response = self.client.get(reverse("chatapp:index"))
+        self.assertEqual(inbox_response.status_code, 200)
+        self.assertContains(inbox_response, self.artist.username)
+
+    def test_content_detail_renders_click_ready_vote_controls(self):
+        response = self.client.get(reverse("content_detail", args=[self.content.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'watch-action-row has-vote')
+        self.assertContains(response, 'watch-action-buttons')
+        self.assertContains(response, 'data-vote-toggle')
+        self.assertContains(response, 'aria-expanded="false"')
+        self.assertContains(response, 'data-vote-submit', count=10)
+        self.assertNotContains(response, 'onclick="submitDetailVote')
+        self.assertNotContains(response, 'onclick="toggleDetailVoting')
+
+    def test_old_vote_can_be_recast_for_same_content_after_one_day(self):
+        old_vote = Vote.objects.create(
+            content=self.content,
+            fan=self.fan,
+            base_value=8,
+            value=8,
+            otp_code="OLD",
+            tag="old",
+        )
+        Vote.objects.filter(pk=old_vote.pk).update(
+            timestamp=timezone.now() - timedelta(days=1, minutes=1)
+        )
+
+        response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 8, "otp_code": "123456", "voter_tag": "new"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        vote = Vote.objects.get(content=self.content, fan=self.fan)
+        self.assertEqual(vote.base_value, 8)
+        self.assertEqual(vote.tag, "new")
+        self.assertGreater(vote.timestamp, timezone.now() - timedelta(minutes=1))
+
+    def test_admin_reset_content_voting_clears_vote_and_temporary_chat(self):
+        self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 9, "otp_code": "123456", "voter_tag": "reset"}',
+            content_type="application/json",
+        )
+        self.assertTrue(Vote.objects.filter(content=self.content, fan=self.fan).exists())
+        self.assertTrue(MatchRating.objects.filter(source_content=self.content).exists())
+        self.assertTrue(PeerChatThread.objects.exists())
+
+        admin = CustomUser.objects.create_user(
+            username="vote_admin",
+            password="password",
+            role=Role.ADMIN,
+            is_staff=True,
+        )
+        self.client.force_login(admin)
+        response = self.client.post(
+            reverse("toggle_content_voting", args=[self.content.id, "reset"])
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Vote.objects.filter(content=self.content).exists())
+        self.assertFalse(MatchRating.objects.filter(source_content=self.content).exists())
+        self.assertFalse(PeerChatThread.objects.exists())
+
     def test_calculate_final_ranking_assigns_badge_without_request(self):
         from content.views import calculate_final_ranking
 
@@ -505,12 +654,51 @@ class VotingFlowTest(TestCase):
 
         response = self.client.post(
             reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 4, "otp_code": "123456", "voter_tag": "blocked"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Vote.objects.filter(content=self.content, fan=self.fan).exists())
+
+    def test_vote_rejected_without_voter_tag(self):
+        response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
             data='{"vote_value": 4, "otp_code": "123456"}',
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
+        self.otp.refresh_from_db()
+        self.assertEqual(self.otp.remaining_votes, 1)
         self.assertFalse(Vote.objects.filter(content=self.content, fan=self.fan).exists())
+
+    def test_malformed_vote_payload_returns_400(self):
+        response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": ',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.otp.refresh_from_db()
+        self.assertEqual(self.otp.remaining_votes, 1)
+        self.assertFalse(Vote.objects.filter(content=self.content, fan=self.fan).exists())
+
+    def test_vote_accepts_standard_form_post(self):
+        response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data={
+                "vote_value": "4",
+                "otp_code": "123456",
+                "voter_tag": "form",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        vote = Vote.objects.get(content=self.content, fan=self.fan)
+        self.assertEqual(vote.base_value, 4)
+        self.assertEqual(vote.tag, "form")
 
     def test_vote_without_otp_when_tokens_are_paused(self):
         policy = VotingTokenPolicy.current()
@@ -530,6 +718,45 @@ class VotingFlowTest(TestCase):
         self.assertEqual(vote.base_value, 4)
         self.assertEqual(vote.otp_code, "FREE")
 
+    def test_vote_rejected_when_admin_suspends_all_voting(self):
+        policy = VotingTokenPolicy.current()
+        policy.voting_suspended = True
+        policy.save(update_fields=["voting_suspended", "updated_at"])
+
+        detail_response = self.client.get(reverse("content_detail", args=[self.content.id]))
+        vote_response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 4, "otp_code": "123456", "voter_tag": "suspended"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, 'watch-action-row no-vote')
+        self.assertNotContains(detail_response, 'data-vote-toggle')
+        self.assertEqual(vote_response.status_code, 200)
+        self.assertEqual(vote_response.json()["message"], "Voting is suspended by admin")
+        self.otp.refresh_from_db()
+        self.assertEqual(self.otp.remaining_votes, 1)
+        self.assertFalse(Vote.objects.filter(content=self.content, fan=self.fan).exists())
+
+    def test_global_voting_suspension_overrides_paused_tokens_and_free_pass(self):
+        policy = VotingTokenPolicy.current()
+        policy.tokens_paused = True
+        policy.voting_suspended = True
+        policy.save(update_fields=["tokens_paused", "voting_suspended", "updated_at"])
+        self.fan.has_free_pass = True
+        self.fan.save(update_fields=["has_free_pass"])
+
+        response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 4, "voter_tag": "blocked"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["message"], "Voting is suspended by admin")
+        self.assertFalse(Vote.objects.filter(content=self.content, fan=self.fan).exists())
+
     def test_paused_tokens_preserve_rank_reuse_rule(self):
         policy = VotingTokenPolicy.current()
         policy.tokens_paused = True
@@ -540,6 +767,7 @@ class VotingFlowTest(TestCase):
             genre=self.genre,
             file=sample_upload_file(filename="target-two.mp4", content_type="video/mp4"),
             is_approved=True,
+            is_approved_for_voting=True,
         )
         Vote.objects.create(
             content=self.content,
@@ -555,8 +783,104 @@ class VotingFlowTest(TestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
         self.assertFalse(Vote.objects.filter(content=other_content, fan=self.fan).exists())
+
+    def test_free_pass_user_can_vote_without_otp(self):
+        self.fan.has_free_pass = True
+        self.fan.save(update_fields=["has_free_pass"])
+
+        response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 4, "voter_tag": "free-pass"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.otp.refresh_from_db()
+        self.assertEqual(self.otp.remaining_votes, 1)
+        vote = Vote.objects.get(content=self.content, fan=self.fan)
+        self.assertEqual(vote.otp_code, "FREE")
+
+    def test_suspended_user_cannot_vote_even_with_valid_otp(self):
+        self.fan.is_suspended_by_admin = True
+        self.fan.save(update_fields=["is_suspended_by_admin"])
+
+        response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 4, "otp_code": "123456", "voter_tag": "suspended"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("login"))
+        self.otp.refresh_from_db()
+        self.assertEqual(self.otp.remaining_votes, 1)
+        self.assertFalse(Vote.objects.filter(content=self.content, fan=self.fan).exists())
+
+    def test_admin_voting_toggle_hides_button_and_blocks_votes(self):
+        admin = CustomUser.objects.create_user(
+            username="vote_toggle_admin",
+            password="password",
+            role=Role.ADMIN,
+            is_staff=True,
+        )
+        self.client.force_login(admin)
+        response = self.client.post(
+            reverse("toggle_content_voting", args=[self.content.id, "disapprove"])
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.content.refresh_from_db()
+        self.assertFalse(self.content.is_approved_for_voting)
+
+        self.client.force_login(self.fan)
+        detail_response = self.client.get(reverse("content_detail", args=[self.content.id]))
+        vote_response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 4, "otp_code": "123456", "voter_tag": "closed"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, 'watch-action-row no-vote')
+        self.assertNotContains(detail_response, 'data-vote-toggle')
+        self.assertEqual(vote_response.status_code, 200)
+        self.assertFalse(Vote.objects.filter(content=self.content, fan=self.fan).exists())
+
+    def test_vote_rejected_when_content_not_approved_for_voting(self):
+        self.content.is_approved_for_voting = False
+        self.content.save(update_fields=["is_approved_for_voting"])
+
+        response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 4, "otp_code": "123456", "voter_tag": "closed"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Vote.objects.filter(content=self.content, fan=self.fan).exists())
+
+    def test_pending_content_rejects_detail_comments_and_votes_for_fans(self):
+        self.content.is_approved = False
+        self.content.save(update_fields=["is_approved"])
+
+        detail_response = self.client.get(reverse("content_detail", args=[self.content.id]))
+        comment_response = self.client.post(
+            reverse("add_comment", args=[self.content.id]),
+            {"text": "Should not post"},
+        )
+        vote_response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 4, "otp_code": "123456"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(detail_response.status_code, 302)
+        self.assertEqual(comment_response.status_code, 404)
+        self.assertEqual(vote_response.status_code, 404)
+        self.assertFalse(Comment.objects.filter(content=self.content).exists())
+        self.assertFalse(Vote.objects.filter(content=self.content, fan=self.fan).exists())
 
 
 class LiveStreamVoucherFlowTest(TestCase):

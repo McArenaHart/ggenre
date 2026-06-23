@@ -512,6 +512,81 @@
     }
   }
 
+  function syncAdminChatBadges(unreadCount) {
+    const count = Number(unreadCount) || 0;
+    document.querySelectorAll("[data-admin-chat-badge]").forEach(function (badge) {
+      badge.textContent = String(count);
+      badge.hidden = count <= 0;
+    });
+  }
+
+  function showAdminChatToast(unreadCount, inboxUrl) {
+    if (!inboxUrl || unreadCount <= 0) {
+      return;
+    }
+
+    const existing = document.querySelector("[data-admin-chat-toast]");
+    if (existing) {
+      existing.remove();
+    }
+
+    const toast = document.createElement("a");
+    toast.href = inboxUrl;
+    toast.className = "pwa-network-pill is-online";
+    toast.setAttribute("data-admin-chat-toast", "");
+    toast.setAttribute("role", "status");
+    toast.textContent = unreadCount === 1 ? "New admin chat message" : unreadCount + " admin chat messages";
+    document.body.appendChild(toast);
+
+    window.setTimeout(function () {
+      toast.remove();
+    }, 4200);
+  }
+
+  function initAdminChatUnreadPolling() {
+    const body = document.body;
+    if (
+      !body ||
+      body.dataset.authenticated !== "1" ||
+      body.dataset.userRole !== "admin" ||
+      !body.dataset.adminChatUnreadUrl
+    ) {
+      return;
+    }
+
+    const unreadUrl = body.dataset.adminChatUnreadUrl;
+    const inboxUrl = body.dataset.adminChatInboxUrl;
+    const firstBadge = document.querySelector("[data-admin-chat-badge]");
+    let lastCount = Number(firstBadge ? firstBadge.textContent : "0") || 0;
+
+    function pollUnread() {
+      fetch(unreadUrl, { credentials: "include" })
+        .then(function (response) {
+          if (!response.ok) {
+            return null;
+          }
+          return response.json();
+        })
+        .then(function (data) {
+          if (!data) {
+            return;
+          }
+          const nextCount = Number(data.unread_count) || 0;
+          syncAdminChatBadges(nextCount);
+          if (nextCount > lastCount) {
+            showAdminChatToast(nextCount, inboxUrl);
+          }
+          lastCount = nextCount;
+        })
+        .catch(function () {
+          // Ignore polling failures; the next interval can recover.
+        });
+    }
+
+    pollUnread();
+    window.setInterval(pollUnread, 10000);
+  }
+
   applyTheme(resolveTheme());
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -521,5 +596,6 @@
     initInstallFlow();
     initServiceWorker();
     initNetworkStateIndicator();
+    initAdminChatUnreadPolling();
   });
 })();

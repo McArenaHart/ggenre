@@ -1,5 +1,19 @@
-{% if content.safe_thumbnail_url %}
-  {# Always show thumbnail if available #}
+{% if content.is_video_file and content.safe_file_url %}
+  <div class="gg-media-frame">
+    <video class="gg-video-preview" controls controlsList="nodownload" disablePictureInPicture preload="metadata" oncontextmenu="return false" {% if content.safe_thumbnail_url %}poster="{{ content.safe_thumbnail_url }}"{% endif %}>
+      <source src="{{ content.safe_file_url }}" type="video/mp4" />
+      Your browser does not support the video tag.
+    </video>
+  </div>
+{% elif content.is_audio_file and content.safe_file_url %}
+  <div class="gg-audio-wrapper">
+    <img src="{{ content.audio_thumbnail_url }}" alt="{{ content.title }} thumbnail" class="gg-audio-thumb" loading="lazy" />
+    <audio class="gg-audio-player" controls controlsList="nodownload" preload="metadata" oncontextmenu="return false">
+      <source src="{{ content.safe_file_url }}" type="audio/mpeg" />
+      Your browser does not support the audio tag.
+    </audio>
+  </div>
+{% elif content.safe_thumbnail_url %}
   <div class="gg-media-frame">
     <img src="{{ content.safe_thumbnail_url }}" alt="{{ content.title }} thumbnail" loading="lazy" />
   </div>
@@ -7,19 +21,6 @@
   {# Show image file as thumbnail #}
   <div class="gg-media-frame">
     <img src="{{ content.safe_file_url }}" alt="{{ content.title }}" loading="lazy" />
-  </div>
-{% elif content.is_audio_file %}
-  {# Show audio with default thumbnail #}
-  <div class="gg-audio-wrapper">
-    <img src="{{ content.audio_thumbnail_url }}" alt="{{ content.title }} thumbnail" class="gg-audio-thumb" loading="lazy" />
-  </div>
-{% elif content.safe_file_url %}
-  {# Video file without thumbnail #}
-  <div class="gg-media-frame">
-    <video class="gg-video-preview">
-      <source src="{{ content.safe_file_url }}" type="video/mp4" />
-      Your browser does not support the video tag.
-    </video>
   </div>
 {% elif content.youtube_embed_url %}
   {# YouTube video without thumbnail #}
