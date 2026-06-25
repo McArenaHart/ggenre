@@ -246,17 +246,31 @@ class UsersAppTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, reverse("chatapp:direct", args=[self.fan_user.id]))
-        self.assertContains(response, reverse("chatapp:rate_user", args=[self.fan_user.id]))
+        self.assertNotContains(response, reverse("chatapp:rate_user", args=[self.fan_user.id]))
+        self.assertNotContains(response, "profile-match-rating")
 
-    def test_profile_shows_peer_message_shortcut_for_rating_unlocked_users(self):
+    def test_profile_hides_peer_message_shortcut_for_rating_unlocked_users(self):
         record_match_rating(self.artist_user, self.fan_user, 8)
 
         self.client.force_login(self.artist_user)
         response = self.client.get(reverse("user_profile", args=[self.fan_user.id]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, reverse("chatapp:direct", args=[self.fan_user.id]))
-        self.assertContains(response, "Message")
+        self.assertNotContains(response, reverse("chatapp:direct", args=[self.fan_user.id]))
+        self.assertNotContains(response, "profile-match-rating")
+
+    def test_artist_list_uses_directory_cards_and_stable_avatars(self):
+        self.artist_user.bio = "Independent performer with weekly releases."
+        self.artist_user.save(update_fields=["bio"])
+
+        self.client.force_login(self.fan_user)
+        response = self.client.get(reverse("artist_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "artist-directory-card")
+        self.assertContains(response, "artist-card-avatar")
+        self.assertContains(response, "Independent performer")
+        self.assertContains(response, "--gg-avatar-size: 74px")
 
     def test_profile_update(self):
         self.client.login(

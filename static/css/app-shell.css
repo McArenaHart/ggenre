@@ -1056,8 +1056,15 @@ select option {
 }
 
 .gg-avatar {
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  display: inline-block;
+  height: var(--gg-avatar-size, 40px);
+  max-width: none;
   object-fit: cover;
+  object-position: center;
   flex-shrink: 0;
+  width: var(--gg-avatar-size, 40px);
 }
 
 .gg-avatar-fallback {

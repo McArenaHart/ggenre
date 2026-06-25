@@ -843,21 +843,8 @@ def artist_list(request):
     """
     View to display a list of all artists.
     """
-    # Fetch all users with the role of 'artist'
-    artists = CustomUser.objects.filter(role=Role.ARTIST)
+    artists = CustomUser.objects.filter(role=Role.ARTIST).order_by("username")
 
-    # Fetch content uploaded by each artist
-    artists_with_content = []
-    for artist in artists:
-        content = Content.objects.filter(artist=artist)  # Fetch content for the artist
-        artists_with_content.append(
-            {
-                "artist": artist,
-                "content": content,
-            }
-        )
-
-    # Pass the artists to the template
     context = {
         "artists": artists,
     }

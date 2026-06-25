@@ -1,20 +1,173 @@
-.card {
-  transition: transform 0.2s, box-shadow 0.2s;
-  border-radius: 12px;
+.artist-directory-page {
+  margin-top: 0.75rem;
+}
+
+.artist-directory-header {
+  align-items: flex-end;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.artist-directory-header h1 {
+  color: var(--gg-text);
+  font-size: clamp(1.45rem, 2vw, 2rem);
+  font-weight: 850;
+  margin: 0;
+}
+
+.artist-directory-header p {
+  color: var(--gg-text-muted);
+  margin: 0.25rem 0 0;
+}
+
+.artist-directory-grid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.artist-directory-card {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--gg-border);
+  border-radius: 8px;
+  color: var(--gg-text);
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 116px;
+  padding: 1rem;
+  text-decoration: none;
+  transition: background var(--gg-transition-fast), border-color var(--gg-transition-fast), transform var(--gg-transition-fast);
+}
+
+.artist-directory-card:hover,
+.artist-directory-card:focus {
+  background: rgba(122, 237, 238, 0.1);
+  border-color: rgba(122, 237, 238, 0.34);
+  color: var(--gg-text);
+  text-decoration: none;
+  transform: translateY(-2px);
+}
+
+.artist-card-avatar-wrap {
+  align-items: center;
+  background: rgba(122, 237, 238, 0.08);
+  border: 1px solid rgba(122, 237, 238, 0.2);
+  border-radius: 999px;
+  display: inline-flex;
+  height: 84px;
+  justify-content: center;
+  width: 84px;
+}
+
+.artist-card-avatar {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+.artist-card-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.artist-card-name {
+  color: var(--gg-text);
+  font-size: 1rem;
+  font-weight: 850;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 18px rgba(5, 10, 25, 0.5);
+.artist-card-role {
+  color: var(--gg-neon-cyan);
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin-top: 0.12rem;
+  text-transform: uppercase;
 }
 
-.profile-picture-container {
-  position: relative;
-  width: 50px;
-  height: 50px;
+.artist-card-bio {
+  color: var(--gg-text-muted);
+  display: -webkit-box;
+  font-size: 0.84rem;
+  line-height: 1.35;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.font-weight-bold {
-  font-size: 1.1rem;
+.artist-card-action {
+  align-items: center;
+  border: 1px solid rgba(122, 237, 238, 0.24);
+  border-radius: 999px;
+  color: var(--gg-text-muted);
+  display: inline-flex;
+  font-size: 0.8rem;
+  font-weight: 800;
+  gap: 0.35rem;
+  justify-content: center;
+  padding: 0.34rem 0.62rem;
+  white-space: nowrap;
+}
+
+.artist-directory-card:hover .artist-card-action,
+.artist-directory-card:focus .artist-card-action {
+  background: var(--gg-neon-cyan);
+  border-color: var(--gg-neon-cyan);
+  color: #061122;
+}
+
+.artist-directory-empty {
+  grid-column: 1 / -1;
+}
+
+body.app-theme[data-theme="light"] .artist-directory-card {
+  background: #ffffff;
+  border-color: rgba(19, 41, 86, 0.13);
+  color: #111f3a;
+}
+
+body.app-theme[data-theme="light"] .artist-directory-card:hover,
+body.app-theme[data-theme="light"] .artist-directory-card:focus {
+  background: #f5f9ff;
+  border-color: rgba(22, 57, 120, 0.22);
+}
+
+body.app-theme[data-theme="light"] .artist-card-name,
+body.app-theme[data-theme="light"] .artist-directory-header h1 {
+  color: #111f3a;
+}
+
+body.app-theme[data-theme="light"] .artist-card-role {
+  color: #163978;
+}
+
+body.app-theme[data-theme="light"] .artist-card-bio,
+body.app-theme[data-theme="light"] .artist-directory-header p,
+body.app-theme[data-theme="light"] .artist-card-action {
+  color: rgba(17, 31, 58, 0.68);
+}
+
+body.app-theme[data-theme="light"] .artist-card-avatar-wrap,
+body.app-theme[data-theme="light"] .artist-card-action {
+  border-color: rgba(22, 57, 120, 0.16);
+}
+
+@media (max-width: 575.98px) {
+  .artist-directory-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .artist-directory-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .artist-card-action {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
 }

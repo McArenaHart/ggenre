@@ -6,6 +6,7 @@
       src="{{ avatar_user.profile_picture.url }}"
       alt="{{ avatar_alt }}"
       class="rounded-circle gg-avatar {{ class_name|default:'' }}"
+      style="--gg-avatar-size: {{ avatar_size }}px;"
       width="{{ avatar_size }}"
       height="{{ avatar_size }}"
       {% if lazy %}loading="{{ lazy }}"{% endif %}

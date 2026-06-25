@@ -4,32 +4,46 @@
 {% block title %}Artists{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/users-artist-list.css' %}" rel="stylesheet" />
+<link href="{% static 'css/pages/users-artist-list.css' %}?v=20260625cards1" rel="stylesheet" />
 {% endblock extra_css %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-    <h2 class="font-weight-bold mb-4">Artists</h2>
-    <div class="row">
+<div class="container-fluid artist-directory-page">
+    <header class="artist-directory-header">
+        <div>
+            <h1>Artists</h1>
+            <p>Browse creators and open their latest public content.</p>
+        </div>
+    </header>
+
+    <section class="artist-directory-grid" aria-label="Artist directory">
         {% for artist in artists %}
-        <div class="col-lg-4 col-md-6 mb-3">
-            <a href="{% url 'artist_content' artist.id %}" class="card-link text-decoration-none">
-                <div class="card shadow-sm p-3 d-flex align-items-center">
-                    <!-- Profile Picture -->
-                    <div class="profile-picture-container">
-                        {% include "partials/user_avatar.html" with avatar_user=artist size=50 class_name="mr-3" alt_text=artist.username lazy="lazy" %}
-                    </div>
-                    <!-- Username -->
-                    <h6 class="font-weight-bold mb-0">{{ artist.username }}</h6>
-                </div>
+            <a href="{% url 'artist_content' artist.id %}" class="artist-directory-card">
+                <span class="artist-card-avatar-wrap">
+                    {% include "partials/user_avatar.html" with avatar_user=artist size=74 class_name="artist-card-avatar" alt_text=artist.username lazy="lazy" %}
+                </span>
+                <span class="artist-card-body">
+                    <span class="artist-card-name">{{ artist.username }}</span>
+                    <span class="artist-card-role">{{ artist.get_role_display|default:"Artist" }}</span>
+                    {% if artist.bio %}
+                        <span class="artist-card-bio">{{ artist.bio|truncatechars:92 }}</span>
+                    {% else %}
+                        <span class="artist-card-bio">View uploads, performances, and creator activity.</span>
+                    {% endif %}
+                </span>
+                <span class="artist-card-action">
+                    <span>View</span>
+                    <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                </span>
             </a>
-        </div>
         {% empty %}
-        <div class="col-12">
-            <p class="text-muted text-center">No artists found.</p>
-        </div>
+            <div class="app-empty artist-directory-empty">
+                <i class="fas fa-users" aria-hidden="true"></i>
+                <strong>No artists found.</strong>
+                <span>Approved creators will appear here.</span>
+            </div>
         {% endfor %}
-    </div>
+    </section>
 </div>
 
 {% endblock %}

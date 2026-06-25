@@ -4,7 +4,7 @@
 {% block title %}{{ profile_user.username }}'s Profile{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/users-profile.css' %}?v=20260623contrast2" rel="stylesheet" />
+<link href="{% static 'css/pages/users-profile.css' %}?v=20260625profile1" rel="stylesheet" />
 {% endblock extra_css %}
 
 {% block content %}
@@ -47,11 +47,6 @@
 
                 {% if request.user != profile_user %}
                     <div class="profile-follow-form">
-                        {% if can_peer_chat %}
-                            <a href="{% url 'chatapp:direct' profile_user.id %}" class="btn btn-info btn-sm">
-                                <i class="fas fa-comment-dots" aria-hidden="true"></i> Message
-                            </a>
-                        {% endif %}
                         <form method="post" action="{% url 'user_profile' profile_user.id %}" class="d-inline">
                             {% csrf_token %}
                             {% if is_following %}
@@ -65,43 +60,6 @@
                             {% endif %}
                         </form>
                     </div>
-                    {% if not request.user.is_admin and not profile_user.is_admin and not profile_user.is_suspended_by_admin %}
-                        <form method="post" action="{% url 'chatapp:rate_user' profile_user.id %}" class="profile-match-rating" aria-label="Rate {{ profile_user.username }}">
-                            {% csrf_token %}
-                            <div class="profile-match-rating-header">
-                                <strong>Rate {{ profile_user.username }}</strong>
-                                {% if can_peer_chat %}
-                                    <span>Chat unlocked{% if match_score %} by rating {{ match_score }}/10{% endif %}</span>
-                                {% elif viewer_match_rating %}
-                                    <span>Your rating: {{ viewer_match_rating.score }}/10</span>
-                                {% else %}
-                                    <span>Rating unlocks private chat</span>
-                                {% endif %}
-                            </div>
-                            <div class="profile-rating-grid" role="radiogroup" aria-label="Match rating">
-                                {% for score in "123456789X"|make_list %}
-                                    {% if score == "X" %}
-                                        {% with rating_value=10 %}
-                                            <label class="profile-rating-option">
-                                                <input type="radio" name="score" value="{{ rating_value }}" {% if viewer_match_rating.score == rating_value %}checked{% endif %} required>
-                                                <span>{{ rating_value }}</span>
-                                            </label>
-                                        {% endwith %}
-                                    {% else %}
-                                        {% with rating_value=score|add:"0" %}
-                                            <label class="profile-rating-option">
-                                                <input type="radio" name="score" value="{{ rating_value }}" {% if viewer_match_rating.score == rating_value %}checked{% endif %} required>
-                                                <span>{{ rating_value }}</span>
-                                            </label>
-                                        {% endwith %}
-                                    {% endif %}
-                                {% endfor %}
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-sm profile-rating-submit">
-                                <i class="fas fa-star" aria-hidden="true"></i> Save Rating
-                            </button>
-                        </form>
-                    {% endif %}
                 {% endif %}
             </div>
         </div>
