@@ -1822,7 +1822,7 @@ body.app-theme .table th {
   border-radius: 999px;
   box-shadow: 0 8px 20px rgba(4, 9, 24, 0.22);
   color: var(--gg-text);
-  display: inline-flex;
+  display: none;
   height: 38px;
   justify-content: center;
   left: calc(var(--gg-sidebar-width) + 1rem);
@@ -1837,6 +1837,10 @@ body.app-theme .table th {
     transform var(--gg-transition-fast);
   width: 38px;
   z-index: 1040;
+}
+
+.app-floating-back.is-visible {
+  display: inline-flex;
 }
 
 .app-floating-back:hover,

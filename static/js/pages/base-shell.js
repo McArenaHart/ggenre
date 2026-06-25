@@ -593,6 +593,20 @@
       return;
     }
 
+    const currentUrl = window.location.pathname + window.location.search;
+    const previousUrl = window.sessionStorage.getItem("app-last-page-url");
+    let hasInternalReferrer = false;
+    try {
+      hasInternalReferrer = Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin;
+    } catch (error) {
+      hasInternalReferrer = false;
+    }
+    const hasShiftedPages = Boolean(previousUrl && previousUrl !== currentUrl) || hasInternalReferrer;
+    if (hasShiftedPages) {
+      button.classList.add("is-visible");
+    }
+    window.sessionStorage.setItem("app-last-page-url", currentUrl);
+
     button.addEventListener("click", function () {
       const fallbackUrl = button.getAttribute("data-fallback-url") || "/";
       if (window.history.length > 1) {
