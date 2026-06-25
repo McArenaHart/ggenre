@@ -376,6 +376,59 @@ class DirectChatWebSocketTests(TestCase):
 
         await communicator.disconnect()
 
+    async def test_direct_chat_socket_relays_read_receipts(self):
+        owner = await database_sync_to_async(CustomUser.objects.create_user)(
+            username="socket_receipt_owner",
+            password="password123",
+            role=Role.FAN,
+        )
+        member = await database_sync_to_async(CustomUser.objects.create_user)(
+            username="socket_receipt_member",
+            password="password123",
+            role=Role.FAN,
+        )
+        await database_sync_to_async(record_match_rating)(owner, member, 8)
+
+        owner_socket = WebsocketCommunicator(
+            URLRouter(websocket_urlpatterns),
+            f"/ws/chat/user/{member.id}/",
+        )
+        owner_socket.scope["user"] = owner
+        member_socket = WebsocketCommunicator(
+            URLRouter(websocket_urlpatterns),
+            f"/ws/chat/user/{owner.id}/",
+        )
+        member_socket.scope["user"] = member
+
+        owner_connected, _ = await owner_socket.connect()
+        member_connected, _ = await member_socket.connect()
+
+        self.assertTrue(owner_connected)
+        self.assertTrue(member_connected)
+
+        await owner_socket.send_json_to(
+            {"message": "Receipt test", "client_id": "client-msg-1"}
+        )
+        owner_echo = await owner_socket.receive_json_from()
+        member_message = await member_socket.receive_json_from()
+
+        self.assertEqual(owner_echo["client_id"], "client-msg-1")
+        self.assertEqual(member_message["client_id"], "client-msg-1")
+        self.assertEqual(member_message["body"], "Receipt test")
+
+        await member_socket.send_json_to(
+            {"type": "read", "message_id": "client-msg-1"}
+        )
+        owner_receipt = await owner_socket.receive_json_from()
+
+        self.assertEqual(owner_receipt["type"], "receipt")
+        self.assertEqual(owner_receipt["message_id"], "client-msg-1")
+        self.assertEqual(owner_receipt["reader_id"], member.id)
+        self.assertEqual(owner_receipt["status"], "read")
+
+        await owner_socket.disconnect()
+        await member_socket.disconnect()
+
     async def test_admin_reply_socket_increments_user_contact_unread(self):
         owner = await database_sync_to_async(CustomUser.objects.create_user)(
             username="socket_reply_owner",

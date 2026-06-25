@@ -68,6 +68,20 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
         except json.JSONDecodeError:
             return
 
+        if data.get("type") == "read":
+            message_id = str(data.get("message_id") or "")[:120]
+            if not message_id:
+                return
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    "type": "direct.receipt",
+                    "message_id": message_id,
+                    "reader_id": self.user.id,
+                },
+            )
+            return
+
         body = (data.get("message") or "").strip()
         if not body:
             return
@@ -80,6 +94,8 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
             await self.record_peer_contact()
 
         message = {
+            "type": "message",
+            "client_id": str(data.get("client_id") or "")[:120],
             "body": body[:2000],
             "sender": self.user.username,
             "sender_id": self.user.id,
@@ -96,6 +112,18 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
 
     async def direct_message(self, event):
         await self.send(text_data=json.dumps(event["message"]))
+
+    async def direct_receipt(self, event):
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "receipt",
+                    "message_id": event["message_id"],
+                    "reader_id": event["reader_id"],
+                    "status": "read",
+                }
+            )
+        )
 
     @sync_to_async
     def get_other_user(self):

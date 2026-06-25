@@ -399,6 +399,16 @@
   text-align: right;
 }
 
+.chat-message-delivery {
+  color: inherit;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin-left: 0.35rem;
+  min-width: 1.05rem;
+}
+
 .chat-connection-status {
   color: var(--gg-text-muted);
   display: block;

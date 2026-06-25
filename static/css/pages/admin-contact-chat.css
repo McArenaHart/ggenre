@@ -121,6 +121,25 @@
   overflow-wrap: anywhere;
 }
 
+.admin-contact-chat .chat-message-meta {
+  color: var(--gg-text-muted, #7c8597);
+  display: block;
+  font-size: 0.7rem;
+  line-height: 1.1;
+  margin-top: 0.32rem;
+  text-align: right;
+}
+
+.admin-contact-chat .chat-message-delivery {
+  color: inherit;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin-left: 0.35rem;
+  min-width: 1.05rem;
+}
+
 .admin-contact-chat .chat-message.is-otp {
   align-self: stretch;
   background: rgba(249, 223, 132, 0.12);

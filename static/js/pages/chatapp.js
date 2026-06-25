@@ -174,28 +174,116 @@
       }
     }
 
+    function saveStoredMessages(stored) {
+      window.sessionStorage.setItem(storageKey, JSON.stringify(stored.slice(-250)));
+    }
+
+    function createMessageId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+      }
+      return "msg-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+    }
+
+    function deliveryLabel(status) {
+      if (status >= 2) {
+        return "\u2713\u2713";
+      }
+      if (status === 1) {
+        return "\u2713";
+      }
+      return "0";
+    }
+
+    function deliveryDescription(status) {
+      if (status >= 2) {
+        return "Read";
+      }
+      if (status === 1) {
+        return "Delivered";
+      }
+      return "Not delivered";
+    }
+
+    function updateStoredMessageStatus(messageId, status) {
+      if (!messageId) {
+        return;
+      }
+      const stored = loadStoredMessages();
+      let changed = false;
+      stored.forEach(function (message) {
+        if (message.client_id === messageId && Number(message.delivery_status || 0) < status) {
+          message.delivery_status = status;
+          changed = true;
+        }
+      });
+      if (changed) {
+        saveStoredMessages(stored);
+      }
+    }
+
+    function updateDeliveryStatus(messageId, status) {
+      if (!messageId) {
+        return;
+      }
+      updateStoredMessageStatus(messageId, status);
+      const delivery = messages.querySelector('[data-message-delivery="' + messageId + '"]');
+      if (delivery) {
+        delivery.textContent = deliveryLabel(status);
+        delivery.setAttribute("aria-label", deliveryDescription(status));
+        delivery.setAttribute("title", deliveryDescription(status));
+      }
+    }
+
     function sendMessage(value) {
       const body = value.trim();
       if (!body) {
         return false;
       }
+      const message = {
+        type: "message",
+        client_id: createMessageId(),
+        body: body,
+        sender: currentUser,
+        sender_id: currentUserId,
+        recipient_id: otherUserId,
+        created_at: new Date().toISOString(),
+        delivery_status: 0,
+      };
+      addMessage(message);
+      storeMessage(message);
       if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ message: body }));
+        socket.send(JSON.stringify({ message: body, client_id: message.client_id }));
         return true;
       }
-      pendingMessage = body;
+      pendingMessage = message;
       setStatus("Connecting", "pending");
       setCanSend(false);
-      return false;
+      return true;
     }
 
     function storeMessage(message) {
       const stored = loadStoredMessages();
-      stored.push(message);
-      window.sessionStorage.setItem(storageKey, JSON.stringify(stored.slice(-250)));
+      const existing = message.client_id ? stored.find(function (item) {
+        return item.client_id === message.client_id;
+      }) : null;
+      if (existing) {
+        Object.assign(existing, message);
+      } else {
+        stored.push(message);
+      }
+      saveStoredMessages(stored);
     }
 
     function addMessage(message) {
+      const messageId = message.client_id || "";
+      if (messageId) {
+        const existingDelivery = messages.querySelector('[data-message-delivery="' + messageId + '"]');
+        if (existingDelivery) {
+          updateDeliveryStatus(messageId, Number(message.delivery_status || 1));
+          return;
+        }
+      }
       const item = document.createElement("article");
       item.className = "chat-message";
       const isOwn = String(message.sender_id) === String(currentUserId) || message.sender === currentUser;
@@ -208,7 +296,18 @@
 
       const meta = document.createElement("span");
       meta.className = "chat-message-meta";
-      meta.textContent = (isOwn ? "You" : (message.sender || otherUser)) + " · " + formatMessageTime(message.created_at);
+      meta.textContent = (isOwn ? "You" : (message.sender || otherUser)) + " - " + formatMessageTime(message.created_at);
+
+      if (isOwn && messageId) {
+        const delivery = document.createElement("span");
+        const deliveryStatus = Number(message.delivery_status || 0);
+        delivery.className = "chat-message-delivery";
+        delivery.setAttribute("data-message-delivery", messageId);
+        delivery.setAttribute("aria-label", deliveryDescription(deliveryStatus));
+        delivery.setAttribute("title", deliveryDescription(deliveryStatus));
+        delivery.textContent = deliveryLabel(deliveryStatus);
+        meta.appendChild(delivery);
+      }
 
       item.appendChild(body);
       item.appendChild(meta);
@@ -324,7 +423,7 @@
       if (pendingMessage) {
         const queued = pendingMessage;
         pendingMessage = null;
-        socket.send(JSON.stringify({ message: queued }));
+        socket.send(JSON.stringify({ message: queued.body, client_id: queued.client_id }));
         input.value = "";
       }
     });
@@ -332,8 +431,20 @@
     socket.addEventListener("message", function (event) {
       try {
         const message = JSON.parse(event.data);
+        if (message.type === "receipt") {
+          if (String(message.reader_id) === String(otherUserId)) {
+            updateDeliveryStatus(message.message_id, 2);
+          }
+          return;
+        }
+        if (String(message.sender_id) === String(currentUserId) && message.client_id) {
+          message.delivery_status = Math.max(Number(message.delivery_status || 0), 1);
+        }
         addMessage(message);
         storeMessage(message);
+        if (String(message.sender_id) !== String(currentUserId) && message.client_id && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: "read", message_id: message.client_id }));
+        }
       } catch (error) {
         return;
       }
