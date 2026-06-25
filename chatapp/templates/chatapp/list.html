@@ -4,7 +4,7 @@
 {% block title %}Messages{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/chatapp.css' %}?v=20260620a" rel="stylesheet" />
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260625rating1" rel="stylesheet" />
 {% endblock %}
 
 {% block content %}
@@ -35,16 +35,25 @@
             <span class="chat-peer-main">
               <span class="chat-peer-name">{{ row.user.username }}</span>
               <span class="chat-peer-meta">
-                {% if row.unread_count %}
-                  New message
+                {% if row.incoming_rating %}
+                  Rated you {{ row.incoming_rating.score }}/10
                 {% else %}
-                  Last active <time datetime="{{ row.thread.last_contact_at|date:'c' }}">{{ row.thread.last_contact_at|date:"M d, H:i" }}</time>
+                  {% if row.unread_count %}
+                    New message
+                  {% else %}
+                    Last active <time datetime="{{ row.thread.last_contact_at|date:'c' }}">{{ row.thread.last_contact_at|date:"M d, H:i" }}</time>
+                  {% endif %}
                 {% endif %}
               </span>
             </span>
             <span class="chat-peer-state">
               {% if row.unread_count %}
                 <span class="chat-unread-badge">{{ row.unread_count }}</span>
+              {% elif row.incoming_rating %}
+                <span class="chat-rating-pill" title="Rating {{ row.user.username }} gave you">
+                  <i class="fas fa-star" aria-hidden="true"></i>
+                  {{ row.incoming_rating.score }}
+                </span>
               {% else %}
                 <i class="fas fa-chevron-right" aria-hidden="true"></i>
               {% endif %}

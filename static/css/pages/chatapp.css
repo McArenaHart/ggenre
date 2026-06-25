@@ -139,6 +139,33 @@
   min-width: 28px;
 }
 
+.chat-rating-pill,
+.chat-inline-rating {
+  align-items: center;
+  border: 1px solid rgba(255, 193, 7, 0.42);
+  border-radius: 999px;
+  color: #ffd166;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 800;
+  gap: 0.28rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.chat-rating-pill {
+  background: rgba(255, 193, 7, 0.12);
+  min-width: 2.35rem;
+  padding: 0.28rem 0.5rem;
+}
+
+.chat-inline-rating {
+  background: rgba(255, 193, 7, 0.1);
+  margin-left: 0.45rem;
+  padding: 0.22rem 0.5rem;
+  vertical-align: middle;
+}
+
 .chat-inbox-avatar,
 .chat-room-avatar {
   flex: 0 0 auto;
@@ -490,6 +517,13 @@ body.app-theme[data-theme="light"] .chat-peer-row.is-unread {
   background: rgba(22, 57, 120, 0.08);
 }
 
+body.app-theme[data-theme="light"] .chat-rating-pill,
+body.app-theme[data-theme="light"] .chat-inline-rating {
+  background: rgba(176, 112, 0, 0.1);
+  border-color: rgba(176, 112, 0, 0.34);
+  color: #8a5600;
+}
+
 body.app-theme[data-theme="light"] .chat-message {
   background: #fff;
   border-color: rgba(19, 41, 86, 0.12);
@@ -533,6 +567,11 @@ body.app-theme[data-theme="light"] .chat-emoji-option {
   .chat-peer-row {
     min-height: 68px;
     padding: 0.75rem;
+  }
+
+  .chat-inline-rating {
+    margin-left: 0;
+    margin-top: 0.25rem;
   }
 
   .chat-room-panel {

@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from users.models import CustomUser, OTP, Role
 
-from .models import AdminChatThread, PeerChatThread
+from .models import AdminChatThread, MatchRating, PeerChatThread
 from .services import record_match_rating, users_can_peer_chat
 
 
@@ -44,6 +44,16 @@ def chat_index(request):
             }
         )
 
+    incoming_ratings = {
+        rating.rater_id: rating
+        for rating in MatchRating.objects.filter(
+            rater_id__in=thread_user_ids,
+            rated=request.user,
+        ).select_related("source_content")
+    }
+    for row in thread_rows:
+        row["incoming_rating"] = incoming_ratings.get(row["user"].id)
+
     return render(
         request,
         "chatapp/list.html",
@@ -74,6 +84,14 @@ def direct_chat(request, user_id):
     if not (is_user_contacting_admin or is_admin_replying_to_user or is_peer_chat):
         return HttpResponseForbidden()
 
+    incoming_rating = None
+    if is_peer_chat:
+        incoming_rating = (
+            MatchRating.objects.filter(rater=other_user, rated=request.user)
+            .select_related("source_content")
+            .first()
+        )
+
     if request.user.is_admin():
         AdminChatThread.objects.filter(admin=request.user, user=other_user).update(
             unread_count=0
@@ -95,6 +113,7 @@ def direct_chat(request, user_id):
         {
             "other_user": other_user,
             "chat_channel": "peer" if is_peer_chat else "admin",
+            "incoming_rating": incoming_rating,
         },
     )
 

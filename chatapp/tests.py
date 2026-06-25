@@ -72,6 +72,19 @@ class ChatAppTests(TestCase):
         self.assertNotContains(response, "chat_suspended")
         self.assertNotContains(response, "chat_inactive")
 
+    def test_artist_inbox_shows_rating_received_from_peer(self):
+        self.member.role = Role.ARTIST
+        self.member.save(update_fields=["role"])
+        self.create_match(self.owner, self.member, score=8)
+
+        self.client.login(username="chat_member", password="password123")
+        response = self.client.get(reverse("chatapp:index"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "chat_owner")
+        self.assertContains(response, "Rated you 8/10")
+        self.assertContains(response, 'class="chat-rating-pill"')
+
     def test_index_hides_invalid_existing_peer_threads(self):
         owner_suspended_one, owner_suspended_two = PeerChatThread.ordered_users(
             self.owner,
@@ -116,6 +129,18 @@ class ChatAppTests(TestCase):
         self.assertContains(response, "chat_member")
         self.assertContains(response, f'data-direct-chat-user="{self.member.id}"')
         self.assertContains(response, reverse("chatapp:index"))
+
+    def test_artist_direct_chat_shows_rating_received_from_peer(self):
+        self.member.role = Role.ARTIST
+        self.member.save(update_fields=["role"])
+        self.create_match(self.owner, self.member, score=9)
+
+        self.client.login(username="chat_member", password="password123")
+        response = self.client.get(reverse("chatapp:direct", args=[self.owner.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Rated you 9/10")
+        self.assertContains(response, 'class="chat-inline-rating"')
 
     def test_direct_chat_blocks_unmatched_peer_user(self):
         self.client.login(username="chat_owner", password="password123")

@@ -4,7 +4,7 @@
 {% block title %}Chat with {{ other_user.username }}{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/chatapp.css' %}?v=20260620a" rel="stylesheet" />
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260625rating1" rel="stylesheet" />
 {% endblock %}
 
 {% block content %}
@@ -40,7 +40,15 @@
         {% include "partials/user_avatar.html" with avatar_user=other_user size=44 class_name="chat-room-avatar" alt_text=other_user.username %}
         <div>
           <h1>{{ other_user.username }}</h1>
-          <p>{{ other_user.get_role_display }}</p>
+          <p>
+            {{ other_user.get_role_display }}
+            {% if incoming_rating %}
+              <span class="chat-inline-rating">
+                <i class="fas fa-star" aria-hidden="true"></i>
+                Rated you {{ incoming_rating.score }}/10
+              </span>
+            {% endif %}
+          </p>
         </div>
       </div>
       <span class="chat-room-status" data-chat-status-pill>
