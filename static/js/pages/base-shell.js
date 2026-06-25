@@ -587,6 +587,22 @@
     window.setInterval(pollUnread, 10000);
   }
 
+  function initFloatingBackButton() {
+    const button = document.querySelector("[data-floating-back]");
+    if (!button) {
+      return;
+    }
+
+    button.addEventListener("click", function () {
+      const fallbackUrl = button.getAttribute("data-fallback-url") || "/";
+      if (window.history.length > 1) {
+        window.history.back();
+        return;
+      }
+      window.location.href = fallbackUrl;
+    });
+  }
+
   applyTheme(resolveTheme());
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -597,5 +613,6 @@
     initServiceWorker();
     initNetworkStateIndicator();
     initAdminChatUnreadPolling();
+    initFloatingBackButton();
   });
 })();

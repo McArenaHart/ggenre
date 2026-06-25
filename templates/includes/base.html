@@ -406,6 +406,17 @@
 
     <div class="pwa-network-pill" data-pwa-network-pill hidden role="status" aria-live="polite"></div>
 
+    <button
+      type="button"
+      class="app-floating-back"
+      data-floating-back
+      data-fallback-url="{% url 'content_list' %}"
+      aria-label="Go back"
+      title="Go back"
+    >
+      <i class="fas fa-arrow-left" aria-hidden="true"></i>
+    </button>
+
     {% if admin_contact_user and other_user != admin_contact_user %}
       <section
         class="admin-contact-chat"
@@ -478,7 +489,7 @@
     <script src="{% static 'vendor/jquery-easing/jquery.easing.min.js' %}"></script>
     <script src="{% static 'vendor/owl-carousel/owl.carousel.js' %}"></script>
     <script src="{% static 'js/custom.js' %}"></script>
-    <script src="{% static 'js/pages/base-shell.js' %}?v=20260623role1"></script>
+    <script src="{% static 'js/pages/base-shell.js' %}?v=20260625back1"></script>
     {% if admin_contact_user and other_user != admin_contact_user %}
       <script src="{% static 'js/pages/chatapp.js' %}?v=20260625ticks1"></script>
     {% endif %}

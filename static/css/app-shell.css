@@ -1814,6 +1814,47 @@ body.app-theme .table th {
   color: #ff9bb8;
 }
 
+.app-floating-back {
+  align-items: center;
+  background: rgba(7, 13, 25, 0.66);
+  border: 1px solid rgba(122, 237, 238, 0.26);
+  border-radius: 999px;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+  color: var(--gg-text);
+  display: inline-flex;
+  height: 42px;
+  justify-content: center;
+  left: 1rem;
+  opacity: 0.72;
+  padding: 0;
+  position: fixed;
+  transition:
+    background var(--gg-transition-fast),
+    border-color var(--gg-transition-fast),
+    opacity var(--gg-transition-fast),
+    transform var(--gg-transition-fast);
+  width: 42px;
+  z-index: 1030;
+}
+
+.app-floating-back:hover,
+.app-floating-back:focus {
+  background: rgba(122, 237, 238, 0.16);
+  border-color: rgba(122, 237, 238, 0.52);
+  color: var(--gg-text);
+  opacity: 1;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+body.app-theme[data-theme="light"] .app-floating-back {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(22, 57, 120, 0.18);
+  box-shadow: 0 12px 24px rgba(22, 57, 120, 0.16);
+  color: #163978;
+}
+
 @media (max-width: 991.98px) {
   body.app-theme {
     -webkit-tap-highlight-color: transparent;
@@ -1821,6 +1862,11 @@ body.app-theme .table th {
 
   body.app-theme .app-content-wrapper {
     padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .app-floating-back {
+    bottom: calc(5.85rem + env(safe-area-inset-bottom, 0px));
+    left: 0.75rem;
   }
 
   .app-mobile-tabbar {
