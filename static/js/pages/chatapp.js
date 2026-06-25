@@ -139,7 +139,8 @@
     });
     const storageKey = "direct-chat:" + chatIds[0] + ":" + chatIds[1];
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const socket = new WebSocket(protocol + "://" + window.location.host + "/ws/chat/user/" + otherUserId + "/");
+    const socketUrl = protocol + "://" + window.location.host + "/ws/chat/user/" + otherUserId + "/";
+    const socket = new WebSocket(socketUrl);
     const status = document.createElement("small");
     status.className = "chat-connection-status";
     status.setAttribute("data-chat-status", "");
@@ -338,15 +339,28 @@
       }
     });
 
-    socket.addEventListener("close", function () {
+    socket.addEventListener("close", function (event) {
       socketReady = false;
-      setStatus("Offline", "closed");
+      const blockedByAuth = event.code === 4401 || event.code === 4403;
+      setStatus(blockedByAuth ? "Chat locked" : "Realtime unavailable", "closed");
       setCanSend(false);
+      if (!blockedByAuth && window.console && typeof window.console.warn === "function") {
+        window.console.warn(
+          "Chat websocket closed before connecting. Production must serve ASGI/Daphne and proxy websocket upgrades for:",
+          socketUrl
+        );
+      }
     });
 
     socket.addEventListener("error", function () {
       if (!socketReady) {
-        setStatus("Unavailable", "closed");
+        setStatus("Realtime unavailable", "closed");
+        if (window.console && typeof window.console.warn === "function") {
+          window.console.warn(
+            "Chat websocket failed. Check ASGI/Daphne, Nginx websocket upgrade headers, and allowed hosts for:",
+            socketUrl
+          );
+        }
       }
       setCanSend(false);
     });
