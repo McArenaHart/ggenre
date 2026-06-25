@@ -4,7 +4,7 @@
 {% block title %}Artists{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/users-artist-list.css' %}?v=20260625cards1" rel="stylesheet" />
+<link href="{% static 'css/pages/users-artist-list.css' %}?v=20260625cards2" rel="stylesheet" />
 {% endblock extra_css %}
 
 {% block content %}
@@ -23,13 +23,28 @@
                     {% include "partials/user_avatar.html" with avatar_user=artist size=74 class_name="artist-card-avatar" alt_text=artist.username lazy="lazy" %}
                 </span>
                 <span class="artist-card-body">
-                    <span class="artist-card-name">{{ artist.username }}</span>
-                    <span class="artist-card-role">{{ artist.get_role_display|default:"Artist" }}</span>
+                    <span class="artist-card-heading">
+                        <span class="artist-card-name">{{ artist.username }}</span>
+                        <span class="artist-card-role">{{ artist.get_role_display|default:"Artist" }}</span>
+                    </span>
                     {% if artist.bio %}
-                        <span class="artist-card-bio">{{ artist.bio|truncatechars:92 }}</span>
+                        <span class="artist-card-bio">{{ artist.bio|truncatechars:86 }}</span>
                     {% else %}
                         <span class="artist-card-bio">View uploads, performances, and creator activity.</span>
                     {% endif %}
+                    <span class="artist-card-meta" aria-label="Artist stats">
+                        <span><i class="fas fa-upload" aria-hidden="true"></i>{{ artist.public_upload_count|default:0 }} uploads</span>
+                        <span><i class="fas fa-star" aria-hidden="true"></i>{{ artist.average_rating|floatformat:1|default:"0.0" }}</span>
+                        <span><i class="fas fa-comment" aria-hidden="true"></i>{{ artist.comment_count|default:0 }}</span>
+                        <span><i class="fas fa-users" aria-hidden="true"></i>{{ artist.follower_count|default:0 }}</span>
+                    </span>
+                    <span class="artist-card-latest">
+                        {% if artist.latest_upload_at %}
+                            Latest upload {{ artist.latest_upload_at|date:"M j, Y" }}
+                        {% else %}
+                            No public uploads yet
+                        {% endif %}
+                    </span>
                 </span>
                 <span class="artist-card-action">
                     <span>View</span>

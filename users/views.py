@@ -17,7 +17,7 @@ import smtplib
 import socket
 import ssl
 import time
-from django.db.models import Avg, Sum, Count
+from django.db.models import Avg, Sum, Count, Max
 from django.db.models.functions import Coalesce
 from django.core.mail import send_mail, BadHeaderError
 from django.core.cache import cache
@@ -843,7 +843,18 @@ def artist_list(request):
     """
     View to display a list of all artists.
     """
-    artists = CustomUser.objects.filter(role=Role.ARTIST).order_by("username")
+    public_content = Q(content__is_approved=True, content__is_visible=True)
+    artists = (
+        CustomUser.objects.filter(role=Role.ARTIST)
+        .annotate(
+            public_upload_count=Count("content", filter=public_content, distinct=True),
+            average_rating=Avg("content__votes__base_value", filter=public_content),
+            comment_count=Count("content__comments", filter=public_content, distinct=True),
+            follower_count=Count("followers", distinct=True),
+            latest_upload_at=Max("content__upload_date", filter=public_content),
+        )
+        .order_by("username")
+    )
 
     context = {
         "artists": artists,

@@ -5,7 +5,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from content.models import Content, Vote
+from content.models import Comment, Content, Vote
 from chatapp.models import AdminChatThread, MatchRating, PeerChatThread
 from chatapp.services import record_match_rating
 
@@ -262,6 +262,24 @@ class UsersAppTests(TestCase):
     def test_artist_list_uses_directory_cards_and_stable_avatars(self):
         self.artist_user.bio = "Independent performer with weekly releases."
         self.artist_user.save(update_fields=["bio"])
+        content = Content.objects.create(
+            title="Weekly Stage Set",
+            artist=self.artist_user,
+            is_approved=True,
+            is_visible=True,
+        )
+        Vote.objects.create(
+            content=content,
+            fan=self.fan_user,
+            base_value=8,
+            value=8,
+            otp_code="123456",
+        )
+        Comment.objects.create(
+            content=content,
+            user=self.fan_user,
+            text="Strong performance.",
+        )
 
         self.client.force_login(self.fan_user)
         response = self.client.get(reverse("artist_list"))
@@ -270,6 +288,9 @@ class UsersAppTests(TestCase):
         self.assertContains(response, "artist-directory-card")
         self.assertContains(response, "artist-card-avatar")
         self.assertContains(response, "Independent performer")
+        self.assertContains(response, "1 uploads")
+        self.assertContains(response, "8.0")
+        self.assertContains(response, "Latest upload")
         self.assertContains(response, "--gg-avatar-size: 74px")
 
     def test_profile_update(self):
