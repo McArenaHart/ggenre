@@ -23,6 +23,7 @@
     "\u2705",
     "\u{1F44B}",
   ];
+  const MESSAGE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
   function insertAtCursor(input, value) {
     const start = input.selectionStart || input.value.length;
@@ -167,15 +168,56 @@
     }
 
     function loadStoredMessages() {
+      const now = Date.now();
+      const normalize = function (messages) {
+        if (!Array.isArray(messages)) {
+          return [];
+        }
+        return messages.filter(function (message) {
+          let storedAt = Number(message.stored_at || message.created_at_timestamp || 0);
+          if (!storedAt && message.created_at) {
+            const createdAt = new Date(message.created_at).getTime();
+            storedAt = Number.isNaN(createdAt) ? 0 : createdAt;
+          }
+          if (!storedAt) {
+            return true;
+          }
+          return now - storedAt < MESSAGE_CACHE_TTL_MS;
+        });
+      };
+
       try {
-        return JSON.parse(window.sessionStorage.getItem(storageKey) || "[]");
+        const localMessages = normalize(JSON.parse(window.localStorage.getItem(storageKey) || "[]"));
+        if (localMessages.length) {
+          window.sessionStorage.setItem(storageKey, JSON.stringify(localMessages));
+          return localMessages;
+        }
+      } catch (error) {
+        try {
+          window.localStorage.removeItem(storageKey);
+        } catch (removeError) {}
+      }
+
+      try {
+        return normalize(JSON.parse(window.sessionStorage.getItem(storageKey) || "[]"));
       } catch (error) {
         return [];
       }
     }
 
     function saveStoredMessages(stored) {
-      window.sessionStorage.setItem(storageKey, JSON.stringify(stored.slice(-250)));
+      const now = Date.now();
+      const messagesToStore = stored.slice(-250).map(function (message) {
+        if (!message.stored_at) {
+          message.stored_at = now;
+        }
+        return message;
+      });
+      const serialized = JSON.stringify(messagesToStore);
+      window.sessionStorage.setItem(storageKey, serialized);
+      try {
+        window.localStorage.setItem(storageKey, serialized);
+      } catch (error) {}
     }
 
     function createMessageId() {
@@ -248,6 +290,7 @@
         sender_id: currentUserId,
         recipient_id: otherUserId,
         created_at: new Date().toISOString(),
+        stored_at: Date.now(),
         delivery_status: 0,
       };
       addMessage(message);
