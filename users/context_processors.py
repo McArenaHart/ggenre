@@ -1,4 +1,11 @@
-from .models import CustomUser, Role
+from .models import CustomUser, Role, VotingTokenPolicy
+
+
+def _message_retention_ms():
+    try:
+        return VotingTokenPolicy.message_retention_ms()
+    except Exception:
+        return 24 * 60 * 60 * 1000
 
 
 def admin_contact(request):
@@ -10,6 +17,7 @@ def admin_contact(request):
             "admin_contact_unread_count": 0,
             "admin_contact_otp": None,
             "peer_chat_unread_count": 0,
+            "message_retention_ms": _message_retention_ms(),
         }
 
     peer_unread_count = 0
@@ -63,6 +71,7 @@ def admin_contact(request):
             "admin_contact_unread_count": 0,
             "admin_contact_otp": None,
             "peer_chat_unread_count": 0,
+            "message_retention_ms": _message_retention_ms(),
         }
 
     admin_user = (
@@ -95,4 +104,5 @@ def admin_contact(request):
         "admin_contact_unread_count": admin_contact_unread_count,
         "admin_contact_otp": admin_contact_otp,
         "peer_chat_unread_count": peer_unread_count,
+        "message_retention_ms": _message_retention_ms(),
     }

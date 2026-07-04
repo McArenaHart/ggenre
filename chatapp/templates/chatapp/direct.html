@@ -14,6 +14,7 @@
   data-current-user-id="{{ request.user.id }}"
   data-current-user="{{ request.user.username }}"
   data-other-user="{{ other_user.username }}"
+  data-message-retention-ms="{{ message_retention_ms|default:86400000 }}"
 >
   <header class="chat-header chat-direct-nav">
     {% if request.user.is_admin %}
@@ -70,5 +71,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/pages/chatapp.js' %}?v=20260704cache1"></script>
+<script src="{% static 'js/pages/chatapp.js' %}?v=20260704retention1"></script>
 {% endblock %}

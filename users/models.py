@@ -161,6 +161,7 @@ class OTP(models.Model):
 class VotingTokenPolicy(models.Model):
     tokens_paused = models.BooleanField(default=False)
     voting_suspended = models.BooleanField(default=False)
+    message_retention_hours = models.PositiveSmallIntegerField(default=24)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -187,11 +188,16 @@ class VotingTokenPolicy(models.Model):
     def voting_is_suspended(cls):
         return cls.current().voting_suspended
 
+    @classmethod
+    def message_retention_ms(cls):
+        hours = cls.current().message_retention_hours or 24
+        return max(1, min(int(hours), 168)) * 60 * 60 * 1000
+
     def __str__(self):
         if self.voting_suspended:
             return "Voting suspended"
         status = "paused" if self.tokens_paused else "required"
-        return f"Voting tokens {status}"
+        return f"Voting tokens {status}; messages retained {self.message_retention_hours}h"
 
 
 class Announcement(models.Model):

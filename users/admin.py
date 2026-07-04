@@ -110,8 +110,8 @@ class TermsAndConditionsAdmin(admin.ModelAdmin):
 
 @admin.register(VotingTokenPolicy)
 class VotingTokenPolicyAdmin(admin.ModelAdmin):
-    list_display = ('id', 'voting_suspended', 'tokens_paused', 'updated_by', 'updated_at')
-    list_editable = ('voting_suspended', 'tokens_paused')
+    list_display = ('id', 'voting_suspended', 'tokens_paused', 'message_retention_hours', 'updated_by', 'updated_at')
+    list_editable = ('voting_suspended', 'tokens_paused', 'message_retention_hours')
     readonly_fields = ('updated_at',)
 
     def save_model(self, request, obj, form, change):

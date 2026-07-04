@@ -6,7 +6,7 @@ from django.http import HttpResponseForbidden, JsonResponse
 from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
 
-from users.models import CustomUser, OTP, Role
+from users.models import CustomUser, OTP, Role, VotingTokenPolicy
 
 from .models import AdminChatThread, MatchRating, PeerChatThread
 from .services import record_match_rating, users_can_peer_chat
@@ -114,6 +114,7 @@ def direct_chat(request, user_id):
             "other_user": other_user,
             "chat_channel": "peer" if is_peer_chat else "admin",
             "incoming_rating": incoming_rating,
+            "message_retention_ms": VotingTokenPolicy.message_retention_ms(),
         },
     )
 

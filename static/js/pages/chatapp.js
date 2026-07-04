@@ -23,7 +23,7 @@
     "\u2705",
     "\u{1F44B}",
   ];
-  const MESSAGE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+  const DEFAULT_MESSAGE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
   function insertAtCursor(input, value) {
     const start = input.selectionStart || input.value.length;
@@ -122,6 +122,10 @@
     const badge = root.querySelector("[data-admin-contact-badge]");
     const unreadUrl = document.body.getAttribute("data-admin-contact-unread-url");
     const markReadUrl = document.body.getAttribute("data-admin-contact-mark-read-url");
+    const configuredRetentionMs = Number(root.getAttribute("data-message-retention-ms"));
+    const messageCacheTtlMs = Number.isFinite(configuredRetentionMs) && configuredRetentionMs > 0
+      ? configuredRetentionMs
+      : DEFAULT_MESSAGE_CACHE_TTL_MS;
     let pendingMessage = null;
     let socketReady = false;
     let renderedOtpCode = "";
@@ -182,7 +186,7 @@
           if (!storedAt) {
             return true;
           }
-          return now - storedAt < MESSAGE_CACHE_TTL_MS;
+          return now - storedAt < messageCacheTtlMs;
         });
       };
 

@@ -523,6 +523,21 @@ def admin_dashboard(request):
             voting_token_policy.updated_by = request.user
             voting_token_policy.save(update_fields=["voting_suspended", "updated_by", "updated_at"])
             messages.success(request, "Voting resumed.")
+        elif token_policy_action == "message_retention":
+            try:
+                retention_hours = int(request.POST.get("message_retention_hours", 24))
+            except (TypeError, ValueError):
+                retention_hours = 24
+            retention_hours = max(1, min(retention_hours, 168))
+            voting_token_policy.message_retention_hours = retention_hours
+            voting_token_policy.updated_by = request.user
+            voting_token_policy.save(
+                update_fields=["message_retention_hours", "updated_by", "updated_at"]
+            )
+            messages.success(
+                request,
+                f"Ephemeral chat messages will remain in browser storage for {retention_hours} hour(s).",
+            )
         else:
             messages.error(request, "Invalid token policy action.")
         return redirect("admin_dashboard")

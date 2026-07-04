@@ -68,6 +68,36 @@
               </button>
             </form>
           {% endif %}
+
+          <hr>
+          <form method="POST" class="admin-message-retention-form">
+            {% csrf_token %}
+            <input type="hidden" name="token_policy_action" value="message_retention">
+            <div class="form-group">
+              <label for="message_retention_hours">Message retention window</label>
+              <div class="input-group">
+                <input
+                  type="number"
+                  name="message_retention_hours"
+                  id="message_retention_hours"
+                  class="form-control"
+                  min="1"
+                  max="168"
+                  value="{{ voting_token_policy.message_retention_hours|default:24 }}"
+                  required
+                >
+                <div class="input-group-append">
+                  <span class="input-group-text">hours</span>
+                </div>
+              </div>
+              <small class="form-text text-muted">
+                Controls how long chat messages remain in browser storage. Message bodies are still not saved in the database.
+              </small>
+            </div>
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-clock"></i> Save Message Retention
+            </button>
+          </form>
         </div>
       </div>
     </div>

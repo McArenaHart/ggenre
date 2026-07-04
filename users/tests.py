@@ -215,6 +215,7 @@ class UsersAppTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "admin-contact-chat")
         self.assertContains(response, f'data-direct-chat-user="{self.admin_user.id}"')
+        self.assertContains(response, 'data-message-retention-ms="86400000"')
         self.assertContains(response, "Contact Admin")
 
     def test_admin_shell_does_not_show_admin_contact_widget(self):
@@ -411,6 +412,36 @@ class UsersAppTests(TestCase):
         self.assertEqual(resume_response.status_code, 302)
         policy.refresh_from_db()
         self.assertFalse(policy.tokens_paused)
+
+    def test_admin_can_set_message_retention_policy(self):
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
+
+        response = self.client.post(
+            reverse("admin_dashboard"),
+            {
+                "token_policy_action": "message_retention",
+                "message_retention_hours": "36",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        policy = VotingTokenPolicy.current()
+        self.assertEqual(policy.message_retention_hours, 36)
+
+        response = self.client.post(
+            reverse("admin_dashboard"),
+            {
+                "token_policy_action": "message_retention",
+                "message_retention_hours": "500",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        policy.refresh_from_db()
+        self.assertEqual(policy.message_retention_hours, 168)
 
     def test_admin_can_bulk_generate_otps_and_deliver_contact_notifications(self):
         self.client.login(

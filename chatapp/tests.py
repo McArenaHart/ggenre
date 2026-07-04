@@ -9,7 +9,7 @@ from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
 
 from chatapp.routing import websocket_urlpatterns
-from users.models import CustomUser, Notification, Role
+from users.models import CustomUser, Notification, Role, VotingTokenPolicy
 
 from .models import AdminChatThread, MatchRating, PeerChatThread
 from .services import (
@@ -122,12 +122,16 @@ class ChatAppTests(TestCase):
 
     def test_direct_chat_page_loads_for_matched_peer_user(self):
         self.create_match(self.owner, self.member)
+        policy = VotingTokenPolicy.current()
+        policy.message_retention_hours = 12
+        policy.save(update_fields=["message_retention_hours", "updated_at"])
         self.client.login(username="chat_owner", password="password123")
         response = self.client.get(reverse("chatapp:direct", args=[self.member.id]))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "chat_member")
         self.assertContains(response, f'data-direct-chat-user="{self.member.id}"')
+        self.assertContains(response, 'data-message-retention-ms="43200000"')
         self.assertContains(response, reverse("chatapp:index"))
 
     def test_artist_direct_chat_shows_rating_received_from_peer(self):

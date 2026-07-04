@@ -424,6 +424,7 @@
         data-current-user-id="{{ user.id }}"
         data-current-user="{{ user.username }}"
         data-chat-widget="admin-contact"
+        data-message-retention-ms="{{ message_retention_ms|default:86400000 }}"
         data-admin-contact-unread="{{ admin_contact_unread_count|default:0 }}"
         data-admin-contact-otp-code="{{ admin_contact_otp.otp_code|default:'' }}"
         data-admin-contact-otp-votes="{{ admin_contact_otp.remaining_votes|default:'' }}"
@@ -491,7 +492,7 @@
     <script src="{% static 'js/custom.js' %}"></script>
     <script src="{% static 'js/pages/base-shell.js' %}?v=20260625back3"></script>
     {% if admin_contact_user and other_user != admin_contact_user %}
-      <script src="{% static 'js/pages/chatapp.js' %}?v=20260704cache1"></script>
+      <script src="{% static 'js/pages/chatapp.js' %}?v=20260704retention1"></script>
     {% endif %}
 
     {% block extra_js %}{% endblock %}
