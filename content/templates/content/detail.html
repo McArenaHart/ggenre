@@ -144,8 +144,7 @@
             {% for comment in comments %}
             <div class="watch-comment-item">
               <div class="watch-comment-avatar-wrapper">
-                {% include "partials/user_avatar.html" with avatar_user=comment.user size=38
-                class_name="watch-comment-avatar" alt_text=comment.user.username %}
+                {% include "partials/user_avatar.html" with avatar_user=comment.user size=38 class_name="watch-comment-avatar" alt_text=comment.user.username %}
               </div>
               <div class="comment-content">
                 <p class="watch-comment-meta">

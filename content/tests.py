@@ -107,6 +107,21 @@ class ContentViewTest(TestCase):
 
         self.assertEqual(self.content.viewers.count(), 2)
 
+    def test_content_detail_renders_comment_avatar_without_template_leak(self):
+        Comment.objects.create(
+            content=self.content,
+            user=self.user,
+            text="Rendered comment.",
+        )
+
+        response = self.client.get(reverse("content_detail", args=[self.content.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "watch-comment-avatar")
+        self.assertContains(response, "Rendered comment.")
+        self.assertNotContains(response, "{% include")
+        self.assertNotContains(response, "partials/user_avatar.html")
+
     def test_content_detail_up_next_prioritizes_same_creator_then_related_creators(self):
         shared_genre = Genre.objects.create(name="Afro Fusion")
         self.content.genre = shared_genre
