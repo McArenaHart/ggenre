@@ -141,8 +141,10 @@
           <div class="watch-comment-list">
             {% for comment in comments %}
             <div class="watch-comment-item">
-              {% include "partials/user_avatar.html" with avatar_user=comment.user size=38
-              class_name="watch-comment-avatar" alt_text=comment.user.username %}
+              <div class="watch-comment-avatar-wrapper">
+                {% include "partials/user_avatar.html" with avatar_user=comment.user size=38
+                class_name="watch-comment-avatar" alt_text=comment.user.username %}
+              </div>
               <div class="comment-content">
                 <p class="watch-comment-meta">
                   <a href="{% url 'user_profile' comment.user.id %}"><strong>{{ comment.user.username }}</strong></a>

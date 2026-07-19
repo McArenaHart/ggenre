@@ -168,8 +168,8 @@ body.app-theme[data-theme="dark"] .border-left {
 
 body.app-theme[data-theme="dark"] .dropdown-header,
 body.app-theme[data-theme="dark"] .pagination .page-item .page-link,
-body.app-theme[data-theme="dark"] .form-label-group > label,
-body.app-theme[data-theme="dark"] .form-label-group input:not(:placeholder-shown) ~ label {
+body.app-theme[data-theme="dark"] .form-label-group>label,
+body.app-theme[data-theme="dark"] .form-label-group input:not(:placeholder-shown)~label {
   color: var(--gg-text-muted) !important;
 }
 
@@ -720,7 +720,7 @@ select option {
   -webkit-overflow-scrolling: touch;
 }
 
-.table-responsive > .table {
+.table-responsive>.table {
   margin-bottom: 0;
 }
 
@@ -988,7 +988,7 @@ select option {
   padding: var(--gg-space-3);
 }
 
-.announcement-content + .announcement-content {
+.announcement-content+.announcement-content {
   border-top: 1px solid var(--gg-border);
   margin-top: var(--gg-space-3);
   padding-top: var(--gg-space-3);
@@ -1064,6 +1064,7 @@ select option {
   object-fit: cover;
   object-position: center;
   flex-shrink: 0;
+  margin-right: 0.5rem;
   width: var(--gg-avatar-size, 40px);
 }
 
@@ -1536,10 +1537,10 @@ body.app-theme[data-theme="light"] .app-empty {
     margin-top: 0.45rem;
   }
 
-  .app-content-wrapper .x_content > table.table,
-  .app-content-wrapper .x_content form > table.table,
-  .app-content-wrapper .x_content > .table,
-  .app-content-wrapper .x_content form > .table {
+  .app-content-wrapper .x_content>table.table,
+  .app-content-wrapper .x_content form>table.table,
+  .app-content-wrapper .x_content>.table,
+  .app-content-wrapper .x_content form>.table {
     display: block;
     width: 100%;
     overflow-x: auto;
@@ -1547,7 +1548,7 @@ body.app-theme[data-theme="light"] .app-empty {
     white-space: nowrap;
   }
 
-  .app-content-wrapper .x_content .table-responsive > table.table {
+  .app-content-wrapper .x_content .table-responsive>table.table {
     white-space: nowrap;
   }
 
@@ -1557,10 +1558,10 @@ body.app-theme[data-theme="light"] .app-empty {
     gap: 0.5rem;
   }
 
-  .app-content-wrapper .x_content .btn-group > .btn,
-  .app-content-wrapper .x_content .btn-group > .form-control,
-  .app-content-wrapper .x_content .btn-group > .custom-select,
-  .app-content-wrapper .x_content .btn-group > select {
+  .app-content-wrapper .x_content .btn-group>.btn,
+  .app-content-wrapper .x_content .btn-group>.form-control,
+  .app-content-wrapper .x_content .btn-group>.custom-select,
+  .app-content-wrapper .x_content .btn-group>select {
     flex: 1 1 auto;
     min-width: 0;
   }
@@ -1612,10 +1613,10 @@ body.app-theme[data-theme="light"] .app-empty {
     padding: var(--gg-space-4);
   }
 
-  .app-content-wrapper .x_content > table.table,
-  .app-content-wrapper .x_content form > table.table,
-  .app-content-wrapper .x_content > .table,
-  .app-content-wrapper .x_content form > .table {
+  .app-content-wrapper .x_content>table.table,
+  .app-content-wrapper .x_content form>table.table,
+  .app-content-wrapper .x_content>.table,
+  .app-content-wrapper .x_content form>.table {
     font-size: 0.82rem;
   }
 }
@@ -1654,10 +1655,10 @@ body.app-theme .table th {
     gap: 0.5rem;
   }
 
-  body.app-theme .app-content-wrapper .btn-group > .btn,
-  body.app-theme .app-content-wrapper .btn-group > .form-control,
-  body.app-theme .app-content-wrapper .btn-group > .custom-select,
-  body.app-theme .app-content-wrapper .btn-group > select {
+  body.app-theme .app-content-wrapper .btn-group>.btn,
+  body.app-theme .app-content-wrapper .btn-group>.form-control,
+  body.app-theme .app-content-wrapper .btn-group>.custom-select,
+  body.app-theme .app-content-wrapper .btn-group>select {
     flex: 1 1 100%;
   }
 

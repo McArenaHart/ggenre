@@ -333,6 +333,12 @@
 .watch-comment-avatar {
   flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.15);
+  margin-right: 0.5rem;
+}
+
+.watch-comment-avatar-wrapper {
+  display: flex;
+  align-items: center;
 }
 
 .watch-comment-meta {
@@ -596,13 +602,13 @@ body.app-theme[data-theme="light"] .watch-related-card.is-next {
   box-shadow: inset 3px 0 0 rgba(22, 57, 120, 0.42);
 }
 
-.watch-sidebar-section + .watch-sidebar-section {
+.watch-sidebar-section+.watch-sidebar-section {
   margin-top: 0.42rem;
   padding-top: 0.58rem;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-body.app-theme[data-theme="light"] .watch-sidebar-section + .watch-sidebar-section {
+body.app-theme[data-theme="light"] .watch-sidebar-section+.watch-sidebar-section {
   border-top-color: rgba(19, 41, 86, 0.1);
 }
 
@@ -651,6 +657,7 @@ body.app-theme[data-theme="light"] .watch-sidebar-section + .watch-sidebar-secti
 }
 
 @media (max-width: 767.98px) {
+
   .watch-main-body,
   .watch-comments {
     padding-inline: 0.85rem !important;
