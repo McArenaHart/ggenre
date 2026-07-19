@@ -108,6 +108,14 @@ class ContentViewTest(TestCase):
         self.assertEqual(self.content.viewers.count(), 2)
 
     def test_content_detail_renders_comment_avatar_without_template_leak(self):
+        related = Content.objects.create(
+            title="Related Upload",
+            artist=self.user,
+            file=sample_upload_file(filename="related.mp4"),
+            is_approved=True,
+            is_visible=True,
+        )
+        related.tags.add("test")
         Comment.objects.create(
             content=self.content,
             user=self.user,
@@ -119,6 +127,9 @@ class ContentViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "watch-comment-avatar")
         self.assertContains(response, "Rendered comment.")
+        self.assertContains(response, "Related Upload")
+        self.assertNotContains(response, "vote{{")
+        self.assertNotContains(response, "{{ related")
         self.assertNotContains(response, "{% include")
         self.assertNotContains(response, "partials/user_avatar.html")
 

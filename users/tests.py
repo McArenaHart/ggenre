@@ -4,8 +4,9 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
-from content.models import Comment, Content, Vote
+from content.models import Comment, Content, LivePerformance, Vote
 from chatapp.models import AdminChatThread, MatchRating, PeerChatThread
 from chatapp.services import record_match_rating
 
@@ -713,6 +714,26 @@ class UsersAppTests(TestCase):
         self.assertNotContains(response, "dropdown-toggle admin-actions-toggle")
         self.assertContains(response, "Approve Voting")
         self.assertContains(response, "Reset Votes & Chats")
+
+    def test_admin_dashboard_voucher_dropdown_does_not_leak_template_code(self):
+        LivePerformance.objects.create(
+            title="Restricted Showcase",
+            artist=self.artist_user,
+            start_time=timezone.now(),
+            is_restricted=True,
+        )
+
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
+        response = self.client.get(reverse("admin_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Restricted Showcase")
+        self.assertContains(response, "Restricted")
+        self.assertNotContains(response, "&mdash; {{")
+        self.assertNotContains(response, "perf.is_restricted")
 
 
 class CustomUserModelTests(TestCase):

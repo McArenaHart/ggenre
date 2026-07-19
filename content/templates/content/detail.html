@@ -23,8 +23,7 @@
           <div class="watch-meta-row">
             <div class="watch-author">
               <div class="watch-author-avatar-wrapper">
-                {% include "partials/user_avatar.html" with avatar_user=content.artist size=48
-                class_name="watch-author-avatar" alt_text=content.artist.username %}
+                {% include "partials/user_avatar.html" with avatar_user=content.artist size=48 class_name="watch-author-avatar" alt_text=content.artist.username %}
               </div>
               <div class="watch-author-meta">
                 <a href="{% url 'user_profile' content.artist.id %}" class="watch-author-name">
@@ -225,8 +224,7 @@
                 <h6>{{ related.title }}</h6>
                 <p class="watch-related-artist">{{ related.artist.username }}</p>
                 <p class="watch-related-stats">
-                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{
-                  related.votes.count|pluralize }}
+                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{ related.votes.count|pluralize }}
                 </p>
               </div>
             </a>
@@ -262,8 +260,7 @@
                 <h6>{{ related.title }}</h6>
                 <p class="watch-related-artist">{{ related.artist.username }}</p>
                 <p class="watch-related-stats">
-                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{
-                  related.votes.count|pluralize }}
+                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{ related.votes.count|pluralize }}
                 </p>
               </div>
             </a>
@@ -299,8 +296,7 @@
                 <h6>{{ related.title }}</h6>
                 <p class="watch-related-artist">{{ related.artist.username }}</p>
                 <p class="watch-related-stats">
-                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{
-                  related.votes.count|pluralize }}
+                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{ related.votes.count|pluralize }}
                 </p>
               </div>
             </a>
@@ -336,8 +332,7 @@
                 <h6>{{ related.title }}</h6>
                 <p class="watch-related-artist">{{ related.artist.username }}</p>
                 <p class="watch-related-stats">
-                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{
-                  related.votes.count|pluralize }}
+                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{ related.votes.count|pluralize }}
                 </p>
               </div>
             </a>

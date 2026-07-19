@@ -826,8 +826,7 @@
               <select name="performance_id" class="form-control" required>
                 {% for perf in live_performances %}
                 <option value="{{ perf.id }}">
-                  {{ perf.title }} &mdash; {{ perf.artist.username }} &mdash; {{ perf.start_time }} &mdash; {{
-                  perf.is_restricted|yesno:"Restricted,Public" }}
+                  {{ perf.title }} &mdash; {{ perf.artist.username }} &mdash; {{ perf.start_time }} &mdash; {{ perf.is_restricted|yesno:"Restricted,Public" }}
                 </option>
                 {% endfor %}
               </select>
