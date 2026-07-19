@@ -8,13 +8,9 @@
 {% endblock %}
 
 {% block content %}
-<div
-  class="container-fluid livestream-room"
-  data-stream-key="{{ stream.stream_key }}"
-  data-is-host="{% if is_host %}1{% else %}0{% endif %}"
-  data-current-user-id="{{ request.user.id }}"
-  data-current-user="{{ request.user.username }}"
->
+<div class="container-fluid livestream-room" data-stream-key="{{ stream.stream_key }}"
+  data-is-host="{% if is_host %}1{% else %}0{% endif %}" data-current-user-id="{{ request.user.id }}"
+  data-current-user="{{ request.user.username }}">
   <header class="livestream-room-header">
     <div>
       <h1>{{ stream.title }}</h1>
@@ -22,25 +18,25 @@
     </div>
     <div class="livestream-room-actions">
       {% if is_host %}
-        {% if stream.status != stream.STATUS_LIVE %}
-          <form method="post" action="{% url 'livestream:start' stream.stream_key %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-success">
-              <i class="fas fa-broadcast-tower" aria-hidden="true"></i> Go Live
-            </button>
-          </form>
-        {% endif %}
-        {% if stream.status == stream.STATUS_LIVE %}
-          <form method="post" action="{% url 'livestream:end' stream.stream_key %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-danger">
-              <i class="fas fa-stop" aria-hidden="true"></i> End
-            </button>
-          </form>
-        {% endif %}
-        <a href="{% url 'livestream:manage_access' stream.stream_key %}" class="btn btn-outline-primary">
-          <i class="fas fa-lock" aria-hidden="true"></i> Access
-        </a>
+      {% if stream.status != stream.STATUS_LIVE %}
+      <form method="post" action="{% url 'livestream:start' stream.stream_key %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success">
+          <i class="fas fa-broadcast-tower" aria-hidden="true"></i> Go Live
+        </button>
+      </form>
+      {% endif %}
+      {% if stream.status == stream.STATUS_LIVE %}
+      <form method="post" action="{% url 'livestream:end' stream.stream_key %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">
+          <i class="fas fa-stop" aria-hidden="true"></i> End
+        </button>
+      </form>
+      {% endif %}
+      <a href="{% url 'livestream:manage_access' stream.stream_key %}" class="btn btn-outline-primary">
+        <i class="fas fa-lock" aria-hidden="true"></i> Access
+      </a>
       {% endif %}
     </div>
   </header>
@@ -50,14 +46,17 @@
       <video data-local-video autoplay playsinline muted></video>
       <video data-remote-video autoplay playsinline></video>
       <div class="livestream-stage-empty" data-stage-empty>
-          <i class="fas fa-video" aria-hidden="true"></i>
+        <i class="fas fa-video" aria-hidden="true"></i>
         <span>{% if is_host %}Start your camera to broadcast.{% else %}Waiting for the host.{% endif %}</span>
       </div>
       <div class="livestream-stage-controls">
         {% if is_host %}
-          <button type="button" class="btn btn-primary btn-sm" data-camera-toggle>
-            <i class="fas fa-video" aria-hidden="true"></i> Camera
-          </button>
+        <button type="button" class="btn btn-primary btn-sm" data-camera-toggle>
+          <i class="fas fa-video" aria-hidden="true"></i> Camera
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-camera-flip>
+          <i class="fas fa-sync-alt" aria-hidden="true"></i> Flip Camera
+        </button>
         {% endif %}
         <span data-live-status>Connecting...</span>
       </div>
@@ -67,8 +66,10 @@
       <h2>Live Chat</h2>
       <div class="chat-messages livestream-chat-messages" data-chat-messages></div>
       <form class="chat-compose" data-chat-form>
-        <input type="text" class="form-control" data-chat-input maxlength="2000" autocomplete="off" placeholder="Message live chat..." />
-        <button type="submit" class="btn btn-primary chat-send-button" aria-label="Send live chat message" title="Send live chat message">
+        <input type="text" class="form-control" data-chat-input maxlength="2000" autocomplete="off"
+          placeholder="Message live chat..." />
+        <button type="submit" class="btn btn-primary chat-send-button" aria-label="Send live chat message"
+          title="Send live chat message">
           <i class="fas fa-paper-plane" aria-hidden="true"></i>
         </button>
       </form>

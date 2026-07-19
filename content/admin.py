@@ -102,8 +102,8 @@ class ArtistUploadLimitAdmin(admin.ModelAdmin):
 
 @admin.register(Vote)
 class VoteAdmin(admin.ModelAdmin):
-    list_display = ('content', 'fan', 'value', 'timestamp', 'otp_code', 'tag')
-    list_filter = ('timestamp',)
+    list_display = ('content', 'fan', 'value', 'is_badge_vote', 'timestamp', 'otp_code', 'tag')
+    list_filter = ('timestamp', 'is_badge_vote')
 
 @admin.register(OTP)
 class OTPAdmin(admin.ModelAdmin):

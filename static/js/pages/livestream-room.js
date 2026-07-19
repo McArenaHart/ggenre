@@ -11,6 +11,7 @@
   const localVideo = root.querySelector("[data-local-video]");
   const remoteVideo = root.querySelector("[data-remote-video]");
   const cameraButton = root.querySelector("[data-camera-toggle]");
+  const cameraFlipButton = root.querySelector("[data-camera-flip]");
   const statusLabel = root.querySelector("[data-live-status]");
   const emptyState = root.querySelector("[data-stage-empty]");
   const chatMessages = root.querySelector("[data-chat-messages]");
@@ -21,6 +22,7 @@
   const socket = new WebSocket(protocol + "://" + window.location.host + "/ws/livestream/" + streamKey + "/");
   const peers = new Map();
   let localStream = null;
+  let currentVideoDeviceId = null;
   const standardEmojis = [
     "😀",
     "😂",
@@ -152,14 +154,106 @@
     chatForm.insertBefore(wrapper, chatInput);
   }
 
-  async function ensureCamera() {
-    if (localStream) {
+  async function getVideoInputDevices() {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.filter(function (device) {
+      return device.kind === "videoinput";
+    });
+  }
+
+  function getStreamVideoDeviceId(stream) {
+    return stream
+      .getVideoTracks()
+      .map(function (track) {
+        return track.getSettings().deviceId;
+      })
+      .find(Boolean);
+  }
+
+  function replaceVideoTrack(newTrack) {
+    if (!localStream || !newTrack) {
+      return;
+    }
+
+    localStream.getVideoTracks().forEach(function (oldTrack) {
+      localStream.removeTrack(oldTrack);
+      oldTrack.stop();
+    });
+    localStream.addTrack(newTrack);
+    localVideo.srcObject = localStream;
+
+    peers.forEach(function (peer) {
+      const sender = peer.getSenders().find(function (item) {
+        return item.track && item.track.kind === "video";
+      });
+      if (sender) {
+        sender.replaceTrack(newTrack);
+      }
+    });
+  }
+
+  async function ensureCamera(deviceId) {
+    if (localStream && (!deviceId || deviceId === currentVideoDeviceId)) {
       return localStream;
     }
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    localVideo.srcObject = localStream;
+
+    const constraints = {
+      video: deviceId
+        ? { deviceId: { exact: deviceId } }
+        : true,
+      audio: true,
+    };
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    if (!localStream) {
+      localStream = stream;
+      localVideo.srcObject = localStream;
+    } else {
+      const newVideoTrack = stream.getVideoTracks()[0];
+      replaceVideoTrack(newVideoTrack);
+      stream.getTracks().forEach(function (track) {
+        if (track.kind !== "video") {
+          track.stop();
+        }
+      });
+    }
+
+    currentVideoDeviceId = getStreamVideoDeviceId(localStream);
     showVideoReady();
     return localStream;
+  }
+
+  async function flipCamera() {
+    try {
+      await ensureCamera();
+      const cameras = await getVideoInputDevices();
+      if (cameras.length < 2) {
+        setStatus("No second camera available");
+        return;
+      }
+
+      const currentIndex = cameras.findIndex(function (device) {
+        return device.deviceId === currentVideoDeviceId;
+      });
+      const nextIndex = currentIndex < 0 ? 1 : (currentIndex + 1) % cameras.length;
+      const nextDevice = cameras[nextIndex] || cameras[0];
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: nextDevice.deviceId } },
+        audio: false,
+      });
+      const newVideoTrack = stream.getVideoTracks()[0];
+      if (!newVideoTrack) {
+        setStatus("Unable to switch camera");
+        return;
+      }
+
+      replaceVideoTrack(newVideoTrack);
+      currentVideoDeviceId = nextDevice.deviceId;
+      setStatus("Camera flipped");
+    } catch (error) {
+      setStatus("Camera flip failed");
+    }
   }
 
   function createPeer(peerId) {
@@ -264,6 +358,12 @@
       } catch (error) {
         setStatus("Camera blocked");
       }
+    });
+  }
+
+  if (cameraFlipButton) {
+    cameraFlipButton.addEventListener("click", function () {
+      flipCamera();
     });
   }
 

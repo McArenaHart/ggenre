@@ -633,7 +633,7 @@ class VotingFlowTest(TestCase):
         self.assertFalse(MatchRating.objects.filter(source_content=self.content).exists())
         self.assertFalse(PeerChatThread.objects.exists())
 
-    def test_calculate_final_ranking_assigns_badge_without_request(self):
+    def test_calculate_final_ranking_does_not_auto_assign_badge(self):
         from content.views import calculate_final_ranking
 
         Vote.objects.create(
@@ -644,9 +644,10 @@ class VotingFlowTest(TestCase):
             otp_code="999999",
         )
 
-        calculate_final_ranking()
+        ranking = calculate_final_ranking()
 
-        self.assertTrue(Badge.objects.filter(user=self.fan).exists())
+        self.assertTrue(ranking.exists())
+        self.assertFalse(Badge.objects.filter(user=self.fan).exists())
 
     def test_vote_rejected_when_otp_has_no_remaining_votes(self):
         self.otp.remaining_votes = 0

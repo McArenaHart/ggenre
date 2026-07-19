@@ -452,6 +452,12 @@ def content_detail(request, content_id):
     comments = Comment.objects.filter(content=content).order_by('-timestamp')  # Fetch comments for the content
     average_vote = Vote.objects.filter(content=content).aggregate(Avg('value'))['value__avg'] or 0  # Calculate average vote
     voting_suspended = VotingTokenPolicy.voting_is_suspended()
+    recent_votes = []
+    if request.user == content.artist or request.user.is_admin():
+        recent_votes = (
+            content.votes.select_related('fan')
+            .order_by('-timestamp')[:10]
+        )
 
     return render(request, 'content/detail.html', {
         'content': content,
@@ -470,6 +476,7 @@ def content_detail(request, content_id):
             and content.is_approved_for_voting
             and not voting_suspended
         ),
+        'recent_votes': recent_votes,
     })
 
 
@@ -744,7 +751,6 @@ def vote_content(request, content_id):
                 Vote.objects.filter(pk=vote.pk).update(timestamp=now())
                 vote.refresh_from_db(fields=["timestamp"])
 
-            assign_or_upgrade_badge_for_user(request.user)
             if content.artist_id != request.user.id and not request.user.is_admin():
                 try:
                     from chatapp.services import record_match_rating
@@ -804,16 +810,11 @@ def assign_or_upgrade_badge(request, user_id, level=None):
 
 
 def calculate_final_ranking():
-    # Calculate total points for each content item
-    content_ranking = Content.objects.annotate(
+    # Calculate total points for each content item.
+    # Badge assignment is now managed only through admin badge assignment.
+    return Content.objects.annotate(
         total_points=Sum('votes__value')
     ).order_by('-total_points')
-
-    # Assign badges to fans whose votes match the final ranking
-    for rank, content in enumerate(content_ranking, start=1):
-        matching_votes = Vote.objects.filter(content=content, base_value=rank)
-        for vote in matching_votes:
-            assign_or_upgrade_badge_for_user(vote.fan)  # Upgrade badge for matching votes
 
 @login_required
 @require_POST

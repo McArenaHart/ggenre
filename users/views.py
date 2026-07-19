@@ -744,6 +744,8 @@ def admin_dashboard(request):
     otp_user_statuses = [{"user": user, "otp": otp_by_user.get(user.id)} for user in otp_users]
 
     # Prepare context
+    recent_badge_votes = Vote.objects.filter(is_badge_vote=True).select_related('fan', 'content').order_by('-timestamp')[:10]
+
     context = {
         "announcements": announcements,
         "artists": artists,
@@ -770,6 +772,7 @@ def admin_dashboard(request):
             "pending_content": Content.objects.filter(is_approved=False).count(),
         },
         "content_ranking": content_ranking,  # Add voting statistics to context
+        "recent_badge_votes": recent_badge_votes,
         "performances": LivePerformance.objects.all(),
         "live_performances": live_performances,
         "vouchers_by_perf": {
@@ -1080,9 +1083,12 @@ def notify_artist_on_vote(sender, instance, **kwargs):
     """
     content = instance.content
     artist = content.artist
-    message = f"{instance.fan.username} voted {instance.value} on your content: {content.title}"
+    badge_text = " with badge" if instance.is_badge_vote else ""
+    message = (
+        f"{instance.fan.username} voted {instance.value} on your content: {content.title}"
+        f"{badge_text}"
+    )
 
-    # Create a notification for the artist
     Notification.objects.create(user=artist, message=message)
 
 
