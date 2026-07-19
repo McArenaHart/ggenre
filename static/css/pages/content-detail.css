@@ -100,8 +100,16 @@
   gap: 0.65rem;
 }
 
-.watch-author-avatar {
+.watch-author-avatar-wrapper,
+.watch-comment-avatar-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.watch-author-avatar,
+.watch-comment-avatar {
   border: 1px solid rgba(255, 255, 255, 0.16);
+  margin-right: 0.65rem;
 }
 
 .watch-author-name {

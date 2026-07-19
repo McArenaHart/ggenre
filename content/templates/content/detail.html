@@ -22,8 +22,10 @@
 
           <div class="watch-meta-row">
             <div class="watch-author">
-              {% include "partials/user_avatar.html" with avatar_user=content.artist size=48
-              class_name="watch-author-avatar" alt_text=content.artist.username %}
+              <div class="watch-author-avatar-wrapper">
+                {% include "partials/user_avatar.html" with avatar_user=content.artist size=48
+                class_name="watch-author-avatar" alt_text=content.artist.username %}
+              </div>
               <div class="watch-author-meta">
                 <a href="{% url 'user_profile' content.artist.id %}" class="watch-author-name">
                   {{ content.artist.username }}
