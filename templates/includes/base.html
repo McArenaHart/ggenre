@@ -98,8 +98,7 @@
             <a class="nav-link" href="{% url 'chatapp:index' %}">
               <i class="fas fa-fw fa-comments"></i>
               <span>Messages</span>
-              <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count
-                }}</span>
+              <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count }}</span>
             </a>
           </li>
           {% endif %}
@@ -127,8 +126,7 @@
             <a class="nav-link" href="{% url 'chatapp:admin_inbox' %}">
               <i class="fas fa-fw fa-inbox"></i>
               <span>Inbox</span>
-              <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{
-                admin_chat_unread_count }}</span>
+              <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
             </a>
           </li>
           {% endif %}
@@ -161,8 +159,7 @@
             {% if user.role != 'admin' %}
             <a class="dropdown-item" href="{% url 'chatapp:index' %}">
               <i class="fas fa-fw fa-comments"></i> Messages
-              <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count
-                }}</span>
+              <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count }}</span>
             </a>
             {% endif %}
             {% if user.role == 'admin' %}
@@ -171,8 +168,7 @@
             </a>
             <a class="dropdown-item" href="{% url 'chatapp:admin_inbox' %}">
               <i class="fas fa-fw fa-inbox"></i> Inbox
-              <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{
-                admin_chat_unread_count }}</span>
+              <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
             </a>
             {% endif %}
             {% if user.badge %}
@@ -216,8 +212,7 @@
         <a class="nav-link" href="{% url 'chatapp:index' %}">
           <i class="fas fa-fw fa-comments"></i>
           <span>Messages</span>
-          <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count
-            }}</span>
+          <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count }}</span>
         </a>
       </li>
       {% endif %}
@@ -245,8 +240,7 @@
         <a class="nav-link" href="{% url 'chatapp:admin_inbox' %}">
           <i class="fas fa-fw fa-inbox"></i>
           <span>Inbox</span>
-          <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{
-            admin_chat_unread_count }}</span>
+          <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
         </a>
       </li>
       {% endif %}
@@ -328,8 +322,7 @@
       href="{% url 'chatapp:index' %}">
       <span class="app-mobile-tab-icon">
         <i class="fas fa-comments" aria-hidden="true"></i>
-        <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count
-          }}</span>
+        <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count }}</span>
       </span>
       <span>Messages</span>
     </a>
@@ -339,8 +332,7 @@
       href="{% url 'chatapp:admin_inbox' %}">
       <span class="app-mobile-tab-icon">
         <i class="fas fa-inbox" aria-hidden="true"></i>
-        <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{
-          admin_chat_unread_count }}</span>
+        <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
       </span>
       <span>Inbox</span>
     </a>
