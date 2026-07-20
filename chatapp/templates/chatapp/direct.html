@@ -35,8 +35,9 @@
   <section class="chat-panel chat-room-panel">
     <header class="chat-room-header">
       <div class="chat-room-user">
-        {% include "partials/user_avatar.html" with avatar_user=other_user size=44 class_name="chat-room-avatar"
-        alt_text=other_user.username %}
+        {% with avatar_class="chat-room-avatar" avatar_size=44 %}
+        {% include "partials/user_avatar.html" with avatar_user=other_user class_name=avatar_class size=avatar_size %}
+        {% endwith %}
         <div>
           <h1>{{ other_user.username }}</h1>
           <p>
