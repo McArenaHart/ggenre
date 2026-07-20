@@ -4,8 +4,32 @@ from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
 
-# Direct chats are intentionally ephemeral: messages are relayed over Channels
-# and stored only in each browser sessionStorage, not in the database.
+class DirectChatMessage(models.Model):
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sent_direct_chat_messages",
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="received_direct_chat_messages",
+    )
+    client_id = models.CharField(max_length=120, blank=True, default="")
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["sender", "recipient", "created_at"]),
+            models.Index(fields=["recipient", "read_at"]),
+            models.Index(fields=["client_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.sender} -> {self.recipient}: {self.body[:30]}"
 
 
 class AdminChatThread(models.Model):

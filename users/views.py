@@ -43,10 +43,14 @@ from django.http import JsonResponse
 from content.views import calculate_final_ranking
 from django.utils import timezone
 import csv
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
 from io import BytesIO
+
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+except ImportError:
+    A4 = None
+    canvas = None
 
 logger = logging.getLogger(__name__)
 
@@ -806,6 +810,12 @@ def generate_csv():
 
 
 def generate_pdf():
+    if canvas is None or A4 is None:
+        return HttpResponse(
+            "PDF export is unavailable: install reportlab to enable this feature.",
+            status=503,
+        )
+
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = 'attachment; filename="data.pdf"'
 

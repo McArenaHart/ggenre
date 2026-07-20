@@ -1,5 +1,6 @@
 from django.db import connection
 from django.apps import apps
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -11,7 +12,7 @@ from channels.testing import WebsocketCommunicator
 from chatapp.routing import websocket_urlpatterns
 from users.models import CustomUser, Notification, Role, VotingTokenPolicy
 
-from .models import AdminChatThread, MatchRating, PeerChatThread
+from .models import AdminChatThread, DirectChatMessage, MatchRating, PeerChatThread
 from .services import (
     allow_peer_chat_by_admin,
     record_match_rating,
@@ -63,12 +64,17 @@ class ChatAppTests(TestCase):
         self.create_match(self.owner, self.member)
         self.client.login(username="chat_owner", password="password123")
         response = self.client.get(reverse("chatapp:index"))
+        listed_usernames = {row["user"].username for row in response.context["thread_rows"]}
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Messages")
         self.assertContains(response, "chat_member")
+        self.assertContains(response, reverse("chatapp:direct", args=[self.member.id]))
+        self.assertIn("chat_member", listed_usernames)
+        self.assertNotIn("chat_admin", listed_usernames)
+        self.assertNotIn("chat_suspended", listed_usernames)
+        self.assertNotIn("chat_inactive", listed_usernames)
         self.assertNotContains(response, "chat_outsider")
-        self.assertNotContains(response, reverse("chatapp:direct", args=[self.admin.id]))
         self.assertNotContains(response, "chat_suspended")
         self.assertNotContains(response, "chat_inactive")
 
@@ -109,10 +115,11 @@ class ChatAppTests(TestCase):
 
         self.client.login(username="chat_owner", password="password123")
         response = self.client.get(reverse("chatapp:index"))
+        listed_user_ids = {row["user"].id for row in response.context["thread_rows"]}
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, reverse("chatapp:direct", args=[self.suspended.id]))
-        self.assertNotContains(response, reverse("chatapp:direct", args=[self.admin.id]))
+        self.assertNotIn(self.suspended.id, listed_user_ids)
+        self.assertNotIn(self.admin.id, listed_user_ids)
 
     def test_index_redirects_admin_to_inbox(self):
         self.client.login(username="chat_admin", password="password123")
@@ -133,6 +140,28 @@ class ChatAppTests(TestCase):
         self.assertContains(response, f'data-direct-chat-user="{self.member.id}"')
         self.assertContains(response, 'data-message-retention-ms="43200000"')
         self.assertContains(response, reverse("chatapp:index"))
+
+    def test_direct_chat_history_returns_persisted_messages(self):
+        self.create_match(self.owner, self.member)
+        cache.set(f"direct_chat_presence:last_seen:{self.owner.id}", "2026-07-20T10:11:12+00:00", timeout=None)
+        cache.delete(f"direct_chat_presence:online:{self.owner.id}")
+        DirectChatMessage.objects.create(
+            sender=self.owner,
+            recipient=self.member,
+            client_id="history-1",
+            body="Stored hello",
+        )
+
+        self.client.login(username="chat_member", password="password123")
+        response = self.client.get(reverse("chatapp:direct_history", args=[self.owner.id]))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["messages"]), 1)
+        self.assertEqual(payload["messages"][0]["body"], "Stored hello")
+        self.assertEqual(payload["messages"][0]["client_id"], "history-1")
+        self.assertFalse(payload["presence"]["is_online"])
+        self.assertEqual(payload["presence"]["last_seen_at"], "2026-07-20T10:11:12+00:00")
 
     def test_artist_direct_chat_shows_rating_received_from_peer(self):
         self.member.role = Role.ARTIST
@@ -320,20 +349,25 @@ class ChatAppTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_chat_message_body_storage_table_is_not_present(self):
+    def test_chat_message_body_storage_table_is_present(self):
         table_names = connection.introspection.table_names()
 
-        self.assertNotIn("chatapp_chatmessage", table_names)
-        self.assertNotIn("chatapp_chatroom", table_names)
+        self.assertIn("chatapp_directchatmessage", table_names)
 
-    def test_chatapp_has_no_active_message_body_model(self):
+    def test_chatapp_has_active_message_body_model(self):
         model_names = {model.__name__ for model in apps.get_app_config("chatapp").get_models()}
 
-        self.assertNotIn("ChatMessage", model_names)
-        self.assertNotIn("ChatRoom", model_names)
+        self.assertIn("DirectChatMessage", model_names)
 
 
 class DirectChatWebSocketTests(TestCase):
+    async def receive_event(self, communicator, event_type):
+        for _ in range(8):
+            event = await communicator.receive_json_from()
+            if event.get("type") == event_type:
+                return event
+        self.fail(f"Did not receive event type '{event_type}'")
+
     async def test_direct_chat_socket_echoes_sent_message(self):
         owner = await database_sync_to_async(CustomUser.objects.create_user)(
             username="socket_owner",
@@ -356,7 +390,7 @@ class DirectChatWebSocketTests(TestCase):
 
         self.assertTrue(connected)
         await communicator.send_json_to({"message": "Hello admin"})
-        response = await communicator.receive_json_from()
+        response = await self.receive_event(communicator, "message")
 
         self.assertEqual(response["body"], "Hello admin")
         self.assertEqual(response["sender_id"], owner.id)
@@ -372,11 +406,15 @@ class DirectChatWebSocketTests(TestCase):
             ).exists
         )()
         body_persisted = await database_sync_to_async(
-            Notification.objects.filter(message__contains="Hello admin").exists
+            DirectChatMessage.objects.filter(
+                sender=owner,
+                recipient=admin,
+                body="Hello admin",
+            ).exists
         )()
         self.assertEqual(thread.unread_count, 1)
         self.assertTrue(notification_exists)
-        self.assertFalse(body_persisted)
+        self.assertTrue(body_persisted)
 
         await communicator.disconnect()
 
@@ -413,8 +451,8 @@ class DirectChatWebSocketTests(TestCase):
         await owner_socket.send_json_to(
             {"message": "Receipt test", "client_id": "client-msg-1"}
         )
-        owner_echo = await owner_socket.receive_json_from()
-        member_message = await member_socket.receive_json_from()
+        owner_echo = await self.receive_event(owner_socket, "message")
+        member_message = await self.receive_event(member_socket, "message")
 
         self.assertEqual(owner_echo["client_id"], "client-msg-1")
         self.assertEqual(member_message["client_id"], "client-msg-1")
@@ -423,7 +461,7 @@ class DirectChatWebSocketTests(TestCase):
         await member_socket.send_json_to(
             {"type": "read", "message_id": "client-msg-1"}
         )
-        owner_receipt = await owner_socket.receive_json_from()
+        owner_receipt = await self.receive_event(owner_socket, "receipt")
 
         self.assertEqual(owner_receipt["type"], "receipt")
         self.assertEqual(owner_receipt["message_id"], "client-msg-1")
@@ -455,7 +493,7 @@ class DirectChatWebSocketTests(TestCase):
 
         self.assertTrue(connected)
         await communicator.send_json_to({"message": "Your OTP is ready"})
-        response = await communicator.receive_json_from()
+        response = await self.receive_event(communicator, "message")
 
         self.assertEqual(response["body"], "Your OTP is ready")
         self.assertEqual(response["sender_id"], admin.id)
@@ -471,11 +509,15 @@ class DirectChatWebSocketTests(TestCase):
             ).exists
         )()
         body_persisted = await database_sync_to_async(
-            Notification.objects.filter(message__contains="Your OTP is ready").exists
+            DirectChatMessage.objects.filter(
+                sender=admin,
+                recipient=owner,
+                body="Your OTP is ready",
+            ).exists
         )()
         self.assertEqual(thread.user_unread_count, 1)
         self.assertTrue(notification_exists)
-        self.assertFalse(body_persisted)
+        self.assertTrue(body_persisted)
 
         await communicator.disconnect()
 
@@ -522,7 +564,7 @@ class DirectChatWebSocketTests(TestCase):
 
         self.assertTrue(connected)
         await communicator.send_json_to({"message": "Hello peer"})
-        response = await communicator.receive_json_from()
+        response = await self.receive_event(communicator, "message")
 
         self.assertEqual(response["body"], "Hello peer")
         self.assertEqual(response["sender_id"], owner.id)
@@ -539,11 +581,15 @@ class DirectChatWebSocketTests(TestCase):
             ).exists
         )()
         body_persisted = await database_sync_to_async(
-            Notification.objects.filter(message__contains="Hello peer").exists
+            DirectChatMessage.objects.filter(
+                sender=owner,
+                recipient=member,
+                body="Hello peer",
+            ).exists
         )()
         self.assertEqual(thread.unread_count_for(member), 1)
         self.assertTrue(notification_exists)
-        self.assertFalse(body_persisted)
+        self.assertTrue(body_persisted)
 
         await communicator.disconnect()
 
@@ -575,7 +621,7 @@ class DirectChatWebSocketTests(TestCase):
 
         self.assertTrue(connected)
         await communicator.send_json_to({"message": "Admin allowed hello"})
-        response = await communicator.receive_json_from()
+        response = await self.receive_event(communicator, "message")
 
         self.assertEqual(response["body"], "Admin allowed hello")
         self.assertEqual(response["sender_id"], owner.id)
@@ -586,10 +632,89 @@ class DirectChatWebSocketTests(TestCase):
         )
         thread = thread[0]
         body_persisted = await database_sync_to_async(
-            Notification.objects.filter(message__contains="Admin allowed hello").exists
+            DirectChatMessage.objects.filter(
+                sender=owner,
+                recipient=member,
+                body="Admin allowed hello",
+            ).exists
         )()
         self.assertTrue(thread.admin_approved)
         self.assertEqual(thread.unread_count_for(member), 1)
-        self.assertFalse(body_persisted)
+        self.assertTrue(body_persisted)
 
         await communicator.disconnect()
+
+    async def test_presence_events_push_online_and_offline_updates(self):
+        owner = await database_sync_to_async(CustomUser.objects.create_user)(
+            username="socket_presence_owner",
+            password="password123",
+            role=Role.FAN,
+        )
+        member = await database_sync_to_async(CustomUser.objects.create_user)(
+            username="socket_presence_member",
+            password="password123",
+            role=Role.FAN,
+        )
+        await database_sync_to_async(record_match_rating)(owner, member, 8)
+
+        owner_socket = WebsocketCommunicator(
+            URLRouter(websocket_urlpatterns),
+            f"/ws/chat/user/{member.id}/",
+        )
+        owner_socket.scope["user"] = owner
+        member_socket = WebsocketCommunicator(
+            URLRouter(websocket_urlpatterns),
+            f"/ws/chat/user/{owner.id}/",
+        )
+        member_socket.scope["user"] = member
+
+        owner_connected, _ = await owner_socket.connect()
+        member_connected, _ = await member_socket.connect()
+
+        self.assertTrue(owner_connected)
+        self.assertTrue(member_connected)
+
+        online_event = await self.receive_event(owner_socket, "presence")
+        self.assertEqual(online_event["user_id"], member.id)
+        self.assertTrue(online_event["is_online"])
+
+        await member_socket.disconnect()
+
+        offline_event = await self.receive_event(owner_socket, "presence")
+        self.assertEqual(offline_event["user_id"], member.id)
+        self.assertFalse(offline_event["is_online"])
+        self.assertTrue(offline_event.get("last_seen_at"))
+
+        await owner_socket.disconnect()
+
+    async def test_ping_keeps_socket_active_for_subsequent_messages(self):
+        owner = await database_sync_to_async(CustomUser.objects.create_user)(
+            username="socket_ping_owner",
+            password="password123",
+            role=Role.FAN,
+        )
+        member = await database_sync_to_async(CustomUser.objects.create_user)(
+            username="socket_ping_member",
+            password="password123",
+            role=Role.FAN,
+        )
+        await database_sync_to_async(record_match_rating)(owner, member, 8)
+
+        owner_socket = WebsocketCommunicator(
+            URLRouter(websocket_urlpatterns),
+            f"/ws/chat/user/{member.id}/",
+        )
+        owner_socket.scope["user"] = owner
+
+        connected, _ = await owner_socket.connect()
+        self.assertTrue(connected)
+
+        await owner_socket.send_json_to({"type": "ping"})
+        await owner_socket.send_json_to({"message": "Ping then message"})
+        response = await self.receive_event(owner_socket, "message")
+
+        self.assertEqual(response["body"], "Ping then message")
+        self.assertEqual(response["sender_id"], owner.id)
+        self.assertEqual(response["recipient_id"], member.id)
+
+        await owner_socket.disconnect()

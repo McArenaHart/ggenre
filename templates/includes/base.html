@@ -1,226 +1,86 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
-    <meta name="description" content="Genre Genius platform" />
-    <meta name="author" content="Genre Genius" />
-    <meta name="application-name" content="Genre Genius" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="GGenre" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#05060d" />
-    <title>{% block title %}GGENRE{% endblock %}</title>
-    <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}" />
-    <link rel="apple-touch-icon" href="{% static 'img/pwa/icon-180.png' %}" />
-    <link rel="manifest" href="{% url 'web_manifest' %}" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700&display=swap" rel="stylesheet" />
-    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet" />
-    <link href="{% static 'vendor/fontawesome-free/css/all.min.css' %}" rel="stylesheet" />
-    <link href="{% static 'css/styles.css' %}" rel="stylesheet" />
-    <link href="{% static 'css/app-shell.css' %}?v=20260625back3" rel="stylesheet" />
-    <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.carousel.css' %}" />
-    <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.theme.css' %}" />
-    {% if admin_contact_user and other_user != admin_contact_user %}
-      <link href="{% static 'css/pages/admin-contact-chat.css' %}?v=20260625ticks1" rel="stylesheet" />
-    {% endif %}
-    {% block extra_css %}{% endblock %}
-  </head>
-  <body
-    id="page-top"
-    class="app-theme {% if user.is_authenticated %}app-authenticated{% else %}app-guest{% endif %}"
-    data-theme="dark"
-    data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}"
-    data-user-role="{% if user.is_authenticated %}{{ user.role }}{% endif %}"
-    data-current-path="{{ request.path }}"
-    data-service-worker-url="{% url 'service_worker' %}"
-    data-offline-url="{% url 'offline' %}"
-    data-announcements-url="{% if user.is_authenticated %}{% url 'get_announcements' %}{% endif %}"
-    data-dismiss-announcement-template="{% if user.is_authenticated %}{% url 'dismiss_announcement' 0 %}{% endif %}"
-    data-admin-chat-unread-url="{% if user.is_authenticated and user.role == 'admin' %}{% url 'chatapp:admin_unread_count' %}{% endif %}"
-    data-admin-chat-inbox-url="{% if user.is_authenticated and user.role == 'admin' %}{% url 'chatapp:admin_inbox' %}{% endif %}"
-    data-admin-contact-unread-url="{% if user.is_authenticated and user.role != 'admin' %}{% url 'chatapp:admin_contact_unread_count' %}{% endif %}"
-    data-admin-contact-mark-read-url="{% if user.is_authenticated and user.role != 'admin' %}{% url 'chatapp:mark_admin_contact_read' %}{% endif %}"
-  >
-    {% if user.is_authenticated %}
-      <div id="announcement-container"></div>
-      <nav class="navbar navbar-expand-lg navbar-light bg-white static-top osahan-nav sticky-top app-topbar">
-        <a class="navbar-brand mr-3 app-brand" href="{% url 'content_list' %}">
-          <img
-            src="{% static 'img/logo.png' %}"
-            alt="Genre Genius logo"
-            class="app-brand-logo"
-            width="34"
-            height="34"
-          />
-          <span class="app-brand-text">
-            <span class="app-brand-genre">Genre</span>
-            <span class="app-brand-genius">Genius</span>
-          </span>
-        </a>
 
-        <button type="button" class="app-theme-toggle d-inline-flex d-lg-none ml-auto mr-2" data-theme-toggle aria-label="Switch color mode">
-          <i class="fas fa-sun" aria-hidden="true"></i>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+  <meta name="description" content="Genre Genius platform" />
+  <meta name="author" content="Genre Genius" />
+  <meta name="application-name" content="Genre Genius" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GGenre" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#05060d" />
+  <title>{% block title %}GGENRE{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}" />
+  <link rel="apple-touch-icon" href="{% static 'img/pwa/icon-180.png' %}" />
+  <link rel="manifest" href="{% url 'web_manifest' %}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700&display=swap"
+    rel="stylesheet" />
+  <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet" />
+  <link href="{% static 'vendor/fontawesome-free/css/all.min.css' %}" rel="stylesheet" />
+  <link href="{% static 'css/styles.css' %}" rel="stylesheet" />
+  <link href="{% static 'css/app-shell.css' %}?v=20260625back3" rel="stylesheet" />
+  <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.carousel.css' %}" />
+  <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.theme.css' %}" />
+  {% if admin_contact_user and other_user != admin_contact_user %}
+  <link href="{% static 'css/pages/admin-contact-chat.css' %}?v=20260625ticks1" rel="stylesheet" />
+  {% endif %}
+  {% block extra_css %}{% endblock %}
+</head>
+
+<body id="page-top" class="app-theme {% if user.is_authenticated %}app-authenticated{% else %}app-guest{% endif %}"
+  data-theme="dark" data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}"
+  data-user-role="{% if user.is_authenticated %}{{ user.role }}{% endif %}" data-current-path="{{ request.path }}"
+  data-service-worker-url="{% url 'service_worker' %}" data-offline-url="{% url 'offline' %}"
+  data-announcements-url="{% if user.is_authenticated %}{% url 'get_announcements' %}{% endif %}"
+  data-dismiss-announcement-template="{% if user.is_authenticated %}{% url 'dismiss_announcement' 0 %}{% endif %}"
+  data-admin-chat-unread-url="{% if user.is_authenticated and user.role == 'admin' %}{% url 'chatapp:admin_unread_count' %}{% endif %}"
+  data-admin-chat-inbox-url="{% if user.is_authenticated and user.role == 'admin' %}{% url 'chatapp:admin_inbox' %}{% endif %}"
+  data-admin-contact-unread-url="{% if user.is_authenticated and user.role != 'admin' %}{% url 'chatapp:admin_contact_unread_count' %}{% endif %}"
+  data-admin-contact-mark-read-url="{% if user.is_authenticated and user.role != 'admin' %}{% url 'chatapp:mark_admin_contact_read' %}{% endif %}">
+  {% if user.is_authenticated %}
+  <div id="announcement-container"></div>
+  <nav class="navbar navbar-expand-lg navbar-light bg-white static-top osahan-nav sticky-top app-topbar">
+    <a class="navbar-brand mr-3 app-brand" href="{% url 'content_list' %}">
+      <img src="{% static 'img/logo.png' %}" alt="Genre Genius logo" class="app-brand-logo" width="34" height="34" />
+      <span class="app-brand-text">
+        <span class="app-brand-genre">Genre</span>
+        <span class="app-brand-genius">Genius</span>
+      </span>
+    </a>
+
+    <button type="button" class="app-theme-toggle d-inline-flex d-lg-none ml-auto mr-2" data-theme-toggle
+      aria-label="Switch color mode">
+      <i class="fas fa-sun" aria-hidden="true"></i>
+    </button>
+    <button type="button" class="app-install-trigger d-inline-flex d-lg-none mr-2" data-pwa-install hidden>
+      <i class="fas fa-download" aria-hidden="true"></i>
+    </button>
+
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav"
+      aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <form class="form-inline my-2 my-lg-0 mx-auto osahan-navbar-search app-search-form" method="GET"
+        action="{% url 'search_results' %}">
+        <input class="form-control mr-sm-2" type="search" name="q" placeholder="Search artists and content"
+          aria-label="Search" required />
+        <button class="btn btn-outline-success my-2 my-sm-0" type="submit">
+          <i class="fas fa-search"></i>
         </button>
-        <button type="button" class="app-install-trigger d-inline-flex d-lg-none mr-2" data-pwa-install hidden>
-          <i class="fas fa-download" aria-hidden="true"></i>
-        </button>
+      </form>
 
-        <button
-          class="navbar-toggler"
-          type="button"
-          data-toggle="collapse"
-          data-target="#navbarNav"
-          aria-controls="navbarNav"
-          aria-expanded="false"
-          aria-label="Toggle navigation"
-        >
-          <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <div class="collapse navbar-collapse" id="navbarNav">
-          <form class="form-inline my-2 my-lg-0 mx-auto osahan-navbar-search app-search-form" method="GET" action="{% url 'search_results' %}">
-            <input
-              class="form-control mr-sm-2"
-              type="search"
-              name="q"
-              placeholder="Search artists and content"
-              aria-label="Search"
-              required
-            />
-            <button class="btn btn-outline-success my-2 my-sm-0" type="submit">
-              <i class="fas fa-search"></i>
-            </button>
-          </form>
-
-          <div id="mobile-wrapper" class="d-lg-none w-100 mt-2">
-            <ul class="navbar-nav">
-              <li class="nav-item">
-                <a class="nav-link" href="{% url 'content_list' %}">
-                  <i class="fas fa-fw fa-home"></i>
-                  <span>Home</span>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="{% url 'artist_list' %}">
-                  <i class="fas fa-fw fa-users"></i>
-                  <span>Artists</span>
-                </a>
-              </li>
-              {% if user.role != 'admin' %}
-                <li class="nav-item">
-                  <a class="nav-link" href="{% url 'chatapp:index' %}">
-                    <i class="fas fa-fw fa-comments"></i>
-                    <span>Messages</span>
-                    <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count }}</span>
-                  </a>
-                </li>
-              {% endif %}
-              {% if user.role == 'artist' %}
-                <li class="nav-item">
-                  <a class="nav-link" href="{% url 'upload_content' %}">
-                    <i class="fas fa-fw fa-cloud-upload-alt"></i>
-                    <span>Upload</span>
-                  </a>
-                </li>
-                <li class="nav-item">
-                  <a class="nav-link" href="{% url 'livestream:create' %}">
-                    <i class="fas fa-fw fa-video"></i>
-                    <span>Go Live</span>
-                  </a>
-                </li>
-              {% elif user.role == 'admin' %}
-                <li class="nav-item">
-                  <a class="nav-link" href="{% url 'admin_dashboard' %}">
-                    <i class="fas fa-fw fa-tachometer-alt"></i>
-                    <span>Admin Dashboard</span>
-                  </a>
-                </li>
-                <li class="nav-item">
-                  <a class="nav-link" href="{% url 'chatapp:admin_inbox' %}">
-                    <i class="fas fa-fw fa-inbox"></i>
-                    <span>Inbox</span>
-                    <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
-                  </a>
-                </li>
-              {% endif %}
-            </ul>
-          </div>
-
-          <ul class="navbar-nav ml-auto osahan-right-navbar">
-            <li class="nav-item d-none d-lg-flex align-items-center mr-2">
-              <button type="button" class="app-install-trigger" data-pwa-install hidden>
-                <i class="fas fa-download" aria-hidden="true"></i>
-                <span>Install App</span>
-              </button>
-            </li>
-            <li class="nav-item d-none d-lg-flex align-items-center mr-2">
-              <button type="button" class="app-theme-toggle" data-theme-toggle aria-label="Switch color mode">
-                <i class="fas fa-sun" aria-hidden="true"></i>
-                <span data-theme-label>Light</span>
-              </button>
-            </li>
-            <li class="nav-item dropdown no-arrow osahan-right-navbar-user">
-              <a
-                class="nav-link dropdown-toggle user-dropdown-link"
-                href="#"
-                id="userDropdown"
-                role="button"
-                data-toggle="dropdown"
-                aria-haspopup="true"
-                aria-expanded="false"
-              >
-                {% include "partials/user_avatar.html" with avatar_user=user size=30 alt_text=user.username %}
-                {{ user.username }}
-              </a>
-              <div class="dropdown-menu dropdown-menu-right" aria-labelledby="userDropdown">
-                <a class="dropdown-item" href="{% url 'user_profile' user.id %}">
-                  <i class="fas fa-fw fa-user-circle"></i> My Account
-                </a>
-                {% if user.role != 'admin' %}
-                  <a class="dropdown-item" href="{% url 'chatapp:index' %}">
-                    <i class="fas fa-fw fa-comments"></i> Messages
-                    <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count }}</span>
-                  </a>
-                {% endif %}
-                {% if user.role == 'admin' %}
-                  <a class="dropdown-item" href="{% url 'admin_dashboard' %}">
-                    <i class="fas fa-fw fa-tachometer-alt"></i> Admin Dashboard
-                  </a>
-                  <a class="dropdown-item" href="{% url 'chatapp:admin_inbox' %}">
-                    <i class="fas fa-fw fa-inbox"></i> Inbox
-                    <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
-                  </a>
-                {% endif %}
-                {% if user.badge %}
-                  <div class="dropdown-item text-center">
-                    <span class="badge badge-warning p-2">
-                      <i class="fas fa-award"></i>
-                      Level {{ user.badge.level }} | x{{ user.badge.vote_multiplier }} Votes
-                    </span>
-                  </div>
-                {% else %}
-                  <div class="dropdown-item text-center">
-                    <span class="badge badge-secondary p-2">No Badge Earned</span>
-                  </div>
-                {% endif %}
-                <div class="dropdown-divider"></div>
-                <a class="dropdown-item" href="{% url 'logout' %}">
-                  <i class="fas fa-fw fa-sign-out-alt"></i> Logout
-                </a>
-              </div>
-            </li>
-          </ul>
-        </div>
-      </nav>
-
-      <div class="app-shell" id="wrapper">
-        <ul class="sidebar app-sidebar navbar-nav pt-4 d-none d-lg-block">
+      <div id="mobile-wrapper" class="d-lg-none w-100 mt-2">
+        <ul class="navbar-nav">
           <li class="nav-item">
             <a class="nav-link" href="{% url 'content_list' %}">
               <i class="fas fa-fw fa-home"></i>
@@ -234,267 +94,391 @@
             </a>
           </li>
           {% if user.role != 'admin' %}
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'chatapp:index' %}">
-                <i class="fas fa-fw fa-comments"></i>
-                <span>Messages</span>
-                <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count }}</span>
-              </a>
-            </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'chatapp:index' %}">
+              <i class="fas fa-fw fa-comments"></i>
+              <span>Messages</span>
+              <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count
+                }}</span>
+            </a>
+          </li>
           {% endif %}
           {% if user.role == 'artist' %}
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'upload_content' %}">
-                <i class="fas fa-fw fa-cloud-upload-alt"></i>
-                <span>Upload</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'livestream:create' %}">
-                <i class="fas fa-fw fa-video"></i>
-                <span>Go Live</span>
-              </a>
-            </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'upload_content' %}">
+              <i class="fas fa-fw fa-cloud-upload-alt"></i>
+              <span>Upload</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'livestream:create' %}">
+              <i class="fas fa-fw fa-video"></i>
+              <span>Go Live</span>
+            </a>
+          </li>
           {% elif user.role == 'admin' %}
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'admin_dashboard' %}">
-                <i class="fas fa-fw fa-tachometer-alt"></i>
-                <span>Admin Dashboard</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'chatapp:admin_inbox' %}">
-                <i class="fas fa-fw fa-inbox"></i>
-                <span>Inbox</span>
-                <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
-              </a>
-            </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'admin_dashboard' %}">
+              <i class="fas fa-fw fa-tachometer-alt"></i>
+              <span>Admin Dashboard</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'chatapp:admin_inbox' %}">
+              <i class="fas fa-fw fa-inbox"></i>
+              <span>Inbox</span>
+              <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{
+                admin_chat_unread_count }}</span>
+            </a>
+          </li>
           {% endif %}
         </ul>
+      </div>
 
-        <main id="content-wrapper" class="content-wrapper app-content app-content-wrapper">
-    {% else %}
-        <button type="button" class="app-install-trigger app-install-trigger-guest" data-pwa-install hidden>
-          <i class="fas fa-download" aria-hidden="true"></i>
-          <span>Install App</span>
-        </button>
-        <button type="button" class="app-theme-toggle app-theme-toggle-guest" data-theme-toggle aria-label="Switch color mode">
-          <i class="fas fa-sun" aria-hidden="true"></i>
-          <span data-theme-label>Light</span>
-        </button>
-        <main id="content-wrapper" class="content-wrapper app-content app-content-wrapper app-guest-content">
-    {% endif %}
-
-          {% if messages %}
-            <div class="container-fluid mt-3">
-              {% for message in messages %}
-                <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
-                  {{ message }}
-                  <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                  </button>
-                </div>
-              {% endfor %}
+      <ul class="navbar-nav ml-auto osahan-right-navbar">
+        <li class="nav-item d-none d-lg-flex align-items-center mr-2">
+          <button type="button" class="app-install-trigger" data-pwa-install hidden>
+            <i class="fas fa-download" aria-hidden="true"></i>
+            <span>Install App</span>
+          </button>
+        </li>
+        <li class="nav-item d-none d-lg-flex align-items-center mr-2">
+          <button type="button" class="app-theme-toggle" data-theme-toggle aria-label="Switch color mode">
+            <i class="fas fa-sun" aria-hidden="true"></i>
+            <span data-theme-label>Light</span>
+          </button>
+        </li>
+        <li class="nav-item dropdown no-arrow osahan-right-navbar-user">
+          <a class="nav-link dropdown-toggle user-dropdown-link" href="#" id="userDropdown" role="button"
+            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            {% include "partials/user_avatar.html" with avatar_user=user size=30 alt_text=user.username %}
+            {{ user.username }}
+          </a>
+          <div class="dropdown-menu dropdown-menu-right" aria-labelledby="userDropdown">
+            <a class="dropdown-item" href="{% url 'user_profile' user.id %}">
+              <i class="fas fa-fw fa-user-circle"></i> My Account
+            </a>
+            {% if user.role != 'admin' %}
+            <a class="dropdown-item" href="{% url 'chatapp:index' %}">
+              <i class="fas fa-fw fa-comments"></i> Messages
+              <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count
+                }}</span>
+            </a>
+            {% endif %}
+            {% if user.role == 'admin' %}
+            <a class="dropdown-item" href="{% url 'admin_dashboard' %}">
+              <i class="fas fa-fw fa-tachometer-alt"></i> Admin Dashboard
+            </a>
+            <a class="dropdown-item" href="{% url 'chatapp:admin_inbox' %}">
+              <i class="fas fa-fw fa-inbox"></i> Inbox
+              <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{
+                admin_chat_unread_count }}</span>
+            </a>
+            {% endif %}
+            {% if user.badge %}
+            <div class="dropdown-item text-center">
+              <span class="badge badge-warning p-2">
+                <i class="fas fa-award"></i>
+                Level {{ user.badge.level }} | x{{ user.badge.vote_multiplier }} Votes
+              </span>
             </div>
-          {% endif %}
+            {% else %}
+            <div class="dropdown-item text-center">
+              <span class="badge badge-secondary p-2">No Badge Earned</span>
+            </div>
+            {% endif %}
+            <div class="dropdown-divider"></div>
+            <a class="dropdown-item" href="{% url 'logout' %}">
+              <i class="fas fa-fw fa-sign-out-alt"></i> Logout
+            </a>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </nav>
 
-          {% block content %}{% endblock %}
-        </main>
-
-    {% if user.is_authenticated %}
-      </div>
-    {% endif %}
-
-    <footer class="app-footer" role="contentinfo">
-      <div class="app-footer__inner">
-        <span class="app-footer__copy">Copyright &copy; McArena2026</span>
-      </div>
-    </footer>
-
-    {% if user.is_authenticated %}
-      <nav class="app-mobile-tabbar d-lg-none" aria-label="Primary">
-        <a class="app-mobile-tab {% if request.path == '/' or request.path|slice:':9' == '/content/' %}is-active{% endif %}" href="{% url 'content_list' %}">
-          <i class="fas fa-home" aria-hidden="true"></i>
+  <div class="app-shell" id="wrapper">
+    <ul class="sidebar app-sidebar navbar-nav pt-4 d-none d-lg-block">
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'content_list' %}">
+          <i class="fas fa-fw fa-home"></i>
           <span>Home</span>
         </a>
-        <a class="app-mobile-tab {% if request.path|slice:':14' == '/users/artists' %}is-active{% endif %}" href="{% url 'artist_list' %}">
-          <i class="fas fa-users" aria-hidden="true"></i>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'artist_list' %}">
+          <i class="fas fa-fw fa-users"></i>
           <span>Artists</span>
         </a>
-        {% if user.role == 'artist' %}
-          <a class="app-mobile-tab {% if request.path|slice:':16' == '/content/upload/' %}is-active{% endif %}" href="{% url 'upload_content' %}">
-            <i class="fas fa-plus-circle" aria-hidden="true"></i>
-            <span>Create</span>
-          </a>
-        {% elif user.role == 'admin' %}
-          <a class="app-mobile-tab {% if request.path|slice:':23' == '/users/admin_dashboard/' %}is-active{% endif %}" href="{% url 'admin_dashboard' %}">
-            <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
-            <span>Admin</span>
-          </a>
-        {% else %}
-          <a class="app-mobile-tab {% if request.path|slice:':13' == '/livestreams/' %}is-active{% endif %}" href="{% url 'livestream:index' %}">
-            <i class="fas fa-broadcast-tower" aria-hidden="true"></i>
-            <span>Live</span>
-          </a>
+      </li>
+      {% if user.role != 'admin' %}
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'chatapp:index' %}">
+          <i class="fas fa-fw fa-comments"></i>
+          <span>Messages</span>
+          <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count
+            }}</span>
+        </a>
+      </li>
+      {% endif %}
+      {% if user.role == 'artist' %}
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'upload_content' %}">
+          <i class="fas fa-fw fa-cloud-upload-alt"></i>
+          <span>Upload</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'livestream:create' %}">
+          <i class="fas fa-fw fa-video"></i>
+          <span>Go Live</span>
+        </a>
+      </li>
+      {% elif user.role == 'admin' %}
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'admin_dashboard' %}">
+          <i class="fas fa-fw fa-tachometer-alt"></i>
+          <span>Admin Dashboard</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'chatapp:admin_inbox' %}">
+          <i class="fas fa-fw fa-inbox"></i>
+          <span>Inbox</span>
+          <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{
+            admin_chat_unread_count }}</span>
+        </a>
+      </li>
+      {% endif %}
+    </ul>
+
+    <main id="content-wrapper" class="content-wrapper app-content app-content-wrapper">
+      {% else %}
+      <button type="button" class="app-install-trigger app-install-trigger-guest" data-pwa-install hidden>
+        <i class="fas fa-download" aria-hidden="true"></i>
+        <span>Install App</span>
+      </button>
+      <button type="button" class="app-theme-toggle app-theme-toggle-guest" data-theme-toggle
+        aria-label="Switch color mode">
+        <i class="fas fa-sun" aria-hidden="true"></i>
+        <span data-theme-label>Light</span>
+      </button>
+      <main id="content-wrapper" class="content-wrapper app-content app-content-wrapper app-guest-content">
         {% endif %}
-        {% if user.role != 'admin' %}
-          <a class="app-mobile-tab {% if request.path == '/chat/' or request.path|slice:':8' == '/chat/u/' %}is-active{% endif %}" href="{% url 'chatapp:index' %}">
-            <span class="app-mobile-tab-icon">
-              <i class="fas fa-comments" aria-hidden="true"></i>
-              <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count }}</span>
-            </span>
-            <span>Messages</span>
-          </a>
-        {% endif %}
-        {% if user.role == 'admin' %}
-          <a class="app-mobile-tab {% if request.path|slice:':18' == '/chat/admin-inbox' %}is-active{% endif %}" href="{% url 'chatapp:admin_inbox' %}">
-            <span class="app-mobile-tab-icon">
-              <i class="fas fa-inbox" aria-hidden="true"></i>
-              <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
-            </span>
-            <span>Inbox</span>
-          </a>
-        {% else %}
-          <a class="app-mobile-tab {% if request.path|slice:':20' == '/users/notifications' %}is-active{% endif %}" href="{% url 'notifications' %}">
-            <i class="fas fa-bell" aria-hidden="true"></i>
-            <span>Alerts</span>
-          </a>
-        {% endif %}
-      </nav>
-    {% else %}
-      <nav class="app-mobile-tabbar app-mobile-tabbar-guest d-lg-none" aria-label="Quick links">
-        <a class="app-mobile-tab {% if request.path == '/' %}is-active{% endif %}" href="{% url 'home' %}">
-          <i class="fas fa-home" aria-hidden="true"></i>
-          <span>Home</span>
-        </a>
-        <a class="app-mobile-tab {% if request.path|slice:':9' == '/content/' %}is-active{% endif %}" href="{% url 'content_list' %}">
-          <i class="fas fa-compass" aria-hidden="true"></i>
-          <span>Explore</span>
-        </a>
-        <a class="app-mobile-tab {% if request.path == '/users/login/' %}is-active{% endif %}" href="{% url 'login' %}">
-          <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
-          <span>Login</span>
-        </a>
-        <a class="app-mobile-tab {% if request.path == '/users/register/' %}is-active{% endif %}" href="{% url 'register' %}">
-          <i class="fas fa-user-plus" aria-hidden="true"></i>
-          <span>Join</span>
-        </a>
-      </nav>
-    {% endif %}
 
-    <section class="pwa-install-sheet" data-pwa-install-sheet hidden aria-label="Install app prompt">
-      <div class="pwa-install-sheet__icon-wrap">
-        <img src="{% static 'img/pwa/icon-192.png' %}" alt="Genre Genius app icon" class="pwa-install-sheet__icon" />
-      </div>
-      <div class="pwa-install-sheet__copy">
-        <h3 data-pwa-install-title>Install Genre Genius</h3>
-        <p data-pwa-install-text>Open faster, work offline, and use it like a native mobile app.</p>
-      </div>
-      <div class="pwa-install-sheet__actions">
-        <button type="button" class="btn btn-primary btn-sm" data-pwa-install-action>Install</button>
-        <button type="button" class="btn btn-secondary btn-sm" data-pwa-install-dismiss>Not now</button>
-      </div>
-    </section>
-
-    <div class="pwa-update-toast" data-pwa-update-toast hidden role="status" aria-live="polite">
-      <span>A new app version is ready.</span>
-      <div class="pwa-update-toast__actions">
-        <button type="button" class="btn btn-primary btn-sm" data-pwa-update-apply>Update</button>
-        <button type="button" class="btn btn-secondary btn-sm" data-pwa-update-dismiss>Later</button>
-      </div>
-    </div>
-
-    <div class="pwa-network-pill" data-pwa-network-pill hidden role="status" aria-live="polite"></div>
-
-    <button
-      type="button"
-      class="app-floating-back"
-      data-floating-back
-      data-fallback-url="{% url 'content_list' %}"
-      aria-label="Go back"
-      title="Go back"
-    >
-      <i class="fas fa-arrow-left" aria-hidden="true"></i>
-    </button>
-
-    {% if admin_contact_user and other_user != admin_contact_user %}
-      <section
-        class="admin-contact-chat"
-        data-direct-chat-user="{{ admin_contact_user.id }}"
-        data-current-user-id="{{ user.id }}"
-        data-current-user="{{ user.username }}"
-        data-chat-widget="admin-contact"
-        data-message-retention-ms="{{ message_retention_ms|default:86400000 }}"
-        data-admin-contact-unread="{{ admin_contact_unread_count|default:0 }}"
-        data-admin-contact-otp-code="{{ admin_contact_otp.otp_code|default:'' }}"
-        data-admin-contact-otp-votes="{{ admin_contact_otp.remaining_votes|default:'' }}"
-        aria-label="Contact admin chat"
-      >
-        <button type="button" class="btn btn-primary admin-contact-toggle" data-chat-toggle aria-expanded="false">
-          <i class="fas fa-headset" aria-hidden="true"></i>
-          <span>Admin</span>
-          <span class="admin-contact-badge" data-admin-contact-badge {% if not admin_contact_unread_count %}hidden{% endif %}>{{ admin_contact_unread_count }}</span>
-        </button>
-        <div class="admin-contact-panel" data-chat-panel>
-          <header class="admin-contact-header">
-            <div class="admin-contact-title">
-              <strong>Contact Admin</strong>
-              <span>{{ admin_contact_user.username }}</span>
-            </div>
-            <button type="button" class="btn btn-outline-primary admin-contact-close" data-chat-close aria-label="Close admin chat" title="Close admin chat">
-              <i class="fas fa-times" aria-hidden="true"></i>
-            </button>
-          </header>
-          <div class="admin-contact-messages" data-chat-messages></div>
-          <form class="admin-contact-compose" data-chat-form>
-            <input type="text" class="form-control" data-chat-input maxlength="2000" autocomplete="off" placeholder="Message admin..." />
-            <button type="submit" class="btn btn-primary chat-send-button" aria-label="Send admin message" title="Send admin message">
-              <i class="fas fa-paper-plane" aria-hidden="true"></i>
-            </button>
-          </form>
-        </div>
-      </section>
-    {% endif %}
-
-    <a class="scroll-to-top rounded" href="#page-top">
-      <i class="fas fa-angle-up"></i>
-    </a>
-
-    <div
-      class="modal fade"
-      id="logoutModal"
-      tabindex="-1"
-      role="dialog"
-      aria-labelledby="logoutModalLabel"
-      aria-hidden="true"
-    >
-      <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="logoutModalLabel">Ready to Leave?</h5>
-            <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+        {% if messages %}
+        <div class="container-fluid mt-3">
+          {% for message in messages %}
+          <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
               <span aria-hidden="true">&times;</span>
             </button>
           </div>
-          <div class="modal-body">Select "Logout" below if you are ready to end your current session.</div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
-            <a class="btn btn-primary" href="{% url 'logout' %}">Logout</a>
-          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+      </main>
+
+      {% if user.is_authenticated %}
+  </div>
+  {% endif %}
+
+  <footer class="app-footer" role="contentinfo">
+    <div class="app-footer__inner">
+      <span class="app-footer__copy">Copyright &copy; McArena2026</span>
+    </div>
+  </footer>
+
+  {% if user.is_authenticated %}
+  <nav class="app-mobile-tabbar d-lg-none" aria-label="Primary">
+    <a class="app-mobile-tab {% if request.path == '/' or request.path|slice:':9' == '/content/' %}is-active{% endif %}"
+      href="{% url 'content_list' %}">
+      <i class="fas fa-home" aria-hidden="true"></i>
+      <span>Home</span>
+    </a>
+    <a class="app-mobile-tab {% if request.path|slice:':14' == '/users/artists' %}is-active{% endif %}"
+      href="{% url 'artist_list' %}">
+      <i class="fas fa-users" aria-hidden="true"></i>
+      <span>Artists</span>
+    </a>
+    {% if user.role == 'artist' %}
+    <a class="app-mobile-tab {% if request.path|slice:':16' == '/content/upload/' %}is-active{% endif %}"
+      href="{% url 'upload_content' %}">
+      <i class="fas fa-plus-circle" aria-hidden="true"></i>
+      <span>Create</span>
+    </a>
+    {% elif user.role == 'admin' %}
+    <a class="app-mobile-tab {% if request.path|slice:':23' == '/users/admin_dashboard/' %}is-active{% endif %}"
+      href="{% url 'admin_dashboard' %}">
+      <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
+      <span>Admin</span>
+    </a>
+    {% else %}
+    <a class="app-mobile-tab {% if request.path|slice:':13' == '/livestreams/' %}is-active{% endif %}"
+      href="{% url 'livestream:index' %}">
+      <i class="fas fa-broadcast-tower" aria-hidden="true"></i>
+      <span>Live</span>
+    </a>
+    {% endif %}
+    {% if user.role != 'admin' %}
+    <a class="app-mobile-tab {% if request.path == '/chat/' or request.path|slice:':8' == '/chat/u/' %}is-active{% endif %}"
+      href="{% url 'chatapp:index' %}">
+      <span class="app-mobile-tab-icon">
+        <i class="fas fa-comments" aria-hidden="true"></i>
+        <span class="app-nav-badge" {% if not peer_chat_unread_count %}hidden{% endif %}>{{ peer_chat_unread_count
+          }}</span>
+      </span>
+      <span>Messages</span>
+    </a>
+    {% endif %}
+    {% if user.role == 'admin' %}
+    <a class="app-mobile-tab {% if request.path|slice:':18' == '/chat/admin-inbox' %}is-active{% endif %}"
+      href="{% url 'chatapp:admin_inbox' %}">
+      <span class="app-mobile-tab-icon">
+        <i class="fas fa-inbox" aria-hidden="true"></i>
+        <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{
+          admin_chat_unread_count }}</span>
+      </span>
+      <span>Inbox</span>
+    </a>
+    {% else %}
+    <a class="app-mobile-tab {% if request.path|slice:':20' == '/users/notifications' %}is-active{% endif %}"
+      href="{% url 'notifications' %}">
+      <i class="fas fa-bell" aria-hidden="true"></i>
+      <span>Alerts</span>
+    </a>
+    {% endif %}
+  </nav>
+  {% else %}
+  <nav class="app-mobile-tabbar app-mobile-tabbar-guest d-lg-none" aria-label="Quick links">
+    <a class="app-mobile-tab {% if request.path == '/' %}is-active{% endif %}" href="{% url 'home' %}">
+      <i class="fas fa-home" aria-hidden="true"></i>
+      <span>Home</span>
+    </a>
+    <a class="app-mobile-tab {% if request.path|slice:':9' == '/content/' %}is-active{% endif %}"
+      href="{% url 'content_list' %}">
+      <i class="fas fa-compass" aria-hidden="true"></i>
+      <span>Explore</span>
+    </a>
+    <a class="app-mobile-tab {% if request.path == '/users/login/' %}is-active{% endif %}" href="{% url 'login' %}">
+      <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+      <span>Login</span>
+    </a>
+    <a class="app-mobile-tab {% if request.path == '/users/register/' %}is-active{% endif %}"
+      href="{% url 'register' %}">
+      <i class="fas fa-user-plus" aria-hidden="true"></i>
+      <span>Join</span>
+    </a>
+  </nav>
+  {% endif %}
+
+  <section class="pwa-install-sheet" data-pwa-install-sheet hidden aria-label="Install app prompt">
+    <div class="pwa-install-sheet__icon-wrap">
+      <img src="{% static 'img/pwa/icon-192.png' %}" alt="Genre Genius app icon" class="pwa-install-sheet__icon" />
+    </div>
+    <div class="pwa-install-sheet__copy">
+      <h3 data-pwa-install-title>Install Genre Genius</h3>
+      <p data-pwa-install-text>Open faster, work offline, and use it like a native mobile app.</p>
+    </div>
+    <div class="pwa-install-sheet__actions">
+      <button type="button" class="btn btn-primary btn-sm" data-pwa-install-action>Install</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-pwa-install-dismiss>Not now</button>
+    </div>
+  </section>
+
+  <div class="pwa-update-toast" data-pwa-update-toast hidden role="status" aria-live="polite">
+    <span>A new app version is ready.</span>
+    <div class="pwa-update-toast__actions">
+      <button type="button" class="btn btn-primary btn-sm" data-pwa-update-apply>Update</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-pwa-update-dismiss>Later</button>
+    </div>
+  </div>
+
+  <div class="pwa-network-pill" data-pwa-network-pill hidden role="status" aria-live="polite"></div>
+
+  <button type="button" class="app-floating-back" data-floating-back data-fallback-url="{% url 'content_list' %}"
+    aria-label="Go back" title="Go back">
+    <i class="fas fa-arrow-left" aria-hidden="true"></i>
+  </button>
+
+  {% if admin_contact_user and other_user != admin_contact_user %}
+  <section class="admin-contact-chat" data-direct-chat-user="{{ admin_contact_user.id }}"
+    data-chat-history-url="{% url 'chatapp:direct_history' admin_contact_user.id %}"
+    data-current-user-id="{{ user.id }}" data-current-user="{{ user.username }}" data-chat-widget="admin-contact"
+    data-message-retention-ms="{{ message_retention_ms|default:86400000 }}"
+    data-admin-contact-unread="{{ admin_contact_unread_count|default:0 }}"
+    data-admin-contact-otp-code="{{ admin_contact_otp.otp_code|default:'' }}"
+    data-admin-contact-otp-votes="{{ admin_contact_otp.remaining_votes|default:'' }}" aria-label="Contact admin chat">
+    <button type="button" class="btn btn-primary admin-contact-toggle" data-chat-toggle aria-expanded="false">
+      <i class="fas fa-headset" aria-hidden="true"></i>
+      <span>Admin</span>
+      {% if admin_contact_unread_count %}
+      <span class="admin-contact-badge" data-admin-contact-badge>{{ admin_contact_unread_count }}</span>
+      {% else %}
+      <span class="admin-contact-badge" data-admin-contact-badge hidden>{{ admin_contact_unread_count }}</span>
+      {% endif %}
+    </button>
+    <div class="admin-contact-panel" data-chat-panel>
+      <header class="admin-contact-header">
+        <div class="admin-contact-title">
+          <strong>Contact Admin</strong>
+          <span>{{ admin_contact_user.username }}</span>
+        </div>
+        <button type="button" class="btn btn-outline-primary admin-contact-close" data-chat-close
+          aria-label="Close admin chat" title="Close admin chat">
+          <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+      </header>
+      <div class="admin-contact-messages" data-chat-messages></div>
+      <form class="admin-contact-compose" data-chat-form>
+        <input type="text" class="form-control" data-chat-input maxlength="2000" autocomplete="off"
+          placeholder="Message admin..." />
+        <button type="submit" class="btn btn-primary chat-send-button" aria-label="Send admin message"
+          title="Send admin message">
+          <i class="fas fa-paper-plane" aria-hidden="true"></i>
+        </button>
+      </form>
+    </div>
+  </section>
+  {% endif %}
+
+  <a class="scroll-to-top rounded" href="#page-top">
+    <i class="fas fa-angle-up"></i>
+  </a>
+
+  <div class="modal fade" id="logoutModal" tabindex="-1" role="dialog" aria-labelledby="logoutModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="logoutModalLabel">Ready to Leave?</h5>
+          <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">Select "Logout" below if you are ready to end your current session.</div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
+          <a class="btn btn-primary" href="{% url 'logout' %}">Logout</a>
         </div>
       </div>
     </div>
+  </div>
 
-    <script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
-    <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
-    <script src="{% static 'vendor/jquery-easing/jquery.easing.min.js' %}"></script>
-    <script src="{% static 'vendor/owl-carousel/owl.carousel.js' %}"></script>
-    <script src="{% static 'js/custom.js' %}"></script>
-    <script src="{% static 'js/pages/base-shell.js' %}?v=20260625back3"></script>
-    {% if admin_contact_user and other_user != admin_contact_user %}
-      <script src="{% static 'js/pages/chatapp.js' %}?v=20260704retention1"></script>
-    {% endif %}
+  <script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
+  <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+  <script src="{% static 'vendor/jquery-easing/jquery.easing.min.js' %}"></script>
+  <script src="{% static 'vendor/owl-carousel/owl.carousel.js' %}"></script>
+  <script src="{% static 'js/custom.js' %}"></script>
+  <script src="{% static 'js/pages/base-shell.js' %}?v=20260625back3"></script>
+  {% if admin_contact_user and other_user != admin_contact_user %}
+  <script src="{% static 'js/pages/chatapp.js' %}?v=20260721presence4"></script>
+  {% endif %}
 
-    {% block extra_js %}{% endblock %}
-  </body>
+  {% block extra_js %}{% endblock %}
+</body>
+
 </html>

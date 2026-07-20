@@ -555,7 +555,7 @@ class VotingFlowTest(TestCase):
         )
         self.client.login(username="vote_fan", password="password")
 
-    def test_vote_consumes_otp_and_persists_vote(self):
+    def test_vote_consumes_otp_and_persists_vote_without_auto_badge(self):
         response = self.client.post(
             reverse("vote_content", args=[self.content.id]),
             data='{"vote_value": 4, "otp_code": "123456", "voter_tag": "smoke"}',
@@ -567,7 +567,7 @@ class VotingFlowTest(TestCase):
         self.assertEqual(self.otp.remaining_votes, 0)
         vote = Vote.objects.get(content=self.content, fan=self.fan)
         self.assertEqual(vote.base_value, 4)
-        self.assertTrue(Badge.objects.filter(user=self.fan).exists())
+        self.assertFalse(Badge.objects.filter(user=self.fan).exists())
 
     def test_content_rating_accepts_ten_and_records_match_rating(self):
         response = self.client.post(

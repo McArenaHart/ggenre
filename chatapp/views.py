@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.db.models import Q
 from django.db.models import Sum
 from django.contrib import messages
@@ -8,8 +9,16 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from users.models import CustomUser, OTP, Role, VotingTokenPolicy
 
-from .models import AdminChatThread, MatchRating, PeerChatThread
+from .models import AdminChatThread, DirectChatMessage, MatchRating, PeerChatThread
 from .services import record_match_rating, users_can_peer_chat
+
+
+def _presence_snapshot(user_id):
+    online_value = cache.get(f"direct_chat_presence:online:{user_id}")
+    return {
+        "is_online": bool(online_value),
+        "last_seen_at": cache.get(f"direct_chat_presence:last_seen:{user_id}"),
+    }
 
 
 @login_required
@@ -116,6 +125,58 @@ def direct_chat(request, user_id):
             "incoming_rating": incoming_rating,
             "message_retention_ms": VotingTokenPolicy.message_retention_ms(),
         },
+    )
+
+
+@login_required
+def direct_chat_history(request, user_id):
+    other_user = get_object_or_404(
+        CustomUser.objects.exclude(id=request.user.id)
+        .exclude(is_suspended_by_admin=True)
+        .filter(is_active=True),
+        id=user_id,
+    )
+
+    is_user_contacting_admin = other_user.is_admin() and not request.user.is_admin()
+    is_admin_replying_to_user = request.user.is_admin() and not other_user.is_admin()
+    is_peer_chat = (
+        not request.user.is_admin()
+        and not other_user.is_admin()
+        and users_can_peer_chat(request.user, other_user)
+    )
+    if not (is_user_contacting_admin or is_admin_replying_to_user or is_peer_chat):
+        return HttpResponseForbidden()
+
+    history_items = list(
+        DirectChatMessage.objects.filter(
+            Q(sender=request.user, recipient=other_user)
+            | Q(sender=other_user, recipient=request.user)
+        )
+        .select_related("sender")
+        .order_by("-created_at")[:200]
+    )
+    history_items.reverse()
+
+    return JsonResponse(
+        {
+            "presence": _presence_snapshot(other_user.id),
+            "messages": [
+                {
+                    "type": "message",
+                    "message_id": item.id,
+                    "client_id": item.client_id,
+                    "body": item.body,
+                    "sender": item.sender.username,
+                    "sender_id": item.sender_id,
+                    "recipient_id": item.recipient_id,
+                    "created_at": item.created_at.isoformat(),
+                    "delivery_status": 2
+                    if item.read_at
+                    else (1 if item.sender_id == request.user.id else 0),
+                }
+                for item in history_items
+            ]
+        }
     )
 
 

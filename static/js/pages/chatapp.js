@@ -42,6 +42,57 @@
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  function formatLastSeen(value) {
+    if (!value) {
+      return "Last seen recently";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "Last seen recently";
+    }
+
+    const now = new Date();
+    const diffMs = Math.max(0, now.getTime() - date.getTime());
+    const minuteMs = 60 * 1000;
+    const hourMs = 60 * minuteMs;
+    const dayMs = 24 * hourMs;
+
+    if (diffMs < minuteMs) {
+      return "Last seen just now";
+    }
+    if (diffMs < hourMs) {
+      const minutes = Math.max(1, Math.floor(diffMs / minuteMs));
+      return "Last seen " + minutes + " minute" + (minutes === 1 ? "" : "s") + " ago";
+    }
+    if (diffMs < dayMs) {
+      const hours = Math.max(1, Math.floor(diffMs / hourMs));
+      return "Last seen " + hours + " hour" + (hours === 1 ? "" : "s") + " ago";
+    }
+    if (diffMs < 7 * dayMs) {
+      const days = Math.max(1, Math.floor(diffMs / dayMs));
+      return "Last seen " + days + " day" + (days === 1 ? "" : "s") + " ago";
+    }
+
+    const sameDay = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const sameAsYesterday = date.toDateString() === yesterday.toDateString();
+    const timeText = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    if (sameDay) {
+      return "Last seen today at " + timeText;
+    }
+    if (sameAsYesterday) {
+      return "Last seen yesterday at " + timeText;
+    }
+    return "Last seen " + date.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
   function getCookie(name) {
     const cookies = document.cookie ? document.cookie.split(";") : [];
     for (let index = 0; index < cookies.length; index += 1) {
@@ -111,6 +162,7 @@
     const currentUserId = root.getAttribute("data-current-user-id");
     const currentUser = root.getAttribute("data-current-user") || "";
     const otherUser = root.getAttribute("data-other-user") || "them";
+    const historyUrl = root.getAttribute("data-chat-history-url") || "";
     const messages = root.querySelector("[data-chat-messages]");
     const form = root.querySelector("[data-chat-form]");
     const input = root.querySelector("[data-chat-input]");
@@ -129,6 +181,9 @@
     let pendingMessage = null;
     let socketReady = false;
     let renderedOtpCode = "";
+    let heartbeatInterval = null;
+    let presenceRefreshInterval = null;
+    let latestPresence = null;
 
     if (!otherUserId || !currentUserId || !messages || !form || !input) {
       return;
@@ -156,13 +211,38 @@
       messages.scrollTop = messages.scrollHeight;
     }
 
-    function setStatus(text, state) {
+    function setConnectionStatus(text, state) {
       status.textContent = text;
       status.setAttribute("data-state", state || "");
+    }
+
+    function setPresenceStatus(text, state) {
       if (statusPill) {
         statusPill.setAttribute("data-state", state || "");
         statusPill.lastChild.textContent = text;
       }
+    }
+
+    function applyPresence(presence) {
+      if (!presence) {
+        return;
+      }
+      latestPresence = {
+        is_online: Boolean(presence.is_online),
+        last_seen_at: presence.last_seen_at || (latestPresence ? latestPresence.last_seen_at : null),
+      };
+      if (latestPresence.is_online) {
+        setPresenceStatus("Online", "connected");
+        return;
+      }
+      setPresenceStatus(formatLastSeen(latestPresence.last_seen_at), "idle");
+    }
+
+    function refreshPresenceText() {
+      if (!latestPresence || latestPresence.is_online) {
+        return;
+      }
+      setPresenceStatus(formatLastSeen(latestPresence.last_seen_at), "idle");
     }
 
     function setCanSend(canSend) {
@@ -199,7 +279,7 @@
       } catch (error) {
         try {
           window.localStorage.removeItem(storageKey);
-        } catch (removeError) {}
+        } catch (removeError) { }
       }
 
       try {
@@ -221,7 +301,7 @@
       window.sessionStorage.setItem(storageKey, serialized);
       try {
         window.localStorage.setItem(storageKey, serialized);
-      } catch (error) {}
+      } catch (error) { }
     }
 
     function createMessageId() {
@@ -304,7 +384,7 @@
         return true;
       }
       pendingMessage = message;
-      setStatus("Connecting", "pending");
+      setConnectionStatus("Connecting", "pending");
       setCanSend(false);
       return true;
     }
@@ -324,15 +404,28 @@
 
     function addMessage(message) {
       const messageId = message.client_id || "";
+      const persistentMessageId = String(message.message_id || "");
+      let existingItem = null;
       if (messageId) {
-        const existingDelivery = messages.querySelector('[data-message-delivery="' + messageId + '"]');
-        if (existingDelivery) {
+        existingItem = messages.querySelector('[data-message-client-id="' + messageId + '"]');
+      }
+      if (!existingItem && persistentMessageId) {
+        existingItem = messages.querySelector('[data-message-id="' + persistentMessageId + '"]');
+      }
+      if (existingItem) {
+        if (messageId) {
           updateDeliveryStatus(messageId, Number(message.delivery_status || 1));
-          return;
         }
+        return;
       }
       const item = document.createElement("article");
       item.className = "chat-message";
+      if (messageId) {
+        item.setAttribute("data-message-client-id", messageId);
+      }
+      if (persistentMessageId) {
+        item.setAttribute("data-message-id", persistentMessageId);
+      }
       const isOwn = String(message.sender_id) === String(currentUserId) || message.sender === currentUser;
       if (isOwn) {
         item.classList.add("is-own");
@@ -360,6 +453,38 @@
       item.appendChild(meta);
       messages.appendChild(item);
       scrollToBottom();
+    }
+
+    function mergeServerHistory(serverMessages) {
+      if (!Array.isArray(serverMessages) || !serverMessages.length) {
+        return;
+      }
+      serverMessages.forEach(function (message) {
+        addMessage(message);
+        storeMessage(message);
+      });
+      scrollToBottom();
+    }
+
+    function loadServerHistory() {
+      if (!historyUrl) {
+        return;
+      }
+      fetch(historyUrl, { credentials: "include" })
+        .then(function (response) {
+          if (!response.ok) {
+            return null;
+          }
+          return response.json();
+        })
+        .then(function (data) {
+          if (!data || !Array.isArray(data.messages)) {
+            return;
+          }
+          applyPresence(data.presence);
+          mergeServerHistory(data.messages);
+        })
+        .catch(function () { });
     }
 
     function updateAdminContactBadge(count) {
@@ -409,7 +534,7 @@
         },
       }).then(function () {
         updateAdminContactBadge(0);
-      }).catch(function () {});
+      }).catch(function () { });
     }
 
     function refreshAdminContactState() {
@@ -430,7 +555,7 @@
           updateAdminContactBadge(data.unread_count);
           renderOtpNotice(data.otp);
         })
-        .catch(function () {});
+        .catch(function () { });
     }
 
     function setWidgetOpen(isOpen) {
@@ -451,6 +576,16 @@
     }
 
     loadStoredMessages().forEach(addMessage);
+    setPresenceStatus("Last seen recently", "idle");
+    loadServerHistory();
+    if (statusPill) {
+      presenceRefreshInterval = window.setInterval(refreshPresenceText, 60000);
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") {
+          refreshPresenceText();
+        }
+      });
+    }
     if (isAdminContactWidget) {
       updateAdminContactBadge(root.getAttribute("data-admin-contact-unread"));
       renderOtpNotice({
@@ -465,8 +600,16 @@
 
     socket.addEventListener("open", function () {
       socketReady = true;
-      setStatus("Online", "connected");
+      setConnectionStatus("Connected", "connected");
       setCanSend(true);
+      if (heartbeatInterval) {
+        window.clearInterval(heartbeatInterval);
+      }
+      heartbeatInterval = window.setInterval(function () {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: "ping" }));
+        }
+      }, 30000);
       if (pendingMessage) {
         const queued = pendingMessage;
         pendingMessage = null;
@@ -481,6 +624,12 @@
         if (message.type === "receipt") {
           if (String(message.reader_id) === String(otherUserId)) {
             updateDeliveryStatus(message.message_id, 2);
+          }
+          return;
+        }
+        if (message.type === "presence") {
+          if (String(message.user_id) === String(otherUserId)) {
+            applyPresence(message);
           }
           return;
         }
@@ -499,8 +648,12 @@
 
     socket.addEventListener("close", function (event) {
       socketReady = false;
+      if (heartbeatInterval) {
+        window.clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
       const blockedByAuth = event.code === 4401 || event.code === 4403;
-      setStatus(blockedByAuth ? "Chat locked" : "Realtime unavailable", "closed");
+      setConnectionStatus(blockedByAuth ? "Chat locked" : "Realtime unavailable", "closed");
       setCanSend(false);
       if (!blockedByAuth && window.console && typeof window.console.warn === "function") {
         window.console.warn(
@@ -512,7 +665,7 @@
 
     socket.addEventListener("error", function () {
       if (!socketReady) {
-        setStatus("Realtime unavailable", "closed");
+        setConnectionStatus("Realtime unavailable", "closed");
         if (window.console && typeof window.console.warn === "function") {
           window.console.warn(
             "Chat websocket failed. Check ASGI/Daphne, Nginx websocket upgrade headers, and allowed hosts for:",
@@ -520,7 +673,22 @@
           );
         }
       }
+      if (heartbeatInterval) {
+        window.clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
       setCanSend(false);
+    });
+
+    window.addEventListener("beforeunload", function () {
+      if (heartbeatInterval) {
+        window.clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
+      if (presenceRefreshInterval) {
+        window.clearInterval(presenceRefreshInterval);
+        presenceRefreshInterval = null;
+      }
     });
 
     form.addEventListener("submit", function (event) {

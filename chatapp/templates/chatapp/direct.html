@@ -8,17 +8,14 @@
 {% endblock %}
 
 {% block content %}
-<div
-  class="container-fluid chat-page"
-  data-direct-chat-user="{{ other_user.id }}"
-  data-current-user-id="{{ request.user.id }}"
-  data-current-user="{{ request.user.username }}"
-  data-other-user="{{ other_user.username }}"
-  data-message-retention-ms="{{ message_retention_ms|default:86400000 }}"
->
+<div class="container-fluid chat-page" data-direct-chat-user="{{ other_user.id }}"
+  data-chat-history-url="{% url 'chatapp:direct_history' other_user.id %}" data-current-user-id="{{ request.user.id }}"
+  data-current-user="{{ request.user.username }}" data-other-user="{{ other_user.username }}"
+  data-message-retention-ms="{{ message_retention_ms|default:86400000 }}">
   <header class="chat-header chat-direct-nav">
     {% if request.user.is_admin %}
-    <a href="{% url 'chatapp:admin_inbox' %}" class="btn btn-outline-primary chat-back-button" aria-label="Back to admin inbox">
+    <a href="{% url 'chatapp:admin_inbox' %}" class="btn btn-outline-primary chat-back-button"
+      aria-label="Back to admin inbox">
       <i class="fas fa-arrow-left" aria-hidden="true"></i>
       <span>Admin Inbox</span>
     </a>
@@ -38,16 +35,17 @@
   <section class="chat-panel chat-room-panel">
     <header class="chat-room-header">
       <div class="chat-room-user">
-        {% include "partials/user_avatar.html" with avatar_user=other_user size=44 class_name="chat-room-avatar" alt_text=other_user.username %}
+        {% include "partials/user_avatar.html" with avatar_user=other_user size=44 class_name="chat-room-avatar"
+        alt_text=other_user.username %}
         <div>
           <h1>{{ other_user.username }}</h1>
           <p>
             {{ other_user.get_role_display }}
             {% if incoming_rating %}
-              <span class="chat-inline-rating">
-                <i class="fas fa-star" aria-hidden="true"></i>
-                Rated you {{ incoming_rating.score }}/10
-              </span>
+            <span class="chat-inline-rating">
+              <i class="fas fa-star" aria-hidden="true"></i>
+              Rated you {{ incoming_rating.score }}/10
+            </span>
             {% endif %}
           </p>
         </div>
@@ -61,7 +59,8 @@
       <div class="chat-day-divider"><span>Today</span></div>
     </div>
     <form class="chat-compose" data-chat-form>
-      <input type="text" class="form-control" data-chat-input maxlength="2000" autocomplete="off" placeholder="Message {{ other_user.username }}" />
+      <input type="text" class="form-control" data-chat-input maxlength="2000" autocomplete="off"
+        placeholder="Message {{ other_user.username }}" />
       <button type="submit" class="btn btn-primary chat-send-button" aria-label="Send message" title="Send message">
         <i class="fas fa-paper-plane" aria-hidden="true"></i>
       </button>
@@ -71,5 +70,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/pages/chatapp.js' %}?v=20260704retention1"></script>
+<script src="{% static 'js/pages/chatapp.js' %}?v=20260721presence4"></script>
 {% endblock %}

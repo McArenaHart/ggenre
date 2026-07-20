@@ -3,15 +3,18 @@ import json
 from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db.models import F
 from django.utils import timezone
 
 from users.models import Notification, Role
 
-from .models import AdminChatThread, PeerChatThread
+from .models import AdminChatThread, DirectChatMessage, PeerChatThread
 from .services import users_can_peer_chat
 
 User = get_user_model()
+PRESENCE_TTL_SECONDS = 90
+PRESENCE_CONNECTION_TTL_SECONDS = 5 * 60
 
 
 class DirectChatConsumer(AsyncWebsocketConsumer):
@@ -54,9 +57,31 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
         self.group_name = f"direct_chat_{user_ids[0]}_{user_ids[1]}"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
+        became_online = await self.begin_presence_session()
+        if became_online:
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    "type": "direct.presence",
+                    "user_id": self.user.id,
+                    "is_online": True,
+                    "last_seen_at": timezone.now().isoformat(),
+                },
+            )
 
     async def disconnect(self, close_code):
         if hasattr(self, "group_name"):
+            presence_update = await self.end_presence_session()
+            if presence_update:
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {
+                        "type": "direct.presence",
+                        "user_id": self.user.id,
+                        "is_online": False,
+                        "last_seen_at": presence_update["last_seen_at"],
+                    },
+                )
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def receive(self, text_data=None, bytes_data=None):
@@ -68,10 +93,16 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
         except json.JSONDecodeError:
             return
 
+        if data.get("type") == "ping":
+            await self.touch_presence()
+            return
+
         if data.get("type") == "read":
+            await self.touch_presence()
             message_id = str(data.get("message_id") or "")[:120]
             if not message_id:
                 return
+            await self.mark_message_read(message_id)
             await self.channel_layer.group_send(
                 self.group_name,
                 {
@@ -85,6 +116,7 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
         body = (data.get("message") or "").strip()
         if not body:
             return
+        await self.touch_presence()
 
         if self.is_user_contacting_admin:
             await self.record_admin_contact()
@@ -93,14 +125,18 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
         elif self.is_peer_chat:
             await self.record_peer_contact()
 
+        client_id = str(data.get("client_id") or "")[:120]
+        persisted_message = await self.save_direct_message(client_id=client_id, body=body[:2000])
+
         message = {
             "type": "message",
-            "client_id": str(data.get("client_id") or "")[:120],
+            "client_id": persisted_message.client_id,
+            "message_id": persisted_message.id,
             "body": body[:2000],
             "sender": self.user.username,
             "sender_id": self.user.id,
             "recipient_id": self.other_user.id,
-            "created_at": timezone.now().isoformat(),
+            "created_at": persisted_message.created_at.isoformat(),
         }
         await self.channel_layer.group_send(
             self.group_name,
@@ -121,6 +157,20 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
                     "message_id": event["message_id"],
                     "reader_id": event["reader_id"],
                     "status": "read",
+                }
+            )
+        )
+
+    async def direct_presence(self, event):
+        if event.get("user_id") == self.user.id:
+            return
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "presence",
+                    "user_id": event.get("user_id"),
+                    "is_online": bool(event.get("is_online")),
+                    "last_seen_at": event.get("last_seen_at"),
                 }
             )
         )
@@ -199,3 +249,80 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
             user=self.other_user,
             message=f"{self.user.username} sent you a message.",
         )
+
+    @sync_to_async
+    def save_direct_message(self, client_id, body):
+        return DirectChatMessage.objects.create(
+            sender=self.user,
+            recipient=self.other_user,
+            client_id=client_id,
+            body=body,
+        )
+
+    @sync_to_async
+    def mark_message_read(self, message_id):
+        DirectChatMessage.objects.filter(
+            client_id=message_id,
+            sender=self.other_user,
+            recipient=self.user,
+            read_at__isnull=True,
+        ).update(read_at=timezone.now())
+
+    @sync_to_async
+    def touch_presence(self):
+        self._touch_presence_sync()
+
+    def _touch_presence_sync(self):
+        now = timezone.now()
+        connection_key = f"direct_chat_presence:connections:{self.user.id}"
+        current_connections = int(cache.get(connection_key) or 0)
+        if current_connections > 0:
+            cache.set(
+                connection_key,
+                current_connections,
+                timeout=PRESENCE_CONNECTION_TTL_SECONDS,
+            )
+        cache.set(
+            f"direct_chat_presence:online:{self.user.id}",
+            now.isoformat(),
+            timeout=PRESENCE_TTL_SECONDS,
+        )
+        cache.set(
+            f"direct_chat_presence:last_seen:{self.user.id}",
+            now.isoformat(),
+            timeout=None,
+        )
+
+    @sync_to_async
+    def begin_presence_session(self):
+        connection_key = f"direct_chat_presence:connections:{self.user.id}"
+        current_connections = int(cache.get(connection_key) or 0)
+        cache.set(
+            connection_key,
+            current_connections + 1,
+            timeout=PRESENCE_CONNECTION_TTL_SECONDS,
+        )
+        self._touch_presence_sync()
+        return current_connections == 0
+
+    @sync_to_async
+    def end_presence_session(self):
+        connection_key = f"direct_chat_presence:connections:{self.user.id}"
+        current_connections = int(cache.get(connection_key) or 0)
+        if current_connections <= 1:
+            cache.delete(connection_key)
+            return self.mark_presence_offline()
+
+        cache.set(
+            connection_key,
+            current_connections - 1,
+            timeout=PRESENCE_CONNECTION_TTL_SECONDS,
+        )
+        self._touch_presence_sync()
+        return None
+
+    def mark_presence_offline(self):
+        now = timezone.now().isoformat()
+        cache.delete(f"direct_chat_presence:online:{self.user.id}")
+        cache.set(f"direct_chat_presence:last_seen:{self.user.id}", now, timeout=None)
+        return {"last_seen_at": now}
