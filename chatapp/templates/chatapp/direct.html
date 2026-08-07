@@ -4,14 +4,18 @@
 {% block title %}Chat with {{ other_user.username }}{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/chatapp.css' %}?v=20260625ticks1" rel="stylesheet" />
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260807missionmobile1" rel="stylesheet" />
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid chat-page" data-direct-chat-user="{{ other_user.id }}"
   data-chat-history-url="{% url 'chatapp:direct_history' other_user.id %}" data-current-user-id="{{ request.user.id }}"
   data-current-user="{{ request.user.username }}" data-other-user="{{ other_user.username }}"
-  data-message-retention-ms="{{ message_retention_ms|default:86400000 }}">
+  data-message-retention-ms="{{ message_retention_ms|default:86400000 }}"
+  data-mission-request-url="{% url 'chatapp:mission_request' %}"
+  data-mission-latest-url="{% url 'chatapp:mission_latest' %}"
+  data-mission-detail-template="{% url 'chatapp:mission_detail' 0 %}"
+  data-token-request-url="{% url 'chatapp:token_purchase_create' %}">
   <header class="chat-header chat-direct-nav">
     {% if request.user.is_admin %}
     <a href="{% url 'chatapp:admin_inbox' %}" class="btn btn-outline-primary chat-back-button"
@@ -19,16 +23,31 @@
       <i class="fas fa-arrow-left" aria-hidden="true"></i>
       <span>Admin Inbox</span>
     </a>
-    {% elif chat_channel == "peer" %}
-    <a href="{% url 'chatapp:index' %}" class="btn btn-outline-primary chat-back-button" aria-label="Back to messages">
-      <i class="fas fa-arrow-left" aria-hidden="true"></i>
-      <span>Messages</span>
-    </a>
     {% else %}
-    <a href="{% url 'content_list' %}" class="btn btn-outline-primary chat-back-button" aria-label="Back home">
-      <i class="fas fa-arrow-left" aria-hidden="true"></i>
-      <span>Home</span>
-    </a>
+    <div>
+      <h1>{% if chat_channel == "peer" %}Mission Chat{% else %}Contact Admin{% endif %}</h1>
+      <p>
+        {% if chat_channel == "peer" %}
+        Chat with {{ other_user.username }}. You can return to missions or your inbox anytime.
+        {% else %}
+        Message admin, request missions, or return to the main navigation.
+        {% endif %}
+      </p>
+    </div>
+    <nav class="chat-direct-actions" aria-label="Chat navigation">
+      <a href="{% url 'content_list' %}" class="btn btn-outline-primary chat-back-button" aria-label="Back home">
+        <i class="fas fa-home" aria-hidden="true"></i>
+        <span>Home</span>
+      </a>
+      <a href="{% url 'chatapp:index' %}" class="btn btn-outline-primary chat-back-button" aria-label="Back to messages">
+        <i class="fas fa-comments" aria-hidden="true"></i>
+        <span>Messages</span>
+      </a>
+      <a href="{% url 'chatapp:mission_center' %}" class="btn btn-primary chat-back-button" aria-label="Open my missions">
+        <i class="fas fa-bullseye" aria-hidden="true"></i>
+        <span>My Missions</span>
+      </a>
+    </nav>
     {% endif %}
   </header>
 
@@ -56,6 +75,250 @@
         Connecting
       </span>
     </header>
+
+    {% if chat_channel == "admin" and not request.user.is_admin %}
+    <section class="chat-admin-actions" data-player-mission-panel>
+      <div class="chat-admin-card chat-mission-card">
+        <div class="chat-mission-card-head">
+          <div>
+            <h2>GGenre Secret Mission</h2>
+            <p>Request a challenge, accept your match, then complete your secret mission.</p>
+          </div>
+          <a href="{% url 'chatapp:mission_center' %}" class="btn btn-outline-primary btn-sm">My Missions</a>
+        </div>
+        <div class="chat-mission-search-card" data-mission-search-card hidden>
+          <div class="chat-mission-search-radar" aria-hidden="true"></div>
+          <div>
+            <strong>Welcome to GGenre Secret Mission</strong>
+            <span>Looking for a new challenge? Please wait while we find a suitable opponent...</span>
+          </div>
+        </div>
+        <div class="chat-mission-command-row">
+          <button type="button" class="btn btn-success chat-mission-primary-action" data-mission-request-btn>
+            Request Mission
+          </button>
+          <button type="button" class="btn btn-outline-primary" data-mission-refresh-btn>Refresh</button>
+        </div>
+        <div class="chat-admin-status" data-mission-status
+          data-latest-mission-id="{% if mission_context and mission_context.latest %}{{ mission_context.latest.id }}{% endif %}">
+          {% if mission_context and mission_context.latest %}
+          Latest mission #{{ mission_context.latest.id }}: {{ mission_context.latest.get_status_display }}
+          {% else %}
+          No mission requested yet.
+          {% endif %}
+        </div>
+        <div class="chat-mission-opponent-card" data-opponent-card hidden>
+          <img src="" alt="Opponent avatar" data-opponent-avatar />
+          <div>
+            <strong data-opponent-name></strong>
+            <span data-opponent-meta></span>
+          </div>
+        </div>
+        <div class="chat-admin-status" data-opponent-status></div>
+        <div class="chat-mission-instruction" data-mission-instruction hidden>
+          <span>Mission</span>
+          <strong></strong>
+        </div>
+        <div class="chat-admin-status chat-mission-game-timer" data-mission-timer></div>
+        <div class="chat-mission-timer-track" data-mission-timer-track hidden>
+          <span class="chat-mission-timer-fill" data-mission-timer-fill></span>
+        </div>
+        <div class="chat-mission-step-actions" data-mission-action-row>
+          <button type="button" class="btn btn-outline-primary btn-sm" data-mission-action="find_another_opponent">Find Another Opponent</button>
+          <button type="button" class="btn btn-primary btn-sm" data-mission-action="accept_opponent">Accept
+            Opponent</button>
+          <button type="button" class="btn btn-outline-primary btn-sm" data-mission-action="request_another_mission">Request Another Mission</button>
+          <button type="button" class="btn btn-primary btn-sm" data-mission-action="accept_mission">Accept
+            Mission</button>
+        </div>
+        <div class="chat-mission-proof-panel" data-proof-row>
+          <strong>Capture chat proof</strong>
+          <input type="text" class="form-control form-control-sm" data-proof-explanation placeholder="Optional note for admin" />
+          <button type="button" class="btn btn-warning btn-sm" data-mission-action="submit_proof">Submit Win</button>
+        </div>
+      </div>
+
+      <div class="chat-admin-card">
+        <h2>Buy Additional Voting Tokens</h2>
+        <p>Submit a manual request for admin review.</p>
+        <div class="chat-admin-grid">
+          <input type="number" min="1" class="form-control form-control-sm" data-token-count
+            placeholder="Requested tokens" />
+          <input type="text" class="form-control form-control-sm" data-token-channel placeholder="Payment channel" />
+          <input type="text" class="form-control form-control-sm" data-token-reference
+            placeholder="Payment reference" />
+        </div>
+        <div class="chat-admin-inline">
+          <button type="button" class="btn btn-success btn-sm" data-token-request-btn>Submit Request</button>
+        </div>
+        <div class="chat-admin-status" data-token-request-status>
+          {% if token_request_context and token_request_context.latest %}
+          Latest request #{{ token_request_context.latest.id }}: {{ token_request_context.latest.get_status_display }}
+          {% else %}
+          No token request submitted yet.
+          {% endif %}
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if chat_channel == "peer" and mission_context and mission_context.latest %}
+    <section class="chat-admin-actions chat-peer-mission-actions" data-player-mission-panel>
+      <div class="chat-admin-card chat-mission-card">
+        <div class="chat-mission-card-head">
+          <div>
+            <h2>Active Mission</h2>
+            <p>Complete the mission in this chat. After review, you can continue chatting from your inbox.</p>
+          </div>
+          <a href="{% url 'chatapp:mission_center' %}" class="btn btn-outline-primary btn-sm">My Missions</a>
+        </div>
+        <div class="chat-admin-status" data-mission-status
+          data-latest-mission-id="{{ mission_context.latest.id }}">
+          Mission #{{ mission_context.latest.id }}: {{ mission_context.latest.get_status_display }}
+        </div>
+        <div class="chat-mission-opponent-card" data-opponent-card hidden>
+          <img src="" alt="Opponent avatar" data-opponent-avatar />
+          <div>
+            <strong data-opponent-name></strong>
+            <span data-opponent-meta></span>
+          </div>
+        </div>
+        <div class="chat-admin-status" data-opponent-status></div>
+        <div class="chat-mission-instruction" data-mission-instruction hidden>
+          <span>Mission</span>
+          <strong></strong>
+        </div>
+        <div class="chat-admin-status chat-mission-game-timer" data-mission-timer></div>
+        <div class="chat-mission-timer-track" data-mission-timer-track hidden>
+          <span class="chat-mission-timer-fill" data-mission-timer-fill></span>
+        </div>
+        <div class="chat-mission-step-actions" data-mission-action-row>
+          <button type="button" class="btn btn-outline-primary btn-sm" data-mission-action="find_another_opponent">Find Another Opponent</button>
+          <button type="button" class="btn btn-primary btn-sm" data-mission-action="accept_opponent">Accept Opponent</button>
+          <button type="button" class="btn btn-outline-primary btn-sm" data-mission-action="request_another_mission">Request Another Mission</button>
+          <button type="button" class="btn btn-primary btn-sm" data-mission-action="accept_mission">Accept Mission</button>
+        </div>
+        <div class="chat-mission-proof-panel" data-proof-row>
+          <strong>Capture chat proof</strong>
+          <input type="text" class="form-control form-control-sm" data-proof-explanation placeholder="Optional note for admin" />
+          <button type="button" class="btn btn-warning btn-sm" data-mission-action="submit_proof">Submit Win</button>
+        </div>
+      </div>
+      <div class="chat-admin-card chat-mission-chat-card">
+        <div class="chat-mission-card-head">
+          <div>
+            <h2>Mission Chat</h2>
+            <p>Use this chat to play the mission. It stays available from your inbox after review.</p>
+          </div>
+        </div>
+        <div class="chat-messages" data-chat-messages>
+          <div class="chat-day-divider"><span>Today</span></div>
+        </div>
+        <form class="chat-compose" data-chat-form>
+          <input type="text" class="form-control" data-chat-input maxlength="2000" autocomplete="off"
+            placeholder="Message {{ other_user.username }}" />
+          <button type="submit" class="btn btn-primary chat-send-button" aria-label="Send message" title="Send message">
+            <i class="fas fa-paper-plane" aria-hidden="true"></i>
+          </button>
+        </form>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if chat_channel == "admin" and request.user.is_admin %}
+    <section class="chat-admin-actions">
+      <div class="chat-admin-card">
+        <h2>Secret Mission Control</h2>
+        <p>The game starts when {{ other_user.username }} opens admin chat and taps Request Mission.</p>
+        <div class="chat-admin-inline">
+          <a href="{% url 'chatapp:admin_inbox' %}" class="btn btn-outline-primary btn-sm">Back to Inbox</a>
+          <a href="{% url 'chatapp:admin_review_center' %}" class="btn btn-outline-primary btn-sm">Review Proof</a>
+        </div>
+        <div class="chat-admin-status" data-review-status>
+          {% if mission_context and mission_context.latest_for_user %}
+          Mission #{{ mission_context.latest_for_user.id }}: {{ mission_context.latest_for_user.get_status_display }}.
+          {% if mission_context.latest_for_user.status == "matching" %}
+          Choose an online opponent from Mission Requests.
+          {% elif mission_context.latest_for_user.status == "opponent_proposed" %}
+          Waiting for the player to accept the opponent.
+          {% elif mission_context.latest_for_user.status == "mission_proposed" %}
+          Waiting for the player to accept the secret mission.
+          {% elif mission_context.latest_for_user.status == "mission_active" %}
+          Mission is active. Players can chat and submit proof with I Won.
+          {% elif mission_context.latest_for_user.status == "proof_submitted" or mission_context.latest_for_user.status == "under_review" %}
+          Proof is ready for admin review.
+          {% elif mission_context.latest_for_user.status == "cooldown_vote_required" %}
+          Winner approved. The loser must vote for the winner before starting again.
+          {% endif %}
+          {% else %}
+          No mission yet. Ask the user to tap Request Mission in this chat.
+          {% endif %}
+        </div>
+        {% if mission_context and mission_context.request_row %}
+        {% with mission_row=mission_context.request_row %}
+        <form method="post" action="{% url 'chatapp:admin_assign_mission_opponent' mission_row.mission.id %}"
+          class="chat-admin-quick-review-form">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}" />
+          <strong>Approve mission request</strong>
+          {% if mission_row.claimed_by_other %}
+          <div class="chat-admin-status">Locked by {{ mission_row.mission.assigned_admin.username }}.</div>
+          {% endif %}
+          <div class="chat-admin-inline chat-admin-match-form">
+            <select name="opponent_id" class="form-select form-select-sm" required>
+              <option value="">Select online opponent</option>
+              {% for row in mission_row.available_players %}
+              <option value="{{ row.user.id }}">
+                {{ row.user.username }} - Badge L{{ row.badge_level }} - {{ row.current_points }} pts - {{ row.homepage_wins }} wins
+              </option>
+              {% endfor %}
+            </select>
+            {% if mission_row.match_disabled %}
+            <button type="submit" class="btn btn-primary btn-sm" disabled>Approve & Match</button>
+            {% else %}
+            <button type="submit" class="btn btn-primary btn-sm">Approve & Match</button>
+            {% endif %}
+          </div>
+          {% if not mission_row.available_count and not mission_row.claimed_by_other %}
+          <div class="chat-admin-status">No free online opponents right now.</div>
+          {% endif %}
+        </form>
+        {% endwith %}
+        {% endif %}
+        {% if mission_context and mission_context.pending_evidence_for_user %}
+        <form method="post"
+          action="{% url 'chatapp:admin_review_mission_action' mission_context.pending_evidence_for_user.id %}"
+          class="chat-admin-quick-review-form">
+          {% csrf_token %}
+          <input type="text" name="review_notes" class="form-control form-control-sm" placeholder="Optional note" />
+          <div class="chat-admin-inline">
+            <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">Approve Victory</button>
+            <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">Reject Proof</button>
+          </div>
+        </form>
+        {% endif %}
+      </div>
+
+      <div class="chat-admin-card">
+        <h2>User Tokens</h2>
+        <p>Token requests are reviewed from the queue. No ID copying needed.</p>
+        <div class="chat-admin-inline">
+          <a href="{% url 'chatapp:admin_review_center' %}" class="btn btn-outline-primary btn-sm">Open Token Requests</a>
+        </div>
+        <div class="chat-admin-status" data-token-review-status>
+          {% if token_request_context and token_request_context.latest_for_user %}
+          Latest token request #{{ token_request_context.latest_for_user.id }}:
+          {{ token_request_context.latest_for_user.get_status_display }}.
+          {% else %}
+          No token request from this user yet.
+          {% endif %}
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if chat_channel == "peer" and mission_context and mission_context.latest %}
+    {% else %}
     <div class="chat-messages" data-chat-messages>
       <div class="chat-day-divider"><span>Today</span></div>
     </div>
@@ -66,10 +329,12 @@
         <i class="fas fa-paper-plane" aria-hidden="true"></i>
       </button>
     </form>
+    {% endif %}
   </section>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/pages/chatapp.js' %}?v=20260721presence4"></script>
+<script src="{% static 'js/pages/chatapp.js' %}?v=20260807panelnavclick1"></script>
+<script src="{% static 'js/pages/chatapp_missions.js' %}?v=20260807secret1"></script>
 {% endblock %}

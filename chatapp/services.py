@@ -1,14 +1,108 @@
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 from datetime import timedelta
 
-from users.models import Notification, Role
+from content.models import Vote
+from users.models import Notification, OTP, Role
 
-from .models import MatchRating, PeerChatThread
+from .models import (
+    AdminChatThread,
+    AdminDecisionLog,
+    DirectChatMessage,
+    MatchRating,
+    MissionEvidence,
+    MissionQueueEntry,
+    MissionReviewControl,
+    MissionSession,
+    MissionTemplate,
+    MissionWinFeed,
+    PeerChatThread,
+    ReviewAutomationTicket,
+    TokenPurchaseRequest,
+)
 
 
 CHAT_ACCESS_DURATION = timedelta(days=1)
+MISSION_AI_REVIEW_CONFIDENCE_THRESHOLD = 0.75
+MISSION_MATCH_REMATCH_COOLDOWN_HOURS = 12
+
+
+def _mission_policy_settings():
+    def _as_bool(value, default=False):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+        return default
+
+    defaults = {
+        "review_route_mode": "manual_only",
+        "ai_confidence_threshold": MISSION_AI_REVIEW_CONFIDENCE_THRESHOLD,
+        "prefer_online_opponent": True,
+        "require_homepage_win_opponent": False,
+        "manual_matchmaking": True,
+        "rematch_cooldown_hours": MISSION_MATCH_REMATCH_COOLDOWN_HOURS,
+        "bulk_review_max_items": 10,
+    }
+    configured = getattr(settings, "CHATAPP_MISSION_POLICY", {}) or {}
+    policy = {**defaults, **configured}
+
+    runtime_control = MissionReviewControl.objects.order_by("-updated_at", "-id").first()
+    if runtime_control and runtime_control.route_mode:
+        policy["review_route_mode"] = runtime_control.route_mode
+
+    # Mission review is deliberately manual-only for now.
+    policy["review_route_mode"] = "manual_only"
+    try:
+        policy["ai_confidence_threshold"] = float(policy.get("ai_confidence_threshold", 0.75))
+    except (TypeError, ValueError):
+        policy["ai_confidence_threshold"] = 0.75
+    try:
+        policy["rematch_cooldown_hours"] = max(0, int(policy.get("rematch_cooldown_hours", 12)))
+    except (TypeError, ValueError):
+        policy["rematch_cooldown_hours"] = 12
+    try:
+        policy["bulk_review_max_items"] = max(1, int(policy.get("bulk_review_max_items", 10)))
+    except (TypeError, ValueError):
+        policy["bulk_review_max_items"] = 10
+    policy["prefer_online_opponent"] = _as_bool(policy.get("prefer_online_opponent", True), default=True)
+    policy["require_homepage_win_opponent"] = _as_bool(
+        policy.get("require_homepage_win_opponent", False),
+        default=False,
+    )
+    policy["manual_matchmaking"] = _as_bool(
+        policy.get("manual_matchmaking", True),
+        default=True,
+    )
+    return policy
+
+
+def get_mission_policy_settings():
+    return _mission_policy_settings()
+
+
+def set_mission_review_route_mode(route_mode, reason=""):
+    normalized = str(route_mode or "").strip().lower()
+    if normalized != MissionReviewControl.RouteMode.MANUAL_ONLY:
+        raise ValueError("Mission review is manual-only for now.")
+
+    control = MissionReviewControl.objects.order_by("-updated_at", "-id").first()
+    if not control:
+        control = MissionReviewControl.objects.create(route_mode=normalized, reason=(reason or "")[:255])
+        return control
+
+    control.route_mode = normalized
+    control.reason = (reason or "")[:255]
+    control.save(update_fields=["route_mode", "reason", "updated_at"])
+    return control
 
 
 def users_are_valid_peer_candidates(first_user, second_user):
@@ -211,3 +305,830 @@ def record_match_rating(rater, rated, score, source_content=None):
         "match_score": match_score,
         "thread": thread,
     }
+
+
+MISSION_ACTIVE_STATUSES = {
+    MissionSession.Status.REQUESTED,
+    MissionSession.Status.MATCHING,
+    MissionSession.Status.OPPONENT_PROPOSED,
+    MissionSession.Status.MISSION_PROPOSED,
+    MissionSession.Status.MISSION_ACTIVE,
+    MissionSession.Status.PROOF_SUBMITTED,
+    MissionSession.Status.UNDER_REVIEW,
+}
+
+
+def _validate_mission_player(user):
+    if not user or user.has_role(Role.ADMIN):
+        raise ValueError("Only non-admin players can join missions.")
+    if not user.is_active or user.is_suspended_by_admin:
+        raise ValueError("Suspended or inactive players cannot join missions.")
+
+
+def _mission_visible_to_user(mission, user):
+    if not user:
+        return False
+    if user.has_role(Role.ADMIN):
+        return True
+    return mission.requester_id == user.id or mission.opponent_id == user.id
+
+
+def _available_player_queryset(exclude_user_id):
+    return (
+        MissionQueueEntry.objects.filter(status=MissionQueueEntry.QueueStatus.WAITING)
+        .exclude(user_id=exclude_user_id)
+        .select_related("user")
+        .order_by("created_at")
+    )
+
+
+def _user_gender_value(user):
+    # Gender is optional in this codebase; if absent, treat as unspecified.
+    value = getattr(user, "gender", None)
+    if value is None:
+        return ""
+    return str(value).strip().lower()
+
+
+def _users_are_gender_compatible(first_user, second_user):
+    first_gender = _user_gender_value(first_user)
+    second_gender = _user_gender_value(second_user)
+    if not first_gender or not second_gender:
+        return True
+    return first_gender != second_gender
+
+
+def _find_available_opponent(requester):
+    policy = _mission_policy_settings()
+    rematch_cutoff = timezone.now() - timedelta(hours=policy["rematch_cooldown_hours"])
+    available = []
+    for queue_entry in _available_player_queryset(exclude_user_id=requester.id):
+        candidate = queue_entry.user
+        if not candidate or not users_are_valid_peer_candidates(requester, candidate):
+            continue
+        if not _users_are_gender_compatible(requester, candidate):
+            continue
+        recently_matched = MissionSession.objects.filter(
+            Q(requester=requester, opponent=candidate) | Q(requester=candidate, opponent=requester),
+            ended_at__gte=rematch_cutoff,
+            status__in=[
+                MissionSession.Status.APPROVED,
+                MissionSession.Status.COOLDOWN_VOTE_REQUIRED,
+                MissionSession.Status.CLOSED,
+                MissionSession.Status.REJECTED,
+            ],
+        ).exists()
+        is_online = bool(cache.get(f"direct_chat_presence:online:{candidate.id}"))
+        has_homepage_win = MissionWinFeed.objects.filter(
+            winner=candidate,
+            homepage_visible=True,
+        ).exists()
+        if policy["require_homepage_win_opponent"] and not has_homepage_win:
+            continue
+        available.append(
+            {
+                "queue_entry": queue_entry,
+                "recently_matched": recently_matched,
+                "is_online": is_online,
+                "has_homepage_win": has_homepage_win,
+            }
+        )
+
+    if not available:
+        return None
+
+    candidate_pool = available
+    candidate_pool.sort(
+        key=lambda item: (
+            0 if not item["recently_matched"] else 1,
+            0 if (policy["prefer_online_opponent"] and item["is_online"]) else 1,
+            0 if item["has_homepage_win"] else 1,
+            item["queue_entry"].created_at,
+        )
+    )
+    return candidate_pool[0]["queue_entry"]
+
+
+def _assign_opponent_or_keep_matching(mission):
+    queue_entry = _find_available_opponent(mission.requester)
+    if not queue_entry:
+        mission.status = MissionSession.Status.MATCHING
+        mission.opponent = None
+        mission.save(update_fields=["status", "opponent", "updated_at"])
+        return mission
+
+    mission.opponent = queue_entry.user
+    mission.status = MissionSession.Status.OPPONENT_PROPOSED
+    mission.save(update_fields=["opponent", "status", "updated_at"])
+    MissionQueueEntry.objects.filter(pk=queue_entry.pk).update(
+        status=MissionQueueEntry.QueueStatus.MATCHED,
+        reason=f"Paired for mission #{mission.pk}",
+        mission_session=mission,
+        updated_at=timezone.now(),
+    )
+    return mission
+
+
+def _default_mission_templates():
+    defaults = [
+        (
+            "Level 1: Emoji Vibe Check",
+            "Get your opponent to describe your vibe using exactly one emoji and one word.",
+            "Describe your opponent's vibe using exactly one emoji and one word.",
+            "level_1_warmup",
+            1,
+        ),
+        (
+            "Level 1: Playlist Guess",
+            "Send three song titles that match your mood and get your opponent to pick the one that fits you best.",
+            "Your opponent will send three song titles. Pick the one that fits their mood best and briefly say why.",
+            "level_1_warmup",
+            1,
+        ),
+        (
+            "Level 1: Two Truths And A Spark",
+            "Share two true facts and one playful lie about yourself. Get your opponent to guess the lie.",
+            "Your opponent will share two truths and one playful lie. Guess which one is the lie.",
+            "level_1_warmup",
+            1,
+        ),
+        (
+            "Level 2: Secret Word",
+            "Get your opponent to naturally say the word 'smooth' in chat.",
+            "Chat naturally with your opponent. If the conversation fits, use the word 'smooth'.",
+            "level_2_playful",
+            2,
+        ),
+        (
+            "Level 2: Compliment Catch",
+            "Get your opponent to give you one genuine compliment without directly asking for a compliment.",
+            "Give your opponent one genuine, respectful compliment if they earn it in the conversation.",
+            "level_2_playful",
+            2,
+        ),
+        (
+            "Level 2: Would You Rather",
+            "Ask a playful would-you-rather question and get your opponent to explain their choice.",
+            "Answer your opponent's would-you-rather question and explain your choice.",
+            "level_2_playful",
+            2,
+        ),
+        (
+            "Level 3: Reverse Pickup Line",
+            "Get your opponent to send their funniest harmless pickup line.",
+            "Send your funniest harmless pickup line when your opponent invites you to.",
+            "level_3_flirty",
+            3,
+        ),
+        (
+            "Level 3: Guess My Type",
+            "Describe your type with three respectful hints and get your opponent to guess one trait.",
+            "Read your opponent's three respectful hints and guess one trait of their type.",
+            "level_3_flirty",
+            3,
+        ),
+        (
+            "Level 3: Emoji Chemistry",
+            "Use only emojis to describe an ideal first hangout and get your opponent to guess it.",
+            "Your opponent will use only emojis to describe an ideal first hangout. Guess what they mean.",
+            "level_3_flirty",
+            3,
+        ),
+        (
+            "Level 4: Flirty Riddle",
+            "Send a playful riddle about your personality and get your opponent to solve it.",
+            "Solve your opponent's playful personality riddle.",
+            "level_4_confident",
+            4,
+        ),
+        (
+            "Level 4: Rate The Vibe",
+            "Get your opponent to rate the conversation vibe from 1 to 10 and explain the score.",
+            "Rate the conversation vibe from 1 to 10 and explain your score respectfully.",
+            "level_4_confident",
+            4,
+        ),
+        (
+            "Level 5: Bold But Respectful",
+            "Get your opponent to say what makes a conversation attractive to them, while keeping it respectful.",
+            "Share what makes a conversation attractive to you, while keeping it respectful.",
+            "level_5_bold",
+            5,
+        ),
+    ]
+    return defaults
+
+
+def ensure_default_mission_templates():
+    for title, instruction, opponent_instruction, category, difficulty in _default_mission_templates():
+        MissionTemplate.objects.update_or_create(
+            title=title,
+            defaults={
+                "instruction_text": instruction,
+                "opponent_instruction_text": opponent_instruction,
+                "category": category,
+                "difficulty": difficulty,
+                "is_active": True,
+            },
+        )
+
+
+def _pick_random_mission_template():
+    ensure_default_mission_templates()
+    return MissionTemplate.objects.filter(is_active=True).order_by("?").first()
+
+
+def get_admin_contact_user():
+    return (
+        get_user_model()
+        .objects.filter(role=Role.ADMIN, is_active=True)
+        .exclude(is_suspended_by_admin=True)
+        .order_by("-is_superuser", "-is_staff", "username")
+        .first()
+    )
+
+
+def _send_admin_mission_message(admin_user, player, body):
+    if not admin_user or not player:
+        return
+    DirectChatMessage.objects.create(
+        sender=admin_user,
+        recipient=player,
+        body=body,
+    )
+    thread, created = AdminChatThread.objects.get_or_create(
+        admin=admin_user,
+        user=player,
+        defaults={
+            "user_unread_count": 1,
+            "last_contact_at": timezone.now(),
+        },
+    )
+    if not created:
+        AdminChatThread.objects.filter(pk=thread.pk).update(
+            user_unread_count=F("user_unread_count") + 1,
+            last_contact_at=timezone.now(),
+        )
+
+
+def _mission_admin_sender(preferred_admin=None):
+    return get_admin_contact_user() or (
+        preferred_admin if preferred_admin and preferred_admin.has_role(Role.ADMIN) else None
+    )
+
+
+def _next_mission_route_actor_type():
+    return AdminDecisionLog.ActorType.MANUAL
+
+
+def _determine_mission_review_route(mission, evidence):
+    return {
+        "actor_type": AdminDecisionLog.ActorType.MANUAL,
+        "confidence": 1,
+        "rationale": "Mission proof is queued for manual admin verification.",
+    }
+
+
+@transaction.atomic
+def route_and_start_mission_review(mission, acting_user):
+    evidence = (
+        MissionEvidence.objects.filter(
+            mission_session=mission,
+            review_status__in=[
+                MissionEvidence.ReviewStatus.SUBMITTED,
+                MissionEvidence.ReviewStatus.UNDER_REVIEW,
+            ],
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    route = _determine_mission_review_route(mission, evidence)
+    AdminDecisionLog.objects.create(
+        actor_type=route["actor_type"],
+        actor_user=acting_user if route["actor_type"] == AdminDecisionLog.ActorType.MANUAL else None,
+        mission_session=mission,
+        action="mission_review_route",
+        rationale=route["rationale"],
+        confidence=route["confidence"],
+    )
+
+    return move_mission_to_review(
+        mission=mission,
+        acting_user=acting_user,
+        actor_type=route["actor_type"],
+    )
+
+
+def _eligible_for_new_mission(user):
+    active_session_exists = MissionSession.objects.filter(
+        Q(requester=user) | Q(opponent=user),
+        status__in=MISSION_ACTIVE_STATUSES,
+    ).exists()
+    return not active_session_exists
+
+
+def _loser_support_vote_exists(mission):
+    if not mission.loser_id or not mission.winner_id:
+        return True
+
+    votes = Vote.objects.filter(
+        fan_id=mission.loser_id,
+        content__artist_id=mission.winner_id,
+    )
+    if mission.ended_at:
+        votes = votes.filter(timestamp__gte=mission.ended_at)
+    return votes.exists()
+
+
+def _enforce_loser_support_rule(user):
+    MissionSession.objects.filter(
+        loser=user,
+        loser_vote_required=True,
+        status__in=[
+            MissionSession.Status.APPROVED,
+            MissionSession.Status.COOLDOWN_VOTE_REQUIRED,
+        ],
+    ).exclude(winner__isnull=True).update(
+        status=MissionSession.Status.CLOSED,
+        updated_at=timezone.now(),
+    )
+
+
+@transaction.atomic
+def request_mission_for_user(user):
+    _validate_mission_player(user)
+    _enforce_loser_support_rule(user)
+    if not _eligible_for_new_mission(user):
+        raise ValueError("You already have an active mission.")
+
+    mission = MissionSession.objects.create(
+        requester=user,
+        status=MissionSession.Status.REQUESTED,
+    )
+    MissionQueueEntry.objects.update_or_create(
+        user=user,
+        defaults={
+            "status": MissionQueueEntry.QueueStatus.WAITING,
+            "reason": "Waiting for mission opponent",
+            "mission_session": mission,
+        },
+    )
+    mission.status = MissionSession.Status.MATCHING
+    mission.save(update_fields=["status", "updated_at"])
+    if _mission_policy_settings().get("manual_matchmaking", True):
+        return mission
+    return _assign_opponent_or_keep_matching(mission)
+
+
+@transaction.atomic
+def request_another_opponent(mission, acting_user):
+    if not _mission_visible_to_user(mission, acting_user):
+        raise PermissionError("You cannot update this mission.")
+    if mission.requester_id != acting_user.id:
+        raise PermissionError("Only the player who requested this mission can change the opponent.")
+    if mission.status not in {
+        MissionSession.Status.MATCHING,
+        MissionSession.Status.OPPONENT_PROPOSED,
+    }:
+        raise ValueError("Opponent can only be changed before mission acceptance.")
+
+    mission.opponent = None
+    mission.status = MissionSession.Status.MATCHING
+    mission.save(update_fields=["opponent", "status", "updated_at"])
+    if _mission_policy_settings().get("manual_matchmaking", True):
+        return mission
+    return _assign_opponent_or_keep_matching(mission)
+
+
+@transaction.atomic
+def accept_opponent(mission, acting_user):
+    if not _mission_visible_to_user(mission, acting_user):
+        raise PermissionError("You cannot update this mission.")
+    if mission.requester_id != acting_user.id:
+        raise PermissionError("Only the player who requested this mission can accept the opponent.")
+    if mission.status != MissionSession.Status.OPPONENT_PROPOSED:
+        raise ValueError("Opponent can only be accepted when one is proposed.")
+    if not mission.opponent:
+        raise ValueError("No opponent is currently assigned.")
+
+    selected_template = mission.mission_template or _pick_random_mission_template()
+    if not selected_template:
+        raise ValueError("No active mission template is available.")
+
+    mission.mission_template = selected_template
+    mission.status = MissionSession.Status.MISSION_PROPOSED
+    mission.save(update_fields=["mission_template", "status", "updated_at"])
+    admin_user = _mission_admin_sender(mission.assigned_admin)
+    _send_admin_mission_message(
+        admin_user,
+        mission.requester,
+        "Opponent accepted. Your secret mission is ready in the Mission panel.",
+    )
+    _send_admin_mission_message(
+        admin_user,
+        mission.opponent,
+        (
+            f"{mission.requester.username} accepted the match. "
+            "Your secret mission is ready in the Mission panel."
+        ),
+    )
+    return mission
+
+
+@transaction.atomic
+def request_another_mission(mission, acting_user):
+    if not _mission_visible_to_user(mission, acting_user):
+        raise PermissionError("You cannot update this mission.")
+    if mission.requester_id != acting_user.id:
+        raise PermissionError("Only the player who requested this mission can change the mission.")
+    if mission.status != MissionSession.Status.MISSION_PROPOSED:
+        raise ValueError("Mission can only be changed before mission start.")
+    if mission.reroll_count >= mission.max_rerolls:
+        raise ValueError("Mission reroll limit reached.")
+
+    selected_template = _pick_random_mission_template()
+    if not selected_template:
+        raise ValueError("No active mission template is available.")
+
+    mission.mission_template = selected_template
+    mission.reroll_count = mission.reroll_count + 1
+    mission.save(update_fields=["mission_template", "reroll_count", "updated_at"])
+    return mission
+
+
+@transaction.atomic
+def assign_mission_opponent_by_admin(mission, admin_user, opponent_user, mission_template=None):
+    if not admin_user or not admin_user.has_role(Role.ADMIN):
+        raise PermissionError("Only admins can assign mission opponents.")
+    if mission.status not in {
+        MissionSession.Status.REQUESTED,
+        MissionSession.Status.MATCHING,
+        MissionSession.Status.OPPONENT_PROPOSED,
+    }:
+        raise ValueError("Mission is not waiting for opponent assignment.")
+    if not users_are_valid_peer_candidates(mission.requester, opponent_user):
+        raise ValueError("Selected opponent is not eligible for mission matchmaking.")
+    if not _users_are_gender_compatible(mission.requester, opponent_user):
+        raise ValueError("Selected opponent is not suitable for this mission match.")
+    if mission.assigned_admin_id and mission.assigned_admin_id != admin_user.id:
+        raise ValueError("This mission request is currently claimed by another admin.")
+
+    if mission.opponent_id != opponent_user.id and not _eligible_for_new_mission(opponent_user):
+        raise ValueError("Selected opponent already has an active mission.")
+
+    mission.opponent = opponent_user
+    if mission_template:
+        mission.mission_template = mission_template
+    mission.status = MissionSession.Status.OPPONENT_PROPOSED
+    mission.assigned_admin = None
+    mission.assigned_at = None
+    mission.save(
+        update_fields=[
+            "opponent",
+            "mission_template",
+            "status",
+            "assigned_admin",
+            "assigned_at",
+            "updated_at",
+        ]
+    )
+
+    MissionQueueEntry.objects.update_or_create(
+        user=mission.requester,
+        defaults={
+            "status": MissionQueueEntry.QueueStatus.MATCHED,
+            "reason": f"Matched by admin for mission #{mission.pk}",
+            "mission_session": mission,
+        },
+    )
+    MissionQueueEntry.objects.update_or_create(
+        user=opponent_user,
+        defaults={
+            "status": MissionQueueEntry.QueueStatus.MATCHED,
+            "reason": f"Matched by admin for mission #{mission.pk}",
+            "mission_session": mission,
+        },
+    )
+
+    AdminDecisionLog.objects.create(
+        actor_type=AdminDecisionLog.ActorType.MANUAL,
+        actor_user=admin_user,
+        mission_session=mission,
+        action="manual_match_assignment",
+        rationale="Admin manually selected an online opponent for mission matchmaking.",
+        confidence=1,
+    )
+
+    Notification.objects.bulk_create(
+        [
+            Notification(
+                user=mission.requester,
+                message=(
+                    f"Opponent found: {opponent_user.username}. "
+                    "Open admin chat to accept or request another opponent."
+                ),
+            ),
+            Notification(
+                user=opponent_user,
+                message=(
+                    f"Opponent found: {mission.requester.username}. "
+                    "Open admin chat to accept or request another opponent."
+                ),
+            ),
+        ]
+    )
+    contact_admin = _mission_admin_sender(admin_user)
+    _send_admin_mission_message(
+        contact_admin,
+        mission.requester,
+        (
+            f"Opponent found: {opponent_user.username}. "
+            "Open this Mission panel to accept the opponent or request another match."
+        ),
+    )
+    _send_admin_mission_message(
+        contact_admin,
+        opponent_user,
+        (
+            f"Opponent found: {mission.requester.username}. "
+            "Open this Mission panel to accept the opponent or request another match."
+        ),
+    )
+    return mission
+
+
+@transaction.atomic
+def accept_mission(mission, acting_user):
+    if not _mission_visible_to_user(mission, acting_user):
+        raise PermissionError("You cannot update this mission.")
+    if mission.requester_id != acting_user.id:
+        raise PermissionError("Only the player who requested this mission can start it.")
+    if mission.status != MissionSession.Status.MISSION_PROPOSED:
+        raise ValueError("Mission can only be accepted when proposed.")
+    if not mission.mission_template_id or not mission.opponent_id:
+        raise ValueError("Mission setup is incomplete.")
+
+    mission.status = MissionSession.Status.MISSION_ACTIVE
+    mission.started_at = timezone.now()
+    if not mission.timer_seconds:
+        mission.timer_seconds = 120
+    mission.save(update_fields=["status", "started_at", "timer_seconds", "updated_at"])
+
+    # Mission start should unlock direct chat for the matched pair.
+    user_one, user_two = PeerChatThread.ordered_users(mission.requester, mission.opponent)
+    thread, _ = PeerChatThread.objects.get_or_create(user_one=user_one, user_two=user_two)
+    thread.unlocked_until = timezone.now() + CHAT_ACCESS_DURATION
+    thread.last_contact_at = timezone.now()
+    thread.save(update_fields=["unlocked_until", "last_contact_at", "updated_at"])
+    admin_user = _mission_admin_sender(mission.assigned_admin)
+    _send_admin_mission_message(
+        admin_user,
+        mission.requester,
+        f"Mission started. You can now chat with {mission.opponent.username}.",
+    )
+    _send_admin_mission_message(
+        admin_user,
+        mission.opponent,
+        f"Mission started. You can now chat with {mission.requester.username}.",
+    )
+    return mission
+
+
+def _mission_chat_transcript(mission):
+    if not mission.requester_id or not mission.opponent_id:
+        return ""
+
+    messages = DirectChatMessage.objects.filter(
+        Q(sender=mission.requester, recipient=mission.opponent)
+        | Q(sender=mission.opponent, recipient=mission.requester)
+    ).select_related("sender").order_by("created_at")
+
+    if mission.started_at:
+        messages = messages.filter(created_at__gte=mission.started_at)
+
+    rows = []
+    for message in messages[:80]:
+        timestamp = timezone.localtime(message.created_at).strftime("%Y-%m-%d %H:%M")
+        rows.append(f"[{timestamp}] {message.sender.username}: {message.body}")
+
+    return "\n".join(rows)
+
+
+@transaction.atomic
+def submit_mission_proof(mission, acting_user, screenshot=None, explanation=""):
+    if not _mission_visible_to_user(mission, acting_user):
+        raise PermissionError("You cannot submit proof for this mission.")
+    if mission.status != MissionSession.Status.MISSION_ACTIVE:
+        raise ValueError("Proof can only be submitted while mission is active.")
+    explanation = (explanation or "").strip()
+    chat_transcript = _mission_chat_transcript(mission)
+    if not chat_transcript and not screenshot and not explanation:
+        raise ValueError("Chat proof is empty. Send mission messages first or add a note before submitting proof.")
+
+    evidence = MissionEvidence.objects.create(
+        mission_session=mission,
+        submitted_by=acting_user,
+        screenshot=screenshot,
+        explanation=explanation,
+        chat_transcript=chat_transcript,
+        review_status=MissionEvidence.ReviewStatus.SUBMITTED,
+    )
+    mission.status = MissionSession.Status.PROOF_SUBMITTED
+    mission.save(update_fields=["status", "updated_at"])
+    return evidence
+
+
+@transaction.atomic
+def move_mission_to_review(mission, acting_user, actor_type=AdminDecisionLog.ActorType.AI):
+    if not acting_user.has_role(Role.ADMIN):
+        raise PermissionError("Only admins can start mission review.")
+    if mission.status not in {
+        MissionSession.Status.PROOF_SUBMITTED,
+        MissionSession.Status.UNDER_REVIEW,
+    }:
+        raise ValueError("Mission is not ready for review.")
+
+    mission.status = MissionSession.Status.UNDER_REVIEW
+    mission.save(update_fields=["status", "updated_at"])
+    AdminDecisionLog.objects.create(
+        actor_type=actor_type,
+        actor_user=acting_user if actor_type == AdminDecisionLog.ActorType.MANUAL else None,
+        mission_session=mission,
+        action="review_started",
+        rationale="Mission proof submitted and queued for verification.",
+    )
+    MissionEvidence.objects.filter(
+        mission_session=mission,
+        review_status=MissionEvidence.ReviewStatus.SUBMITTED,
+    ).update(review_status=MissionEvidence.ReviewStatus.UNDER_REVIEW, updated_at=timezone.now())
+    return mission
+
+
+@transaction.atomic
+def review_mission_evidence(
+    mission,
+    evidence,
+    admin_user,
+    approved,
+    review_notes="",
+    actor_type=AdminDecisionLog.ActorType.MANUAL,
+):
+    if not admin_user.has_role(Role.ADMIN):
+        raise PermissionError("Only admins can review mission evidence.")
+    if evidence.mission_session_id != mission.id:
+        raise ValueError("Evidence does not belong to this mission.")
+    if mission.status not in {
+        MissionSession.Status.PROOF_SUBMITTED,
+        MissionSession.Status.UNDER_REVIEW,
+    }:
+        raise ValueError("Mission is not in a reviewable state.")
+
+    evidence.reviewed_by = admin_user
+    evidence.review_notes = review_notes or ""
+    if approved:
+        evidence.review_status = MissionEvidence.ReviewStatus.APPROVED
+        mission.winner = evidence.submitted_by
+        mission.loser = mission.opponent if mission.requester_id == evidence.submitted_by_id else mission.requester
+        mission.status = MissionSession.Status.CLOSED
+        mission.ended_at = timezone.now()
+        mission.save(update_fields=["winner", "loser", "status", "ended_at", "updated_at"])
+        evidence.save(update_fields=["reviewed_by", "review_notes", "review_status", "updated_at"])
+        MissionWinFeed.objects.update_or_create(
+            mission_session=mission,
+            defaults={
+                "winner": evidence.submitted_by,
+                "approved_evidence": evidence,
+                "homepage_visible": True,
+                "published_at": timezone.now(),
+            },
+        )
+        grant_mission_bonus_votes(user=evidence.submitted_by, admin_user=admin_user, votes=2)
+    else:
+        evidence.review_status = MissionEvidence.ReviewStatus.REJECTED
+        mission.status = MissionSession.Status.REJECTED
+        mission.save(update_fields=["status", "updated_at"])
+        evidence.save(update_fields=["reviewed_by", "review_notes", "review_status", "updated_at"])
+
+    AdminDecisionLog.objects.create(
+        actor_type=actor_type,
+        actor_user=admin_user if actor_type == AdminDecisionLog.ActorType.MANUAL else None,
+        mission_session=mission,
+        action="approve_proof" if approved else "reject_proof",
+        rationale=review_notes or "",
+    )
+    return mission
+
+
+@transaction.atomic
+def grant_mission_bonus_votes(user, admin_user, votes=2):
+    if not admin_user or not admin_user.has_role(Role.ADMIN):
+        raise ValueError("Only admins can grant mission bonus votes.")
+
+    otp, _ = OTP.objects.get_or_create(
+        user=user,
+        defaults={
+            "otp_code": "000000",
+            "remaining_votes": 0,
+            "is_active": True,
+        },
+    )
+    # Keep OTP semantics unchanged: extend adds votes and preserves current code.
+    otp.grant_votes(votes=max(1, int(votes or 1)))
+
+    thread, created = AdminChatThread.objects.get_or_create(
+        admin=admin_user,
+        user=user,
+        defaults={"user_unread_count": 1, "last_contact_at": timezone.now()},
+    )
+    if not created:
+        AdminChatThread.objects.filter(pk=thread.pk).update(
+            user_unread_count=F("user_unread_count") + 1,
+            last_contact_at=timezone.now(),
+        )
+    Notification.objects.create(
+        user=user,
+        message=(
+            f"Mission reward approved: +{max(1, int(votes or 1))} voting token(s). "
+            f"Current balance: {otp.remaining_votes}."
+        ),
+    )
+    return otp
+
+
+@transaction.atomic
+def create_token_purchase_request(user, requested_tokens, payment_channel="", payment_reference="", receipt_file=None):
+    _validate_mission_player(user)
+    requested_tokens = int(requested_tokens)
+    if requested_tokens <= 0:
+        raise ValueError("Requested tokens must be greater than zero.")
+
+    return TokenPurchaseRequest.objects.create(
+        requester=user,
+        requested_tokens=requested_tokens,
+        payment_channel=(payment_channel or "")[:40],
+        payment_reference=(payment_reference or "")[:120],
+        receipt_file=receipt_file,
+        status=TokenPurchaseRequest.Status.SUBMITTED,
+    )
+
+
+@transaction.atomic
+def review_token_purchase_request(
+    token_request,
+    admin_user,
+    approved,
+    approved_tokens=None,
+    review_notes="",
+    actor_type=AdminDecisionLog.ActorType.MANUAL,
+):
+    if not admin_user.has_role(Role.ADMIN):
+        raise PermissionError("Only admins can review token purchases.")
+    if token_request.status in {
+        TokenPurchaseRequest.Status.APPROVED,
+        TokenPurchaseRequest.Status.REJECTED,
+        TokenPurchaseRequest.Status.CANCELLED,
+    }:
+        raise ValueError("This token request is already closed.")
+
+    AdminDecisionLog.objects.create(
+        actor_type=AdminDecisionLog.ActorType.MANUAL,
+        actor_user=admin_user,
+        token_purchase_request=token_request,
+        action="token_review_route",
+        rationale="Token purchase requests are always routed to manual review.",
+        confidence=1,
+    )
+
+    token_request.assigned_admin = admin_user
+    token_request.review_notes = review_notes or ""
+    token_request.reviewed_at = timezone.now()
+
+    if approved:
+        grant_count = int(approved_tokens or token_request.requested_tokens)
+        if grant_count <= 0:
+            raise ValueError("Approved tokens must be greater than zero.")
+        grant_mission_bonus_votes(token_request.requester, admin_user, votes=grant_count)
+        token_request.status = TokenPurchaseRequest.Status.APPROVED
+        token_request.approved_tokens = grant_count
+    else:
+        token_request.status = TokenPurchaseRequest.Status.REJECTED
+        token_request.approved_tokens = 0
+
+    token_request.save(
+        update_fields=[
+            "assigned_admin",
+            "status",
+            "approved_tokens",
+            "review_notes",
+            "reviewed_at",
+            "updated_at",
+        ]
+    )
+    AdminDecisionLog.objects.create(
+        actor_type=actor_type,
+        actor_user=admin_user if actor_type == AdminDecisionLog.ActorType.MANUAL else None,
+        token_purchase_request=token_request,
+        action="approve_token_purchase" if approved else "reject_token_purchase",
+        rationale=review_notes or "",
+    )
+    return token_request

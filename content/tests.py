@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from chatapp.models import MatchRating, PeerChatThread
+from chatapp.models import MatchRating, MissionEvidence, MissionSession, MissionWinFeed, PeerChatThread
 from users.models import Follow, OTP, Role, CustomUser, VotingTokenPolicy
 
 from .forms import ContentUploadForm
@@ -85,6 +85,43 @@ class ContentViewTest(TestCase):
         response = self.client.get(reverse("content_list"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Test Content")
+
+    def test_homepage_shows_approved_secret_mission_winner(self):
+        winner = CustomUser.objects.create_user(
+            username="mission_winner",
+            password="password",
+            role=Role.FAN,
+        )
+        opponent = CustomUser.objects.create_user(
+            username="mission_opponent",
+            password="password",
+            role=Role.FAN,
+        )
+        mission = MissionSession.objects.create(
+            requester=winner,
+            opponent=opponent,
+            winner=winner,
+            loser=opponent,
+            status=MissionSession.Status.COOLDOWN_VOTE_REQUIRED,
+        )
+        evidence = MissionEvidence.objects.create(
+            mission_session=mission,
+            submitted_by=winner,
+            review_status=MissionEvidence.ReviewStatus.APPROVED,
+        )
+        MissionWinFeed.objects.create(
+            mission_session=mission,
+            winner=winner,
+            approved_evidence=evidence,
+            homepage_visible=True,
+        )
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Secret Mission Winners")
+        self.assertContains(response, "mission_winner")
+        self.assertContains(response, "Victory Approved")
 
     def test_content_detail_tracks_unique_view_on_page_load(self):
         detail_url = reverse("content_detail", args=[self.content.id])

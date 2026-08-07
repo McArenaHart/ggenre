@@ -428,8 +428,13 @@ def list_content(request, content_id=None):
     """
     Display the same featured content experience used on the home page.
     """
+    from chatapp.models import MissionWinFeed
+
     return render(request, 'content/welcome.html', {
         'featured_contents': get_featured_contents(),
+        'mission_winners': MissionWinFeed.objects.filter(homepage_visible=True)
+            .select_related('winner', 'approved_evidence', 'mission_session')
+            .order_by('-published_at')[:6],
     })
 
 
@@ -932,8 +937,13 @@ def home(request):
     """
     Renders the welcome page as the home page.
     """
+    from chatapp.models import MissionWinFeed
+
     context = {
-        'featured_contents': get_featured_contents()
+        'featured_contents': get_featured_contents(),
+        'mission_winners': MissionWinFeed.objects.filter(homepage_visible=True)
+            .select_related('winner', 'approved_evidence', 'mission_session')
+            .order_by('-published_at')[:6],
     }
     return render(request, 'content/welcome.html', context)
 
@@ -956,7 +966,6 @@ def classify_content(request, content_id):
         form = ContentClassificationForm(instance=content)
 
     return render(request, 'content/classify.html', {'form': form, 'content': content})
-
 
 
 

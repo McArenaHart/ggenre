@@ -6,24 +6,75 @@
     "\u{1F602}",
     "\u{1F60A}",
     "\u{1F60D}",
+    "\u{1F618}",
+    "\u{1F970}",
+    "\u{1F923}",
+    "\u{1F609}",
+    "\u{1F914}",
+    "\u{1F92F}",
     "\u{1F44D}",
+    "\u{1F44E}",
     "\u{1F64F}",
     "\u{1F44F}",
+    "\u{1F91D}",
+    "\u{1F4AA}",
     "\u{1F525}",
+    "\u{1F389}",
+    "\u{1F3C6}",
     "\u2764\uFE0F",
+    "\u{1F499}",
+    "\u{1F49C}",
+    "\u{1F48B}",
     "\u{1F3B5}",
+    "\u{1F3B6}",
     "\u{1F3A4}",
+    "\u{1F3A7}",
+    "\u{1F941}",
+    "\u{1F3B8}",
     "\u2B50",
     "\u2728",
     "\u{1F60E}",
     "\u{1F622}",
     "\u{1F62E}",
+    "\u{1F621}",
+    "\u{1F92B}",
+    "\u{1F633}",
     "\u{1F64C}",
     "\u{1F4AF}",
     "\u2705",
+    "\u274C",
+    "\u{1F440}",
+    "\u{1F4A1}",
+    "\u{1F4AC}",
+    "\u{1F680}",
+    "\u{1F451}",
+    "\u{1F48E}",
+    "\u{1F37F}",
+    "\u{1F3AC}",
+    "\u{1F4F8}",
+    "\u{1F3AF}",
+    "\u{1F48C}",
     "\u{1F44B}",
   ];
   const DEFAULT_MESSAGE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+  const FLOATING_CHAT_OPEN_STORAGE_KEY = "ggenre:floating-chat-open";
+  const initializedChatRoots = new WeakMap();
+
+  function getSessionValue(key) {
+    try {
+      return window.sessionStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function setSessionValue(key, value) {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch (error) {
+      // Ignore storage failures in private or restricted browser modes.
+    }
+  }
 
   function insertAtCursor(input, value) {
     const start = input.selectionStart || input.value.length;
@@ -170,7 +221,9 @@
     const toggle = root.querySelector("[data-chat-toggle]");
     const closeButton = root.querySelector("[data-chat-close]");
     const panel = root.querySelector("[data-chat-panel]");
-    const isAdminContactWidget = root.getAttribute("data-chat-widget") === "admin-contact";
+    const chatWidgetType = root.getAttribute("data-chat-widget") || "";
+    const isAdminContactWidget = chatWidgetType === "admin-contact";
+    const isFloatingChatWidget = chatWidgetType === "admin-contact" || chatWidgetType === "mission-chat";
     const badge = root.querySelector("[data-admin-contact-badge]");
     const unreadUrl = document.body.getAttribute("data-admin-contact-unread-url");
     const markReadUrl = document.body.getAttribute("data-admin-contact-mark-read-url");
@@ -206,6 +259,23 @@
     status.setAttribute("data-chat-status", "");
     status.textContent = "Connecting...";
     form.insertAdjacentElement("beforebegin", status);
+
+    initializedChatRoots.set(root, function () {
+      if (heartbeatInterval) {
+        window.clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
+      if (presenceRefreshInterval) {
+        window.clearInterval(presenceRefreshInterval);
+        presenceRefreshInterval = null;
+      }
+      try {
+        socket.close();
+      } catch (error) {
+        // Ignore socket cleanup errors during realtime widget swaps.
+      }
+      root.removeAttribute("data-chat-initialized");
+    });
 
     function scrollToBottom() {
       messages.scrollTop = messages.scrollHeight;
@@ -560,6 +630,10 @@
 
     function setWidgetOpen(isOpen) {
       root.classList.toggle("is-open", isOpen);
+      if (isFloatingChatWidget) {
+        document.body.classList.toggle("admin-contact-fullscreen-open", isOpen);
+        setSessionValue(FLOATING_CHAT_OPEN_STORAGE_KEY, isOpen ? "1" : "0");
+      }
       if (toggle) {
         toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
       }
@@ -569,7 +643,9 @@
       if (isOpen) {
         markAdminContactRead();
         window.setTimeout(function () {
-          input.focus();
+          if (!isAdminContactWidget) {
+            input.focus();
+          }
           scrollToBottom();
         }, 0);
       }
@@ -714,11 +790,41 @@
       });
     }
 
+    if (isFloatingChatWidget) {
+      root.querySelectorAll(".admin-contact-nav a, .admin-contact-mission-head-actions a").forEach(function (link) {
+        link.addEventListener("click", function () {
+          setSessionValue(FLOATING_CHAT_OPEN_STORAGE_KEY, "0");
+          document.body.classList.remove("admin-contact-fullscreen-open");
+        });
+      });
+    }
+
+    if (isAdminContactWidget) {
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && root.classList.contains("is-open")) {
+          setWidgetOpen(false);
+        }
+      });
+    }
+
     if (panel) {
-      panel.setAttribute("aria-hidden", "true");
+      const shouldRestoreFloatingOpen = isFloatingChatWidget
+        && (root.classList.contains("is-open") || getSessionValue(FLOATING_CHAT_OPEN_STORAGE_KEY) === "1");
+      setWidgetOpen(shouldRestoreFloatingOpen);
     }
     scrollToBottom();
   }
+
+  window.ggenreDisposeDirectChat = function (root) {
+    const dispose = initializedChatRoots.get(root);
+    if (!dispose) {
+      return;
+    }
+    dispose();
+    initializedChatRoots.delete(root);
+  };
+
+  window.ggenreInitDirectChat = initDirectChat;
 
   document.querySelectorAll("[data-direct-chat-user]").forEach(initDirectChat);
 })();

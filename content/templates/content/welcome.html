@@ -4,7 +4,7 @@
 {% block title %}Welcome{% endblock title %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/content-welcome.css' %}?v=20260623contrast1" rel="stylesheet" />
+<link href="{% static 'css/pages/content-welcome.css' %}?v=20260807winnercards1" rel="stylesheet" />
 {% endblock extra_css %}
 
 {% block content %}
@@ -52,6 +52,39 @@
             </div>
         </aside>
     </section>
+
+    {% if mission_winners %}
+    <section class="welcome-mission-winners">
+        <div class="welcome-section-header">
+            <h2 class="mb-0">Secret Mission Winners</h2>
+            <span class="welcome-section-note">Approved by admin</span>
+        </div>
+
+        <div class="welcome-winner-grid">
+            {% for win in mission_winners %}
+            <article class="welcome-winner-card">
+                <div class="welcome-winner-proof">
+                    {% if win.approved_evidence and win.approved_evidence.screenshot %}
+                    <img src="{{ win.approved_evidence.screenshot.url }}" alt="{{ win.winner.username }} mission proof" />
+                    {% else %}
+                    <div class="welcome-winner-proof-empty">
+                        <i class="fas fa-trophy" aria-hidden="true"></i>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="welcome-winner-body">
+                    <div class="welcome-artist-row">
+                        {% include "partials/user_avatar.html" with avatar_user=win.winner size=30 class_name="welcome-artist-avatar" alt_text=win.winner.username %}
+                        <a href="{% url 'user_profile' win.winner.id %}" class="welcome-artist-link">{{ win.winner.username }}</a>
+                    </div>
+                    <p>Victory Approved</p>
+                    <span>{{ win.published_at|date:"M d, H:i" }}</span>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
 
     <section class="welcome-featured">
         <div class="welcome-section-header">

@@ -1,0 +1,203 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}My Mission Center{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260807missionmobile1" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid chat-page">
+    <header class="chat-header">
+        <div>
+            <h1>My Mission Center</h1>
+            <p>{% if is_admin_mission_overview %}Monitor mission lifecycle, proof reviews, and token requests.{% else %}Track mission lifecycle, proof reviews, and token purchase requests.{% endif %}</p>
+        </div>
+        <a href="{% url 'content_list' %}" class="btn btn-outline-primary">
+            <i class="fas fa-home" aria-hidden="true"></i>
+            <span>Back Home</span>
+        </a>
+    </header>
+
+    <section class="chat-mission-center-layout">
+        <section class="chat-mission-summary-strip" aria-label="Mission summary">
+            <div>
+                <span>Total Missions</span>
+                <strong>{{ mission_sessions|length }}</strong>
+            </div>
+            <div>
+                <span>Closed</span>
+                <strong>{{ completed_mission_count }}</strong>
+            </div>
+            <div>
+                <span>Proof Items</span>
+                <strong>{{ mission_evidence|length }}</strong>
+            </div>
+            <div>
+                <span>Token Requests</span>
+                <strong>{{ token_requests|length }}</strong>
+            </div>
+        </section>
+
+        <article class="chat-panel chat-mission-sidebar-card" aria-label="Mission navigation">
+                <div class="chat-mission-sidebar-section">
+                    <span class="chat-mission-sidebar-label">Current</span>
+                    {% if is_admin_mission_overview %}
+                    <strong>Admin overview</strong>
+                    <p>Use this page to scan mission activity across players.</p>
+                    <a href="{% url 'chatapp:admin_review_center' %}" class="btn btn-primary btn-sm">Review Center</a>
+                    <a href="{% url 'chatapp:admin_inbox' %}" class="btn btn-outline-primary btn-sm">Admin Inbox</a>
+                    {% elif active_mission %}
+                    <strong>Mission #{{ active_mission.id }}</strong>
+                    <p>{{ active_mission.get_status_display }}</p>
+                    {% if active_mission.opponent and request.user.id == active_mission.requester_id %}
+                    <a href="{% url 'chatapp:direct' active_mission.opponent.id %}" class="btn btn-primary btn-sm">
+                        Open Mission Chat
+                    </a>
+                    {% elif active_mission.requester and request.user.id == active_mission.opponent_id %}
+                    <a href="{% url 'chatapp:direct' active_mission.requester.id %}" class="btn btn-primary btn-sm">
+                        Open Mission Chat
+                    </a>
+                    {% endif %}
+                    {% else %}
+                    <strong>No active mission</strong>
+                    <p>Use the Mission button to request a new challenge.</p>
+                    <a href="{% url 'content_list' %}" class="btn btn-primary btn-sm">Request From Home</a>
+                    {% endif %}
+                </div>
+                <nav class="chat-mission-sidebar-nav" aria-label="Mission sections">
+                    <a href="#mission-sessions"><i class="fas fa-bullseye" aria-hidden="true"></i><span>Sessions</span></a>
+                    <a href="#proof-timeline"><i class="fas fa-camera-retro" aria-hidden="true"></i><span>Proof</span></a>
+                    <a href="#token-requests"><i class="fas fa-ticket-alt" aria-hidden="true"></i><span>Tokens</span></a>
+                </nav>
+                <div class="chat-mission-sidebar-stats">
+                    <div><strong>{{ mission_sessions|length }}</strong><span>{% if is_admin_mission_overview %}Shown{% else %}Total{% endif %}</span></div>
+                    <div><strong>{{ completed_mission_count }}</strong><span>Closed</span></div>
+                    <div><strong>{{ mission_evidence|length }}</strong><span>Proof</span></div>
+                </div>
+        </article>
+
+        <article class="chat-panel chat-mission-token-panel" id="token-requests">
+                <header class="chat-review-card-header">
+                    <h2>Token Purchase Requests</h2>
+                    <span>{{ token_requests|length }} total</span>
+                </header>
+                <div class="chat-review-list">
+                {% for token_request in token_requests %}
+                <div class="chat-review-item">
+                    <div>
+                        <strong>Request #{{ token_request.id }}</strong>
+                        <p>Status: {{ token_request.get_status_display }}</p>
+                        <p>Requested: {{ token_request.requested_tokens }} token(s)</p>
+                        {% if token_request.approved_tokens %}
+                        <p>Approved: {{ token_request.approved_tokens }} token(s)</p>
+                        {% endif %}
+                        {% if token_request.payment_channel %}
+                        <p>Channel: {{ token_request.payment_channel }}</p>
+                        {% endif %}
+                        {% if token_request.payment_reference %}
+                        <p>Reference: {{ token_request.payment_reference }}</p>
+                        {% endif %}
+                        {% if token_request.assigned_admin %}
+                        <p>Reviewed by: {{ token_request.assigned_admin.username }}</p>
+                        {% endif %}
+                        <p>Submitted: {{ token_request.created_at|date:"M d, H:i" }}</p>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="app-empty chat-empty-state">
+                    <strong>No token requests yet.</strong>
+                </div>
+                {% endfor %}
+                </div>
+        </article>
+
+        <article class="chat-panel chat-mission-session-panel" id="mission-sessions">
+            <header class="chat-review-card-header">
+                <h2>Mission Sessions</h2>
+                <span>{{ mission_sessions|length }} total</span>
+            </header>
+            <div class="chat-mission-session-list">
+            {% for mission in mission_sessions %}
+            <article class="chat-mission-session-row">
+                <div class="chat-mission-session-primary">
+                    <div>
+                        <strong>Mission #{{ mission.id }}</strong>
+                        <span>{{ mission.get_status_display }}</span>
+                    </div>
+                    {% if is_admin_mission_overview %}
+                    <p>Requester: {{ mission.requester.username }}</p>
+                    {% endif %}
+                    <p>
+                        Opponent:
+                        {% if mission.opponent %}
+                        {{ mission.opponent.username }}
+                        {% else %}
+                        Waiting to match
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="chat-mission-session-brief">
+                    {% if mission.mission_template %}
+                    {% if request.user.id == mission.opponent_id %}
+                    <p>You are part of a secret mission. Chat naturally and respond to your opponent without knowing their objective.</p>
+                    {% else %}
+                    <p>Your mission: {{ mission.mission_template.instruction_text }}</p>
+                    {% endif %}
+                    {% endif %}
+                </div>
+                <div class="chat-mission-session-meta">
+                    <span>Rerolls {{ mission.reroll_count }} / {{ mission.max_rerolls }}</span>
+                    {% if mission.winner %}
+                    <span>Winner {{ mission.winner.username }}</span>
+                    {% endif %}
+                    {% if mission.started_at %}
+                    <span>Started {{ mission.started_at|date:"M d, H:i" }}</span>
+                    {% endif %}
+                    {% if mission.ended_at %}
+                    <span>Ended {{ mission.ended_at|date:"M d, H:i" }}</span>
+                    {% endif %}
+                </div>
+            </article>
+            {% empty %}
+            <div class="app-empty chat-empty-state">
+                <strong>No missions yet.</strong>
+                <span>Open admin chat and tap Request Mission to get started.</span>
+            </div>
+            {% endfor %}
+            </div>
+        </article>
+
+        <article class="chat-panel chat-mission-proof-panel-wide" id="proof-timeline">
+            <header class="chat-review-card-header">
+                <h2>Proof Timeline</h2>
+                <span>{{ mission_evidence|length }} item{{ mission_evidence|pluralize }}</span>
+            </header>
+            <div class="chat-review-list">
+            {% for evidence in mission_evidence %}
+            <div class="chat-review-item">
+                <div>
+                    <strong>Evidence #{{ evidence.id }}</strong>
+                    <p>Mission #{{ evidence.mission_session_id }}</p>
+                    <p>Submitted by {{ evidence.submitted_by.username }}</p>
+                    <p>Review: {{ evidence.get_review_status_display }}</p>
+                    {% if evidence.reviewed_by %}
+                    <p>Reviewed by {{ evidence.reviewed_by.username }}</p>
+                    {% endif %}
+                    {% if evidence.explanation %}
+                    <p>Note: {{ evidence.explanation }}</p>
+                    {% endif %}
+                    <p>Submitted: {{ evidence.created_at|date:"M d, H:i" }}</p>
+                </div>
+            </div>
+            {% empty %}
+            <div class="app-empty chat-empty-state">
+                <strong>No proof submissions yet.</strong>
+            </div>
+            {% endfor %}
+            </div>
+        </article>
+    </section>
+</div>
+{% endblock %}

@@ -30,7 +30,7 @@
   <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.carousel.css' %}" />
   <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.theme.css' %}" />
   {% if admin_contact_user and other_user != admin_contact_user %}
-  <link href="{% static 'css/pages/admin-contact-chat.css' %}?v=20260625ticks1" rel="stylesheet" />
+  <link href="{% static 'css/pages/admin-contact-chat.css' %}?v=20260807missionmobile1" rel="stylesheet" />
   {% endif %}
   {% block extra_css %}{% endblock %}
 </head>
@@ -43,6 +43,7 @@
   data-dismiss-announcement-template="{% if user.is_authenticated %}{% url 'dismiss_announcement' 0 %}{% endif %}"
   data-admin-chat-unread-url="{% if user.is_authenticated and user.role == 'admin' %}{% url 'chatapp:admin_unread_count' %}{% endif %}"
   data-admin-chat-inbox-url="{% if user.is_authenticated and user.role == 'admin' %}{% url 'chatapp:admin_inbox' %}{% endif %}"
+  data-admin-mission-request-count="{{ admin_mission_request_count|default:0 }}"
   data-admin-contact-unread-url="{% if user.is_authenticated and user.role != 'admin' %}{% url 'chatapp:admin_contact_unread_count' %}{% endif %}"
   data-admin-contact-mark-read-url="{% if user.is_authenticated and user.role != 'admin' %}{% url 'chatapp:mark_admin_contact_read' %}{% endif %}">
   {% if user.is_authenticated %}
@@ -127,6 +128,18 @@
               <i class="fas fa-fw fa-inbox"></i>
               <span>Inbox</span>
               <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'chatapp:admin_review_center' %}">
+              <i class="fas fa-fw fa-clipboard-check"></i>
+              <span>Review Center</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'chatapp:mission_center' %}">
+              <i class="fas fa-fw fa-bullseye"></i>
+              <span>Missions</span>
             </a>
           </li>
           {% endif %}
@@ -243,6 +256,18 @@
           <span class="app-nav-badge" data-admin-chat-badge {% if not admin_chat_unread_count %}hidden{% endif %}>{{ admin_chat_unread_count }}</span>
         </a>
       </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'chatapp:admin_review_center' %}">
+          <i class="fas fa-fw fa-clipboard-check"></i>
+          <span>Review Center</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'chatapp:mission_center' %}">
+          <i class="fas fa-fw fa-bullseye"></i>
+          <span>Missions</span>
+        </a>
+      </li>
       {% endif %}
     </ul>
 
@@ -328,7 +353,12 @@
     </a>
     {% endif %}
     {% if user.role == 'admin' %}
-    <a class="app-mobile-tab {% if request.path|slice:':18' == '/chat/admin-inbox' %}is-active{% endif %}"
+    <a class="app-mobile-tab {% if request.path|slice:':31' == '/chat/admin-inbox/review-center' %}is-active{% endif %}"
+      href="{% url 'chatapp:admin_review_center' %}">
+      <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+      <span>Review</span>
+    </a>
+    <a class="app-mobile-tab {% if request.path == '/chat/admin-inbox/' %}is-active{% endif %}"
       href="{% url 'chatapp:admin_inbox' %}">
       <span class="app-mobile-tab-icon">
         <i class="fas fa-inbox" aria-hidden="true"></i>
@@ -397,42 +427,166 @@
   </button>
 
   {% if admin_contact_user and other_user != admin_contact_user %}
-  <section class="admin-contact-chat" data-direct-chat-user="{{ admin_contact_user.id }}"
-    data-chat-history-url="{% url 'chatapp:direct_history' admin_contact_user.id %}"
-    data-current-user-id="{{ user.id }}" data-current-user="{{ user.username }}" data-chat-widget="admin-contact"
+  <section class="admin-contact-chat"
+    data-direct-chat-user="{% if admin_contact_mission_chat_user %}{{ admin_contact_mission_chat_user.id }}{% else %}{{ admin_contact_user.id }}{% endif %}"
+    data-chat-history-url="{% if admin_contact_mission_chat_user %}{% url 'chatapp:direct_history' admin_contact_mission_chat_user.id %}{% else %}{% url 'chatapp:direct_history' admin_contact_user.id %}{% endif %}"
+    data-current-user-id="{{ user.id }}" data-current-user="{{ user.username }}"
+    data-other-user="{% if admin_contact_mission_chat_user %}{{ admin_contact_mission_chat_user.username }}{% else %}{{ admin_contact_user.username }}{% endif %}"
+    data-chat-widget="{% if admin_contact_mission_chat_user %}mission-chat{% else %}admin-contact{% endif %}"
     data-message-retention-ms="{{ message_retention_ms|default:86400000 }}"
+    data-mission-request-url="{% url 'chatapp:mission_request' %}"
+    data-mission-latest-url="{% url 'chatapp:mission_latest' %}"
+    data-mission-detail-template="{% url 'chatapp:mission_detail' 0 %}"
+    data-token-request-url="{% url 'chatapp:token_purchase_create' %}"
     data-admin-contact-unread="{{ admin_contact_unread_count|default:0 }}"
     data-admin-contact-otp-code="{{ admin_contact_otp.otp_code|default:'' }}"
-    data-admin-contact-otp-votes="{{ admin_contact_otp.remaining_votes|default:'' }}" aria-label="Contact admin chat">
+    data-admin-contact-otp-votes="{{ admin_contact_otp.remaining_votes|default:'' }}"
+    aria-label="{% if admin_contact_latest_mission %}Mission room{% else %}Contact admin chat{% endif %}">
     <button type="button" class="btn btn-primary admin-contact-toggle" data-chat-toggle aria-expanded="false">
+      {% if admin_contact_latest_mission %}
+      <i class="fas fa-bullseye" aria-hidden="true"></i>
+      <span data-admin-contact-toggle-label>Mission</span>
+      {% else %}
       <i class="fas fa-headset" aria-hidden="true"></i>
-      <span>Admin</span>
-      {% if admin_contact_unread_count %}
+      <span data-admin-contact-toggle-label>Admin</span>
+      {% endif %}
+      {% if admin_contact_mission_chat_user and admin_contact_mission_chat_unread_count %}
+      <span class="admin-contact-badge" data-admin-contact-badge>{{ admin_contact_mission_chat_unread_count }}</span>
+      {% elif not admin_contact_mission_chat_user and admin_contact_unread_count %}
       <span class="admin-contact-badge" data-admin-contact-badge>{{ admin_contact_unread_count }}</span>
       {% else %}
-      <span class="admin-contact-badge" data-admin-contact-badge hidden>{{ admin_contact_unread_count }}</span>
+      <span class="admin-contact-badge" data-admin-contact-badge hidden>{% if admin_contact_mission_chat_user %}{{ admin_contact_mission_chat_unread_count }}{% else %}{{ admin_contact_unread_count }}{% endif %}</span>
       {% endif %}
     </button>
-    <div class="admin-contact-panel" data-chat-panel>
+    <div class="admin-contact-panel" data-chat-panel aria-hidden="true">
       <header class="admin-contact-header">
         <div class="admin-contact-title">
+          {% if admin_contact_latest_mission %}
+          <strong>Secret Mission</strong>
+          <span>
+            {% if admin_contact_mission_chat_user %}
+            Mission chat with {{ admin_contact_mission_chat_user.username }}
+            {% else %}
+            Challenge room with {{ admin_contact_user.username }}
+            {% endif %}
+          </span>
+          {% else %}
           <strong>Contact Admin</strong>
           <span>{{ admin_contact_user.username }}</span>
+          {% endif %}
         </div>
-        <button type="button" class="btn btn-outline-primary admin-contact-close" data-chat-close
-          aria-label="Close admin chat" title="Close admin chat">
-          <i class="fas fa-times" aria-hidden="true"></i>
-        </button>
+        <nav class="admin-contact-nav" aria-label="{% if admin_contact_latest_mission %}Mission room navigation{% else %}Admin chat navigation{% endif %}">
+          <a href="{% url 'content_list' %}" class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-home" aria-hidden="true"></i>
+            <span>Home</span>
+          </a>
+          <a href="{% url 'chatapp:index' %}" class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-comments" aria-hidden="true"></i>
+            <span>Messages</span>
+          </a>
+          <a href="{% url 'chatapp:mission_center' %}" class="btn btn-primary btn-sm">
+            <i class="fas fa-bullseye" aria-hidden="true"></i>
+            <span>My Missions</span>
+          </a>
+          <button type="button" class="btn btn-outline-primary admin-contact-close" data-chat-close
+            aria-label="{% if admin_contact_latest_mission %}Close mission room{% else %}Close admin chat{% endif %}"
+            title="{% if admin_contact_latest_mission %}Close mission room{% else %}Close admin chat{% endif %}">
+            <i class="fas fa-times" aria-hidden="true"></i>
+          </button>
+        </nav>
       </header>
-      <div class="admin-contact-messages" data-chat-messages></div>
-      <form class="admin-contact-compose" data-chat-form>
-        <input type="text" class="form-control" data-chat-input maxlength="2000" autocomplete="off"
-          placeholder="Message admin..." />
-        <button type="submit" class="btn btn-primary chat-send-button" aria-label="Send admin message"
-          title="Send admin message">
-          <i class="fas fa-paper-plane" aria-hidden="true"></i>
+      <section class="admin-contact-mission" data-player-mission-panel>
+        <div class="admin-contact-mission-head">
+          {% if admin_contact_latest_mission %}
+          <strong>Mission Brief</strong>
+          {% else %}
+          <strong>Admin Contact</strong>
+          {% endif %}
+          <div class="admin-contact-mission-head-actions">
+            <a href="{% url 'content_list' %}" class="btn btn-outline-primary btn-sm">
+              <i class="fas fa-home" aria-hidden="true"></i>
+              <span>Home</span>
+            </a>
+            <a href="{% url 'chatapp:index' %}" class="btn btn-outline-primary btn-sm">
+              <i class="fas fa-comments" aria-hidden="true"></i>
+              <span>Messages</span>
+            </a>
+            <a href="{% url 'chatapp:mission_center' %}" class="btn btn-primary btn-sm">
+              <i class="fas fa-bullseye" aria-hidden="true"></i>
+              <span>Missions</span>
+            </a>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-mission-refresh-btn>
+              <i class="fas fa-sync-alt" aria-hidden="true"></i>
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+        <button type="button" class="btn btn-success btn-sm admin-contact-request-mission" data-mission-request-btn>
+          <i class="fas fa-bullseye" aria-hidden="true"></i>
+          <span>Request Mission</span>
         </button>
-      </form>
+        <div class="chat-mission-search-card" data-mission-search-card hidden>
+          <div class="chat-mission-search-radar" aria-hidden="true"></div>
+          <div>
+            <strong>Welcome to GGenre Secret Mission</strong>
+            <span>Looking for a new challenge? Please wait while we find a suitable opponent...</span>
+          </div>
+        </div>
+        <div class="chat-admin-status" data-mission-status
+          data-latest-mission-id="{% if admin_contact_latest_mission %}{{ admin_contact_latest_mission.id }}{% endif %}">
+          {% if admin_contact_latest_mission %}
+          Mission #{{ admin_contact_latest_mission.id }}: {{ admin_contact_latest_mission.get_status_display }}
+          {% else %}
+          Message admin below, or tap Request Mission when you want to start a challenge.
+          {% endif %}
+        </div>
+        <div class="chat-mission-opponent-card" data-opponent-card hidden>
+          <img src="" alt="Opponent avatar" data-opponent-avatar />
+          <div>
+            <strong data-opponent-name></strong>
+            <span data-opponent-meta></span>
+          </div>
+        </div>
+        <div class="chat-admin-status" data-opponent-status></div>
+        <div class="chat-mission-instruction" data-mission-instruction hidden>
+          <span>Mission</span>
+          <strong></strong>
+        </div>
+        <div class="chat-admin-status chat-mission-game-timer" data-mission-timer></div>
+        <div class="chat-mission-timer-track" data-mission-timer-track hidden>
+          <span class="chat-mission-timer-fill" data-mission-timer-fill></span>
+        </div>
+        <div class="admin-contact-mission-actions" data-mission-action-row>
+          <button type="button" class="btn btn-outline-primary btn-sm" data-mission-action="find_another_opponent">Find Another</button>
+          <button type="button" class="btn btn-primary btn-sm" data-mission-action="accept_opponent">Accept Opponent</button>
+          <button type="button" class="btn btn-outline-primary btn-sm" data-mission-action="request_another_mission">New Mission</button>
+          <button type="button" class="btn btn-primary btn-sm" data-mission-action="accept_mission">Accept Mission</button>
+        </div>
+        <div class="admin-contact-proof-row" data-proof-row>
+          <strong>Capture chat proof</strong>
+          <input type="text" class="form-control form-control-sm" data-proof-explanation placeholder="Optional note for admin" />
+          <button type="button" class="btn btn-warning btn-sm" data-mission-action="submit_proof">
+            <i class="fas fa-camera-retro" aria-hidden="true"></i>
+            <span>Submit Win</span>
+          </button>
+        </div>
+      </section>
+      <section class="admin-contact-chat-card" aria-label="{% if admin_contact_mission_chat_user %}Mission chat{% else %}Admin chat{% endif %}">
+        <header class="admin-contact-chat-card-head">
+          <strong>{% if admin_contact_mission_chat_user %}Mission Chat{% else %}Admin Chat{% endif %}</strong>
+          <span>{% if admin_contact_mission_chat_user %}{{ admin_contact_mission_chat_user.username }}{% else %}{{ admin_contact_user.username }}{% endif %}</span>
+        </header>
+        <div class="admin-contact-messages" data-chat-messages
+          aria-label="{% if admin_contact_mission_chat_user %}Mission chat messages{% else %}Admin messages{% endif %}"></div>
+        <form class="admin-contact-compose" data-chat-form>
+          <input type="text" class="form-control" data-chat-input maxlength="2000" autocomplete="off"
+            placeholder="{% if admin_contact_mission_chat_user %}Message {{ admin_contact_mission_chat_user.username }}...{% else %}Message admin...{% endif %}" />
+          <button type="submit" class="btn btn-primary chat-send-button" aria-label="Send admin message"
+            title="{% if admin_contact_mission_chat_user %}Send mission chat message{% else %}Send admin message{% endif %}">
+            <i class="fas fa-paper-plane" aria-hidden="true"></i>
+          </button>
+        </form>
+      </section>
     </div>
   </section>
   {% endif %}
@@ -465,9 +619,10 @@
   <script src="{% static 'vendor/jquery-easing/jquery.easing.min.js' %}"></script>
   <script src="{% static 'vendor/owl-carousel/owl.carousel.js' %}"></script>
   <script src="{% static 'js/custom.js' %}"></script>
-  <script src="{% static 'js/pages/base-shell.js' %}?v=20260625back3"></script>
+  <script src="{% static 'js/pages/base-shell.js' %}?v=20260807backbutton1"></script>
   {% if admin_contact_user and other_user != admin_contact_user %}
-  <script src="{% static 'js/pages/chatapp.js' %}?v=20260721presence4"></script>
+  <script src="{% static 'js/pages/chatapp.js' %}?v=20260807panelnavclick1"></script>
+  <script src="{% static 'js/pages/chatapp_missions.js' %}?v=20260807secret1"></script>
   {% endif %}
 
   {% block extra_js %}{% endblock %}

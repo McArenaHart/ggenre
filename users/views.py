@@ -792,10 +792,9 @@ def export_data(request):
 
     if format_type == "csv":
         return generate_csv()
-    elif format_type == "pdf":
+    if format_type == "pdf":
         return generate_pdf()
-    else:
-        return HttpResponse("Invalid format", status=400)
+    return HttpResponse("Invalid format", status=400)
 
 
 def generate_csv():
@@ -811,10 +810,12 @@ def generate_csv():
 
 def generate_pdf():
     if canvas is None or A4 is None:
-        return HttpResponse(
+        response = HttpResponse(
             "PDF export is unavailable: install reportlab to enable this feature.",
             status=503,
         )
+        response["Content-Type"] = "text/plain; charset=utf-8"
+        return response
 
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = 'attachment; filename="data.pdf"'

@@ -5,9 +5,10 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from datetime import timedelta
 
 from content.models import Comment, Content, LivePerformance, Vote
-from chatapp.models import AdminChatThread, MatchRating, PeerChatThread
+from chatapp.models import AdminChatThread, MatchRating, MissionSession, MissionTemplate, PeerChatThread
 from chatapp.services import record_match_rating
 
 from .models import Announcement, DismissedAnnouncement, Notification, OTP, Role, VotingTokenPolicy
@@ -171,6 +172,13 @@ class UsersAppTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertNotIn("_auth_user_id", self.client.session)
 
+    def test_export_data_returns_pdf_unavailable_message_when_reportlab_missing(self):
+        response = self.client.get(reverse("export_data"), {"format": "pdf"})
+
+        self.assertEqual(response.status_code, 503)
+        self.assertContains(response, "PDF export is unavailable")
+        self.assertEqual(response["Content-Type"], "text/plain; charset=utf-8")
+
     def test_dashboard_redirects_by_role(self):
         self.client.login(
             username=self.admin_user.username,
@@ -200,14 +208,20 @@ class UsersAppTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("admin_dashboard"))
         self.assertContains(response, "Admin Dashboard")
+        self.assertContains(response, reverse("chatapp:admin_inbox"))
+        self.assertContains(response, "Review Center")
+        self.assertContains(response, reverse("chatapp:admin_review_center"))
+        self.assertContains(response, reverse("chatapp:mission_center"))
 
         self.client.force_login(self.artist_user)
         response = self.client.get(reverse("content_list"))
         self.assertNotContains(response, reverse("admin_dashboard"))
+        self.assertNotContains(response, reverse("chatapp:admin_review_center"))
 
         self.client.force_login(self.fan_user)
         response = self.client.get(reverse("content_list"))
         self.assertNotContains(response, reverse("admin_dashboard"))
+        self.assertNotContains(response, reverse("chatapp:admin_review_center"))
 
     def test_fan_shell_has_floating_admin_chat_widget(self):
         self.client.force_login(self.fan_user)
@@ -216,8 +230,108 @@ class UsersAppTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "admin-contact-chat")
         self.assertContains(response, f'data-direct-chat-user="{self.admin_user.id}"')
+        self.assertContains(response, f'data-chat-history-url="{reverse("chatapp:direct_history", args=[self.admin_user.id])}"')
+        self.assertContains(response, 'data-chat-widget="admin-contact"')
         self.assertContains(response, 'data-message-retention-ms="86400000"')
+        self.assertContains(response, "<span data-admin-contact-toggle-label>Admin</span>", html=True)
         self.assertContains(response, "Contact Admin")
+        self.assertContains(response, "Admin Contact")
+        self.assertNotContains(response, "Challenge room with")
+        self.assertContains(response, "Admin chat navigation")
+        self.assertContains(response, "admin-contact-mission-head-actions")
+        self.assertContains(response, reverse("content_list"))
+        self.assertContains(response, reverse("chatapp:index"))
+        self.assertContains(response, reverse("chatapp:mission_center"))
+        self.assertContains(response, "Request Mission")
+        self.assertContains(response, "data-mission-request-btn")
+        self.assertContains(response, reverse("chatapp:mission_request"))
+
+    def test_fan_shell_switches_floating_widget_to_mission_when_mission_exists(self):
+        MissionSession.objects.create(
+            requester=self.fan_user,
+            status=MissionSession.Status.MATCHING,
+        )
+        self.client.force_login(self.fan_user)
+        response = self.client.get(reverse("content_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<span data-admin-contact-toggle-label>Mission</span>", html=True)
+        self.assertContains(response, "Challenge room with")
+        self.assertContains(response, "Secret Mission")
+        self.assertContains(response, "Mission Brief")
+        self.assertContains(response, "Mission room navigation")
+        self.assertContains(response, "admin-contact-mission-head-actions")
+        self.assertContains(response, reverse("content_list"))
+        self.assertContains(response, reverse("chatapp:index"))
+        self.assertContains(response, reverse("chatapp:mission_center"))
+
+    def test_fan_shell_keeps_admin_button_for_completed_mission(self):
+        MissionSession.objects.create(
+            requester=self.fan_user,
+            status=MissionSession.Status.CLOSED,
+        )
+        self.client.force_login(self.fan_user)
+        response = self.client.get(reverse("content_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<span data-admin-contact-toggle-label>Admin</span>", html=True)
+        self.assertContains(response, "Contact Admin")
+        self.assertNotContains(response, "<span data-admin-contact-toggle-label>Mission</span>", html=True)
+        self.assertNotContains(response, "Mission Brief")
+
+    def test_fan_shell_uses_opponent_chat_next_to_active_mission_brief(self):
+        template = MissionTemplate.objects.create(
+            title="Shell Mission Chat",
+            instruction_text="Ask a question.",
+            opponent_instruction_text="Answer the question.",
+            is_active=True,
+        )
+        MissionSession.objects.create(
+            requester=self.fan_user,
+            opponent=self.artist_user,
+            mission_template=template,
+            status=MissionSession.Status.MISSION_ACTIVE,
+            started_at=timezone.now(),
+            timer_seconds=120,
+        )
+        thread, _ = PeerChatThread.get_or_create_for_users(self.fan_user, self.artist_user)
+        thread.unlocked_until = timezone.now() + timedelta(hours=1)
+        thread.save(update_fields=["unlocked_until", "updated_at"])
+
+        self.client.force_login(self.fan_user)
+        response = self.client.get(reverse("content_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'data-direct-chat-user="{self.artist_user.id}"')
+        self.assertContains(response, f'data-chat-history-url="{reverse("chatapp:direct_history", args=[self.artist_user.id])}"')
+        self.assertContains(response, 'data-chat-widget="mission-chat"')
+        self.assertContains(response, f"Mission chat with {self.artist_user.username}")
+        self.assertContains(response, f"Message {self.artist_user.username}...")
+
+    def test_opponent_shell_uses_mission_room_before_peer_chat_unlock(self):
+        template = MissionTemplate.objects.create(
+            title="Opponent Pending Mission",
+            instruction_text="Ask a question.",
+            opponent_instruction_text="Answer the question.",
+            is_active=True,
+        )
+        MissionSession.objects.create(
+            requester=self.fan_user,
+            opponent=self.artist_user,
+            mission_template=template,
+            status=MissionSession.Status.OPPONENT_PROPOSED,
+        )
+
+        self.client.force_login(self.artist_user)
+        response = self.client.get(reverse("content_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<span data-admin-contact-toggle-label>Mission</span>", html=True)
+        self.assertContains(response, f'data-direct-chat-user="{self.fan_user.id}"')
+        self.assertContains(response, 'data-chat-widget="mission-chat"')
+        self.assertContains(response, f"Mission chat with {self.fan_user.username}")
+        self.assertContains(response, "Mission Brief")
+        self.assertContains(response, "Mission Chat")
 
     def test_admin_shell_does_not_show_admin_contact_widget(self):
         self.client.force_login(self.admin_user)

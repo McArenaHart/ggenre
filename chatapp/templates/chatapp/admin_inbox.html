@@ -1,10 +1,14 @@
 {% extends "includes/base.html" %}
-{% load static %}
+{% load static avatar_extras %}
 
 {% block title %}Admin Chat Inbox{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/chatapp.css' %}?v=20260620a" rel="stylesheet" />
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260807missionmobile1" rel="stylesheet" />
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pages/admin_inbox.js' %}?v=20260807realtime1"></script>
 {% endblock %}
 
 {% block content %}
@@ -28,34 +32,53 @@
           <span>{{ thread_count }} thread{{ thread_count|pluralize }}</span>
         </div>
         {% if total_unread %}
-          <span class="chat-unread-badge">{{ total_unread }}</span>
+        <span class="chat-unread-badge">{{ total_unread }}</span>
         {% endif %}
       </div>
 
       <div class="chat-peer-list">
-        {% for thread in threads %}
-          <a class="chat-peer-row {% if thread.unread_count %}is-unread{% endif %}" href="{% url 'chatapp:direct' thread.user.id %}">
-            {% include "partials/user_avatar.html" with avatar_user=thread.user size=44 class_name="chat-inbox-avatar" alt_text=thread.user.username %}
-            <span class="chat-peer-main">
-              <span class="chat-peer-name">{{ thread.user.username }}</span>
-              <span class="chat-peer-meta">
-                {{ thread.user.get_role_display }} &middot; <time datetime="{{ thread.last_contact_at|date:'c' }}">{{ thread.last_contact_at|date:"M d, H:i" }}</time>
-              </span>
-            </span>
-            <span class="chat-peer-state">
-              {% if thread.unread_count %}
-                <span class="chat-unread-badge">{{ thread.unread_count }}</span>
-              {% else %}
-                <i class="fas fa-chevron-right" aria-hidden="true"></i>
+        {% for row in thread_rows %}
+        <a class="chat-peer-row {% if row.action_count %}is-unread{% endif %}"
+          href="{% url 'chatapp:direct' row.user.id %}">
+          {% with avatar_size=44 %}
+          {% if row.user.profile_picture %}
+          <img src="{{ row.user.profile_picture.url }}" alt="{{ row.user.username }}"
+            class="rounded-circle gg-avatar chat-inbox-avatar" style="--gg-avatar-size: {{ avatar_size }}px;"
+            width="{{ avatar_size }}" height="{{ avatar_size }}" />
+          {% else %}
+          <span class="rounded-circle gg-avatar-fallback chat-inbox-avatar"
+            style="--gg-avatar-size: {{ avatar_size }}px;" role="img" aria-label="{{ row.user.username }}">
+            {{ row.user.username|initials }}
+          </span>
+          {% endif %}
+          {% endwith %}
+          <span class="chat-peer-main">
+            <span class="chat-peer-name">{{ row.user.username }}</span>
+            <span class="chat-peer-meta">
+              {{ row.user.get_role_display }} &middot; <time datetime="{{ row.last_contact_at|date:'c' }}">{{ row.last_contact_at|date:"M d, H:i" }}</time>
+              {% if row.unread_count and row.mission_request_count %}
+              &middot; {{ row.unread_count }} unread, {{ row.mission_request_count }} mission request{{ row.mission_request_count|pluralize }}
+              {% elif row.unread_count %}
+              &middot; {{ row.unread_count }} unread message{{ row.unread_count|pluralize }}
+              {% elif row.mission_request_count %}
+              &middot; {{ row.mission_request_count }} mission request{{ row.mission_request_count|pluralize }}
               {% endif %}
             </span>
-          </a>
+          </span>
+          <span class="chat-peer-state">
+            {% if row.action_count %}
+            <span class="chat-unread-badge">{{ row.action_count }}</span>
+            {% else %}
+            <i class="fas fa-chevron-right" aria-hidden="true"></i>
+            {% endif %}
+          </span>
+        </a>
         {% empty %}
-          <div class="app-empty chat-empty-state">
-            <i class="fas fa-inbox" aria-hidden="true"></i>
-            <strong>No admin chat messages yet.</strong>
-            <span>When users contact admin from the floating chat, their thread will appear here.</span>
-          </div>
+        <div class="app-empty chat-empty-state">
+          <i class="fas fa-inbox" aria-hidden="true"></i>
+          <strong>No admin inbox activity yet.</strong>
+          <span>When users message admin or request a mission, their row will appear here.</span>
+        </div>
         {% endfor %}
       </div>
     </aside>
@@ -69,6 +92,108 @@
       <div class="chat-preview-stats">
         <span>{{ thread_count }} total</span>
         <span>{{ total_unread }} unread</span>
+      </div>
+      <a href="{% url 'chatapp:admin_review_center' %}" class="btn btn-primary btn-sm">
+        Review Proof
+      </a>
+      <p class="chat-admin-controls-note">
+        Match players and review submitted proof from the queues below.
+      </p>
+
+      <div class="chat-admin-review-queues">
+        <h3>Mission Requests</h3>
+        <ul>
+          {% for mission_row in pending_mission_rows %}
+          <li class="chat-admin-match-item">
+            <div class="chat-admin-match-summary">
+              <strong>{{ mission_row.mission.requester.username }}</strong>
+              <span>Mission #{{ mission_row.mission.id }} &middot; {{ mission_row.mission.get_status_display }}</span>
+              {% if mission_row.claimed_by_other %}
+              <small>Locked by {{ mission_row.mission.assigned_admin.username }}</small>
+              {% elif mission_row.available_count %}
+              <small>{{ mission_row.available_count }} available opponent{{ mission_row.available_count|pluralize }}</small>
+              {% else %}
+              <small>No free online opponents right now.</small>
+              {% endif %}
+            </div>
+            <form method="post" action="{% url 'chatapp:admin_assign_mission_opponent' mission_row.mission.id %}"
+              class="chat-admin-inline chat-admin-match-form">
+              {% csrf_token %}
+              <select name="opponent_id" class="form-select form-select-sm" required>
+                <option value="">Select online player</option>
+                {% for row in mission_row.available_players %}
+                <option value="{{ row.user.id }}">
+                  {{ row.user.username }} - Badge L{{ row.badge_level }} - {{ row.current_points }} pts - {{ row.homepage_wins }} wins
+                </option>
+                {% endfor %}
+              </select>
+              {% if mission_row.match_disabled %}
+              <button type="submit" class="btn btn-primary btn-sm" disabled>Match Opponent</button>
+              {% else %}
+              <button type="submit" class="btn btn-primary btn-sm">Match Opponent</button>
+              {% endif %}
+            </form>
+          </li>
+          {% empty %}
+          <li>No pending mission requests for manual matching.</li>
+          {% endfor %}
+        </ul>
+
+        <h3>Mission Proof</h3>
+        <ul>
+          {% for evidence in pending_mission_evidence %}
+          <li>
+            <strong>#{{ evidence.id }}</strong>
+            Mission #{{ evidence.mission_session_id }}
+            ({{ evidence.get_review_status_display }})
+            by {{ evidence.submitted_by.username }}
+            <div class="chat-admin-quick-actions">
+              <form method="post" action="{% url 'chatapp:admin_review_mission_action' evidence.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="approve" />
+                <input type="hidden" name="review_notes" value="Quick approve from inbox." />
+                <button type="submit" class="btn btn-success btn-sm">Approve</button>
+              </form>
+              <form method="post" action="{% url 'chatapp:admin_review_mission_action' evidence.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reject" />
+                <input type="hidden" name="review_notes" value="Quick reject from inbox." />
+                <button type="submit" class="btn btn-danger btn-sm">Reject</button>
+              </form>
+            </div>
+          </li>
+          {% empty %}
+          <li>No pending mission evidence.</li>
+          {% endfor %}
+        </ul>
+
+        <h3>Token Requests</h3>
+        <ul>
+          {% for token_request in pending_token_requests %}
+          <li>
+            <strong>#{{ token_request.id }}</strong>
+            {{ token_request.requester.username }} requested {{ token_request.requested_tokens }}
+            ({{ token_request.get_status_display }})
+            <div class="chat-admin-quick-actions">
+              <form method="post" action="{% url 'chatapp:admin_review_token_action' token_request.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="approve" />
+                <input type="hidden" name="approved_tokens" value="{{ token_request.requested_tokens }}" />
+                <input type="hidden" name="review_notes" value="Quick approve from inbox." />
+                <button type="submit" class="btn btn-success btn-sm">Approve</button>
+              </form>
+              <form method="post" action="{% url 'chatapp:admin_review_token_action' token_request.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reject" />
+                <input type="hidden" name="review_notes" value="Quick reject from inbox." />
+                <button type="submit" class="btn btn-danger btn-sm">Reject</button>
+              </form>
+            </div>
+          </li>
+          {% empty %}
+          <li>No pending token purchase requests.</li>
+          {% endfor %}
+        </ul>
       </div>
     </section>
   </section>

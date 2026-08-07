@@ -239,6 +239,8 @@
   gap: 0.25rem;
   grid-template-columns: repeat(5, 32px);
   left: 0;
+  max-height: min(300px, 54vh);
+  overflow-y: auto;
   padding: 0.45rem;
   position: absolute;
   z-index: 20;

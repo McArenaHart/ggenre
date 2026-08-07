@@ -1,0 +1,311 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Review Center{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260807missionmobile1" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid chat-page chat-review-dashboard">
+    <header class="chat-header chat-dashboard-header">
+        <div>
+            <h1>Review Center</h1>
+            <p>Start missions, approve wins, and handle token requests.</p>
+        </div>
+        <div class="chat-dashboard-header-actions">
+            <a href="#mission-requests" class="btn btn-primary btn-sm">
+                <i class="fas fa-gamepad" aria-hidden="true"></i>
+                <span>Start Mission</span>
+            </a>
+            <a href="#mission-proof" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-trophy" aria-hidden="true"></i>
+                <span>Review Proof</span>
+            </a>
+            <a href="{% url 'chatapp:admin_inbox' %}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                <span>Inbox</span>
+            </a>
+        </div>
+    </header>
+
+    <section class="chat-dashboard-summary" aria-label="Review center summary">
+        <a href="#mission-requests" class="chat-dashboard-stat">
+            <span class="chat-dashboard-stat-icon"><i class="fas fa-user-plus" aria-hidden="true"></i></span>
+            <span>
+                <strong>{{ pending_mission_rows|length }}</strong>
+                <small>Waiting Players</small>
+                <em>{{ monitored_missions|length }} total mission{{ monitored_missions|length|pluralize }}</em>
+            </span>
+        </a>
+        <a href="#mission-proof" class="chat-dashboard-stat">
+            <span class="chat-dashboard-stat-icon"><i class="fas fa-medal" aria-hidden="true"></i></span>
+            <span>
+                <strong>{{ pending_mission_evidence|length }}</strong>
+                <small>Proof Reviews</small>
+            </span>
+        </a>
+        <a href="#token-requests" class="chat-dashboard-stat">
+            <span class="chat-dashboard-stat-icon"><i class="fas fa-coins" aria-hidden="true"></i></span>
+            <span>
+                <strong>{{ pending_token_requests|length }}</strong>
+                <small>Token Requests</small>
+            </span>
+        </a>
+        <div class="chat-dashboard-stat">
+            <span class="chat-dashboard-stat-icon"><i class="fas fa-circle" aria-hidden="true"></i></span>
+            <span>
+                <strong>{{ online_players|length }}</strong>
+                <small>Online Players</small>
+            </span>
+        </div>
+    </section>
+
+    <section class="chat-dashboard-commandbar">
+        <div>
+            <strong>Admin controls</strong>
+            <span>Use the cards below to match, cancel, approve, reject, or open a player chat.</span>
+        </div>
+        <form method="get" class="chat-review-toolbar">
+            <label for="reviewSortSelect">Sort queue</label>
+            <div class="chat-review-sort-control">
+                <i class="fas fa-sort-amount-down" aria-hidden="true"></i>
+                <select id="reviewSortSelect" name="sort" class="form-select form-select-sm">
+                    <option value="oldest" {% if sort_oldest %}selected{% endif %}>Oldest first</option>
+                    <option value="newest" {% if sort_newest %}selected{% endif %}>Newest first</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-outline-primary btn-sm">Apply</button>
+        </form>
+    </section>
+
+    <section class="chat-review-grid">
+        <article class="chat-panel chat-review-card chat-review-card-wide chat-review-card-compact" id="mission-monitor">
+            <header class="chat-review-card-header">
+                <div>
+                    <h2>Mission Monitor</h2>
+                    <p>Watch and control active mission sessions.</p>
+                </div>
+                <span>{{ monitored_missions|length }} active</span>
+            </header>
+            <div class="chat-review-list">
+                {% for mission in monitored_missions %}
+                <div class="chat-review-item chat-mission-monitor-item">
+                    <div>
+                        <strong>Mission #{{ mission.id }}: {{ mission.get_status_display }}</strong>
+                        <p>
+                            {{ mission.requester.username }}
+                            {% if mission.opponent %}
+                            vs {{ mission.opponent.username }}
+                            {% else %}
+                            is waiting for an opponent
+                            {% endif %}
+                        </p>
+                        {% if mission.mission_template %}
+                        <p>Requester mission: {{ mission.mission_template.instruction_text }}</p>
+                        <p>Opponent role: {{ mission.mission_template.opponent_instruction_text|default:"Respond naturally and help complete the mission interaction." }}</p>
+                        {% endif %}
+                        {% if mission.started_at %}
+                        <p>Started: {{ mission.started_at|date:"M d, H:i" }}</p>
+                        {% endif %}
+                        {% if mission.assigned_admin %}
+                        <p>Claimed by {{ mission.assigned_admin.username }}</p>
+                        {% endif %}
+                    </div>
+                    <form method="post" action="{% url 'chatapp:admin_mission_control_action' mission.id %}"
+                        class="chat-admin-control-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{% url 'chatapp:admin_review_center' %}" />
+                        <input type="text" name="note" class="form-control form-control-sm"
+                            placeholder="Optional admin note" />
+                        <div class="chat-admin-inline">
+                            <button type="submit" name="action" value="cancel" class="btn btn-warning btn-sm">Cancel Mission</button>
+                            {% if mission.can_admin_remove %}
+                            <button type="submit" name="action" value="delete" class="btn btn-danger btn-sm">Remove Record</button>
+                            {% endif %}
+                            <a href="{% url 'chatapp:direct' mission.requester.id %}" class="btn btn-outline-primary btn-sm">Open Player Chat</a>
+                        </div>
+                    </form>
+                </div>
+                {% empty %}
+                <div class="app-empty chat-empty-state">
+                    <strong>No active mission sessions.</strong>
+                </div>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="chat-panel chat-review-card" id="mission-requests">
+            <header class="chat-review-card-header">
+                <div>
+                    <h2>Mission Requests</h2>
+                    <p>Match waiting players with online opponents.</p>
+                </div>
+                <span>{{ pending_mission_rows|length }} waiting</span>
+            </header>
+            <div class="chat-review-list">
+                {% for mission_row in pending_mission_rows %}
+                <form method="post" action="{% url 'chatapp:admin_assign_mission_opponent' mission_row.mission.id %}"
+                    class="chat-review-item">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{% url 'chatapp:admin_review_center' %}" />
+                    <div>
+                        <strong>{{ mission_row.mission.requester.username }} wants a mission</strong>
+                        <p>Mission #{{ mission_row.mission.id }} &middot; {{ mission_row.mission.get_status_display }}</p>
+                        {% if mission_row.claimed_by_other %}
+                        <p>Locked by {{ mission_row.mission.assigned_admin.username }}</p>
+                        {% elif mission_row.available_count %}
+                        <p>{{ mission_row.available_count }} online opponent{{ mission_row.available_count|pluralize }} available.</p>
+                        {% else %}
+                        <p>No free online opponents right now.</p>
+                        {% endif %}
+                    </div>
+                    <div class="chat-mission-match-row">
+                        <select name="opponent_id" class="form-select form-select-sm" required>
+                            <option value="">Select online opponent</option>
+                            {% for row in mission_row.available_players %}
+                            <option value="{{ row.user.id }}">
+                                {{ row.user.username }} - Badge L{{ row.badge_level }} - {{ row.current_points }} pts - {{ row.homepage_wins }} wins
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if mission_row.match_disabled %}
+                        <button type="submit" class="btn btn-primary btn-sm" disabled>Match Opponent</button>
+                        {% else %}
+                        <button type="submit" class="btn btn-primary btn-sm">Match Opponent</button>
+                        {% endif %}
+                    </div>
+                    <div class="chat-mission-manage-row">
+                        <a href="{% url 'chatapp:direct' mission_row.mission.requester.id %}" class="btn btn-outline-primary btn-sm">Open Chat</a>
+                        <button type="submit" name="action" value="cancel" class="btn btn-warning btn-sm"
+                            formaction="{% url 'chatapp:admin_mission_control_action' mission_row.mission.id %}"
+                            formnovalidate>Cancel</button>
+                        {% if mission_row.mission.can_admin_remove %}
+                        <button type="submit" name="action" value="delete" class="btn btn-danger btn-sm"
+                            formaction="{% url 'chatapp:admin_mission_control_action' mission_row.mission.id %}"
+                            formnovalidate>Remove</button>
+                        {% endif %}
+                    </div>
+                </form>
+                {% empty %}
+                <div class="app-empty chat-empty-state">
+                    <strong>No players waiting for a mission.</strong>
+                </div>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="chat-panel chat-review-card" id="mission-proof">
+            <header class="chat-review-card-header">
+                <div>
+                    <h2>Mission Proof</h2>
+                    <p>Approve winners or request better evidence.</p>
+                </div>
+                <span>{{ pending_mission_evidence|length }} pending</span>
+            </header>
+            <div class="chat-review-list">
+                {% for evidence in pending_mission_evidence %}
+                <form method="post" action="{% url 'chatapp:admin_review_mission_action' evidence.id %}"
+                    class="chat-review-item">
+                    {% csrf_token %}
+                    <div class="chat-review-proof-layout">
+                        <div class="chat-review-proof-media">
+                            {% if evidence.screenshot %}
+                            <a href="{{ evidence.screenshot.url }}" target="_blank" rel="noopener">
+                                <img src="{{ evidence.screenshot.url }}" alt="Mission proof from {{ evidence.submitted_by.username }}" />
+                            </a>
+                            {% else %}
+                            <div class="chat-review-proof-empty">
+                                <i class="fas fa-comments" aria-hidden="true"></i>
+                                <span>Chat proof captured</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="chat-review-proof-copy">
+                            <strong>{{ evidence.submitted_by.username }} says they won</strong>
+                            <p>
+                                Mission #{{ evidence.mission_session_id }}
+                                {% if evidence.mission_session.opponent %}
+                                with {{ evidence.mission_session.opponent.username }}
+                                {% endif %}
+                            </p>
+                            {% if evidence.mission_session.mission_template %}
+                            <p>Requester mission: {{ evidence.mission_session.mission_template.instruction_text }}</p>
+                            <p>Opponent role: {{ evidence.mission_session.mission_template.opponent_instruction_text|default:"Respond naturally and help complete the mission interaction." }}</p>
+                            {% endif %}
+                            <p>Status: {{ evidence.get_review_status_display }}</p>
+                        </div>
+                    </div>
+                    <div>
+                        {% if evidence.chat_transcript %}
+                        <div class="chat-review-transcript">
+                            <strong>Captured mission chat</strong>
+                            <pre>{{ evidence.chat_transcript }}</pre>
+                        </div>
+                        {% endif %}
+                        {% if evidence.explanation %}
+                        <p>Player note: {{ evidence.explanation }}</p>
+                        {% endif %}
+                    </div>
+                    <input type="text" name="review_notes" class="form-control form-control-sm"
+                        placeholder="Optional admin note" />
+                    <div class="chat-admin-inline">
+                        <button type="submit" name="action" value="approve"
+                            class="btn btn-success btn-sm">Approve Victory</button>
+                        <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">Reject Proof</button>
+                        <a href="{% url 'chatapp:direct' evidence.submitted_by.id %}" class="btn btn-outline-primary btn-sm">Open Chat</a>
+                    </div>
+                </form>
+                {% empty %}
+                <div class="app-empty chat-empty-state">
+                    <strong>No mission proof waiting.</strong>
+                </div>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="chat-panel chat-review-card" id="token-requests">
+            <header class="chat-review-card-header">
+                <div>
+                    <h2>Token Requests</h2>
+                    <p>Approve or reject user token requests.</p>
+                </div>
+                <span>{{ pending_token_requests|length }} pending</span>
+            </header>
+            <div class="chat-review-list">
+                {% for token_request in pending_token_requests %}
+                <form method="post" action="{% url 'chatapp:admin_review_token_action' token_request.id %}"
+                    class="chat-review-item">
+                    {% csrf_token %}
+                    <div>
+                        <strong>{{ token_request.requester.username }} requested {{ token_request.requested_tokens }} token{{ token_request.requested_tokens|pluralize }}</strong>
+                        <p>Request #{{ token_request.id }} &middot; {{ token_request.get_status_display }}</p>
+                        {% if token_request.payment_channel %}
+                        <p>Channel: {{ token_request.payment_channel }}</p>
+                        {% endif %}
+                        {% if token_request.payment_reference %}
+                        <p>Reference: {{ token_request.payment_reference }}</p>
+                        {% endif %}
+                    </div>
+                    <input type="number" min="1" name="approved_tokens" class="form-control form-control-sm"
+                        value="{{ token_request.requested_tokens }}" placeholder="Approved tokens" />
+                    <input type="text" name="review_notes" class="form-control form-control-sm"
+                        placeholder="Optional admin note" />
+                    <div class="chat-admin-inline">
+                        <button type="submit" name="action" value="approve"
+                            class="btn btn-success btn-sm">Approve Tokens</button>
+                        <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">Reject Request</button>
+                        <a href="{% url 'chatapp:direct' token_request.requester.id %}" class="btn btn-outline-primary btn-sm">Open Chat</a>
+                    </div>
+                </form>
+                {% empty %}
+                <div class="app-empty chat-empty-state">
+                    <strong>No token requests waiting.</strong>
+                </div>
+                {% endfor %}
+            </div>
+        </article>
+    </section>
+</div>
+{% endblock %}

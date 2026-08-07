@@ -10,6 +10,7 @@ from django.utils import timezone
 from users.models import Notification, Role
 
 from .models import AdminChatThread, DirectChatMessage, PeerChatThread
+from .realtime import admin_counts_payload, user_events_group
 from .services import users_can_peer_chat
 
 User = get_user_model()
@@ -118,8 +119,9 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
             return
         await self.touch_presence()
 
+        admin_counts = None
         if self.is_user_contacting_admin:
-            await self.record_admin_contact()
+            admin_counts = await self.record_admin_contact()
         elif self.is_admin_replying_to_user:
             await self.record_admin_reply()
         elif self.is_peer_chat:
@@ -145,6 +147,17 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
                 "message": message,
             },
         )
+        if admin_counts:
+            await self.channel_layer.group_send(
+                user_events_group(self.other_user.id),
+                {
+                    "type": "user.event",
+                    "event": {
+                        "type": "admin_counts",
+                        **admin_counts,
+                    },
+                },
+            )
 
     async def direct_message(self, event):
         await self.send(text_data=json.dumps(event["message"]))
@@ -204,6 +217,7 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
             user=self.other_user,
             message=f"{self.user.username} sent you an admin chat message.",
         )
+        return admin_counts_payload(self.other_user)
 
     @sync_to_async
     def record_admin_reply(self):
@@ -326,3 +340,25 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
         cache.delete(f"direct_chat_presence:online:{self.user.id}")
         cache.set(f"direct_chat_presence:last_seen:{self.user.id}", now, timeout=None)
         return {"last_seen_at": now}
+
+
+class UserEventConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.user = self.scope["user"]
+        if not self.user.is_authenticated:
+            await self.close(code=4401)
+            return
+        if getattr(self.user, "is_suspended_by_admin", False):
+            await self.close(code=4403)
+            return
+
+        self.group_name = user_events_group(self.user.id)
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        if hasattr(self, "group_name"):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def user_event(self, event):
+        await self.send(text_data=json.dumps(event.get("event") or {}))

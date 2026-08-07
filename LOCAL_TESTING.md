@@ -82,3 +82,39 @@ If PowerShell blocks script execution, run with a temporary bypass:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start_local.ps1 -Reset
 ```
+
+## 7. Mission Review Policy And Automation Infrastructure
+
+The mission review system supports policy-level configuration without enabling a live AI chatbot.
+
+Optional Django setting (for example in local environment config):
+
+```python
+CHATAPP_MISSION_POLICY = {
+	"review_route_mode": "alternate",  # alternate | manual_only | ai_preferred
+	"ai_confidence_threshold": 0.75,
+	"prefer_online_opponent": True,
+	"rematch_cooldown_hours": 12,
+	"bulk_review_max_items": 10,
+}
+```
+
+Notes:
+
+- AI-routed mission reviews now create `ReviewAutomationTicket` rows in queued status.
+- This is infrastructure only: no chatbot auto-approvals are executed.
+
+## 8. Ops Metrics Command
+
+Use this command to inspect routing and moderation metrics:
+
+```powershell
+python manage.py mission_review_metrics --days 7
+```
+
+The output includes:
+
+- Active policy snapshot
+- Mission route counts (AI/manual)
+- Mission decision counts (approve/reject)
+- Automation ticket status counts
