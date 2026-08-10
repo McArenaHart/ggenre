@@ -61,3 +61,49 @@ class LiveStreamTests(TestCase):
         stream.refresh_from_db()
         self.assertEqual(end_response.status_code, 302)
         self.assertEqual(stream.status, LiveStream.STATUS_ENDED)
+
+    def test_stream_room_renders_host_production_controls(self):
+        stream = LiveStream.objects.create(
+            title="Production Room",
+            host=self.artist,
+            status=LiveStream.STATUS_LIVE,
+        )
+        self.client.login(username="live_artist_app", password="password123")
+
+        response = self.client.get(reverse("livestream:room", args=[stream.stream_key]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-camera-toggle')
+        self.assertContains(response, 'data-mic-toggle')
+        self.assertContains(response, 'data-camera-flip')
+        self.assertContains(response, 'data-screen-share')
+        self.assertContains(response, 'data-screen-share aria-pressed="false"')
+        self.assertContains(response, 'data-fullscreen-toggle')
+        self.assertContains(response, 'data-viewer-count')
+        self.assertContains(response, 'livestream-stage-action-form')
+
+    def test_live_index_feels_like_live_hub(self):
+        LiveStream.objects.create(
+            title="Friday Live",
+            description="Live performance",
+            host=self.artist,
+            status=LiveStream.STATUS_LIVE,
+        )
+        self.client.login(username="live_fan_app", password="password123")
+
+        response = self.client.get(reverse("livestream:index"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Live now")
+        self.assertContains(response, "Enter Live Room")
+        self.assertContains(response, "Available streams")
+
+    def test_create_stream_page_uses_setup_layout(self):
+        self.client.login(username="live_artist_app", password="password123")
+
+        response = self.client.get(reverse("livestream:create"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Set up your live")
+        self.assertContains(response, "Create Live Room")
+        self.assertContains(response, "Before you go live")

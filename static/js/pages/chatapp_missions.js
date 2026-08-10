@@ -541,7 +541,7 @@
             const opts = options || {};
             const silent = Boolean(opts.silent);
             if (!activeMissionId) {
-                refreshLatestMission({ silent: silent });
+                await refreshLatestMission({ silent: silent });
                 return;
             }
             if (isRefreshingMission) {
@@ -581,6 +581,113 @@
                     setText(statusEl, error.message);
                 }
             }
+        }
+
+        function initPullRefresh() {
+            const refreshPanel = root.querySelector("[data-chat-panel]");
+            const pullIndicator = root.querySelector("[data-pull-refresh-indicator]");
+            const pullLabel = pullIndicator ? pullIndicator.querySelector("span") : null;
+            const pullIcon = pullIndicator ? pullIndicator.querySelector("i") : null;
+            const mobileQuery = window.matchMedia ? window.matchMedia("(max-width: 767.98px)") : null;
+            const threshold = 58;
+            let startY = 0;
+            let pullDistance = 0;
+            let tracking = false;
+
+            if (!refreshPanel || !pullIndicator || !missionLatestUrl) {
+                return;
+            }
+
+            function isMobile() {
+                return !mobileQuery || mobileQuery.matches;
+            }
+
+            function setPull(distance) {
+                pullDistance = Math.max(0, Math.min(distance, 96));
+                refreshPanel.style.setProperty("--admin-contact-pull-offset", String(pullDistance) + "px");
+                refreshPanel.classList.toggle("is-pulling", pullDistance > 0);
+                if (pullLabel) {
+                    pullLabel.textContent = pullDistance >= threshold ? "Release to refresh" : "Pull to refresh";
+                }
+                if (pullIcon) {
+                    pullIcon.className = pullDistance >= threshold ? "fas fa-arrow-up" : "fas fa-arrow-down";
+                }
+            }
+
+            function resetPull() {
+                tracking = false;
+                pullDistance = 0;
+                refreshPanel.classList.remove("is-pulling");
+                refreshPanel.style.setProperty("--admin-contact-pull-offset", "0px");
+                if (pullLabel) {
+                    pullLabel.textContent = "Pull to refresh";
+                }
+                if (pullIcon) {
+                    pullIcon.className = "fas fa-arrow-down";
+                }
+            }
+
+            refreshPanel.addEventListener("touchstart", function (event) {
+                if (!isMobile() || isRefreshingMission || refreshPanel.scrollTop > 0) {
+                    return;
+                }
+                if (event.target && event.target.closest("input, textarea, select")) {
+                    return;
+                }
+                startY = event.touches[0].clientY;
+                tracking = true;
+                pullDistance = 0;
+            }, { passive: true });
+
+            refreshPanel.addEventListener("touchmove", function (event) {
+                if (!tracking || !isMobile()) {
+                    return;
+                }
+                const deltaY = event.touches[0].clientY - startY;
+                if (deltaY <= 0) {
+                    resetPull();
+                    return;
+                }
+                if (refreshPanel.scrollTop > 0) {
+                    resetPull();
+                    return;
+                }
+                if (event.cancelable) {
+                    event.preventDefault();
+                }
+                setPull(deltaY * 0.45);
+            }, { passive: false });
+
+            refreshPanel.addEventListener("touchend", async function () {
+                if (!tracking) {
+                    return;
+                }
+                const shouldRefresh = pullDistance >= threshold;
+                if (!shouldRefresh) {
+                    resetPull();
+                    return;
+                }
+                tracking = false;
+                refreshPanel.classList.remove("is-pulling");
+                refreshPanel.classList.add("is-refreshing");
+                refreshPanel.style.setProperty("--admin-contact-pull-offset", "52px");
+                if (pullLabel) {
+                    pullLabel.textContent = "Refreshing...";
+                }
+                if (pullIcon) {
+                    pullIcon.className = "fas fa-sync-alt";
+                }
+                try {
+                    await refreshMission({ silent: false, source: "pull" });
+                } finally {
+                    window.setTimeout(function () {
+                        refreshPanel.classList.remove("is-refreshing");
+                        resetPull();
+                    }, 260);
+                }
+            });
+
+            refreshPanel.addEventListener("touchcancel", resetPull);
         }
 
         async function runMissionAction(action) {
@@ -649,6 +756,7 @@
                 refreshMission({ silent: false, source: "manual" });
             });
         }
+        initPullRefresh();
 
         panel.querySelectorAll("[data-mission-action]").forEach(function (button) {
             button.addEventListener("click", function () {

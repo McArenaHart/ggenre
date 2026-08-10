@@ -55,6 +55,13 @@ class MissionSession(models.Model):
         blank=True,
         related_name="sessions",
     )
+    opponent_mission_template = models.ForeignKey(
+        "MissionTemplate",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="opponent_sessions",
+    )
     status = models.CharField(
         max_length=32,
         choices=Status.choices,
@@ -354,6 +361,7 @@ class MissionReviewControl(models.Model):
         default=RouteMode.ALTERNATE,
     )
     reason = models.CharField(max_length=255, blank=True, default="")
+    mission_timer_seconds = models.PositiveIntegerField(default=120)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -364,7 +372,7 @@ class MissionReviewControl(models.Model):
         ]
 
     def __str__(self):
-        return f"Mission review mode: {self.route_mode}"
+        return f"Mission review mode: {self.route_mode}; timer {self.mission_timer_seconds}s"
 
 
 class MissionWinFeed(models.Model):
@@ -413,6 +421,9 @@ class DirectChatMessage(models.Model):
     )
     client_id = models.CharField(max_length=120, blank=True, default="")
     body = models.TextField()
+    media_file = models.FileField(upload_to="direct_chat_media/", null=True, blank=True)
+    media_type = models.CharField(max_length=20, blank=True, default="")
+    media_name = models.CharField(max_length=160, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     read_at = models.DateTimeField(null=True, blank=True)
 

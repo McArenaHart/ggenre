@@ -1,8 +1,11 @@
 import json
+from pathlib import Path
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import F, Q
 from django.db.models import Sum
 from django.contrib import messages
 from django.utils import timezone
@@ -10,7 +13,7 @@ from django.http import HttpResponseForbidden, JsonResponse
 from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
 
-from users.models import CustomUser, OTP, Role, VotingTokenPolicy
+from users.models import CustomUser, Notification, OTP, Role, VotingTokenPolicy
 
 from .models import (
     AdminChatThread,
@@ -25,16 +28,19 @@ from .models import (
     PeerChatThread,
     TokenPurchaseRequest,
 )
-from .realtime import broadcast_admin_counts, broadcast_mission_update
+from .realtime import admin_counts_payload, broadcast_admin_counts, broadcast_mission_update, user_events_group
 from .services import (
     accept_mission,
     accept_opponent,
     assign_mission_opponent_by_admin,
+    create_admin_started_mission,
     create_token_purchase_request,
     get_admin_contact_user,
     get_mission_policy_settings,
+    cleanup_mission_chat_media,
     record_match_rating,
     route_and_start_mission_review,
+    set_mission_timer_seconds,
     set_mission_review_route_mode,
     request_another_mission,
     request_another_opponent,
@@ -190,6 +196,34 @@ def _online_mission_player_rows(busy_player_ids):
     return online_players
 
 
+def _admin_start_mission_player_rows():
+    busy_player_ids = _mission_busy_player_ids()
+    rows = []
+    candidate_players = (
+        CustomUser.objects.exclude(role=Role.ADMIN)
+        .exclude(is_suspended_by_admin=True)
+        .filter(is_active=True)
+        .order_by("username")
+    )
+    for player in candidate_players:
+        homepage_wins = MissionWinFeed.objects.filter(
+            winner=player,
+            homepage_visible=True,
+        ).count()
+        otp = OTP.objects.filter(user=player).only("remaining_votes").first()
+        rows.append(
+            {
+                "user": player,
+                "is_busy": player.id in busy_player_ids,
+                "is_online": bool(cache.get(f"direct_chat_presence:online:{player.id}")),
+                "badge_level": 1 + (homepage_wins // 3),
+                "current_points": otp.remaining_votes if otp else 0,
+                "homepage_wins": homepage_wins,
+            }
+        )
+    return rows
+
+
 def _build_mission_request_row(mission, current_admin, online_players):
     mission.can_admin_remove = _mission_can_be_removed(mission)
     claimed_by_other = bool(
@@ -235,7 +269,7 @@ def _build_mission_request_row(mission, current_admin, online_players):
 def _build_pending_mission_rows(current_admin):
     pending_mission_requests = list(
         MissionSession.objects.filter(status__in=MISSION_REQUEST_QUEUE_STATUSES)
-        .select_related("requester", "opponent", "mission_template", "assigned_admin")
+        .select_related("requester", "opponent", "mission_template", "opponent_mission_template", "assigned_admin")
         .order_by("created_at")[:20]
     )
 
@@ -351,7 +385,7 @@ def direct_chat(request, user_id):
                 Q(requester=request.user) | Q(opponent=request.user),
                 status__in=PLAYER_ONGOING_MISSION_STATUSES,
             )
-            .select_related("mission_template", "requester", "opponent")
+            .select_related("mission_template", "opponent_mission_template", "requester", "opponent")
             .order_by("-created_at")
             .first()
         )
@@ -374,7 +408,7 @@ def direct_chat(request, user_id):
                 | Q(requester=other_user, opponent=request.user),
                 status__in=PLAYER_ONGOING_MISSION_STATUSES,
             )
-            .select_related("mission_template", "requester", "opponent")
+            .select_related("mission_template", "opponent_mission_template", "requester", "opponent")
             .order_by("-created_at")
             .first()
         )
@@ -385,7 +419,7 @@ def direct_chat(request, user_id):
     if is_admin_replying_to_user:
         latest_user_mission = (
             MissionSession.objects.filter(Q(requester=other_user) | Q(opponent=other_user))
-            .select_related("mission_template", "opponent", "requester")
+            .select_related("mission_template", "opponent_mission_template", "opponent", "requester")
             .order_by("-created_at")
             .first()
         )
@@ -465,25 +499,184 @@ def direct_chat_history(request, user_id):
     )
     history_items.reverse()
 
+    def _message_payload(item):
+        media_url = item.media_file.url if item.media_file else ""
+        return {
+            "type": "message",
+            "message_id": item.id,
+            "client_id": item.client_id,
+            "body": item.body,
+            "sender": item.sender.username,
+            "sender_id": item.sender_id,
+            "recipient_id": item.recipient_id,
+            "created_at": item.created_at.isoformat(),
+            "delivery_status": 2
+            if item.read_at
+            else (1 if item.sender_id == request.user.id else 0),
+            "media_url": media_url,
+            "media_type": item.media_type,
+            "media_name": item.media_name,
+        }
+
     return JsonResponse(
         {
             "presence": _presence_snapshot(other_user.id),
-            "messages": [
+            "messages": [_message_payload(item) for item in history_items]
+        }
+    )
+
+
+def _record_direct_media_contact(sender, recipient, is_user_contacting_admin, is_admin_replying_to_user, is_peer_chat):
+    if is_user_contacting_admin:
+        thread, created = AdminChatThread.objects.get_or_create(
+            admin=recipient,
+            user=sender,
+            defaults={"unread_count": 1, "last_contact_at": timezone.now()},
+        )
+        if not created:
+            AdminChatThread.objects.filter(pk=thread.pk).update(
+                unread_count=F("unread_count") + 1,
+                last_contact_at=timezone.now(),
+            )
+        Notification.objects.create(
+            user=recipient,
+            message=f"{sender.username} sent you an admin chat media message.",
+        )
+        return admin_counts_payload(recipient)
+
+    if is_admin_replying_to_user:
+        thread, created = AdminChatThread.objects.get_or_create(
+            admin=sender,
+            user=recipient,
+            defaults={"user_unread_count": 1, "last_contact_at": timezone.now()},
+        )
+        if not created:
+            AdminChatThread.objects.filter(pk=thread.pk).update(
+                user_unread_count=F("user_unread_count") + 1,
+                last_contact_at=timezone.now(),
+            )
+        Notification.objects.create(
+            user=recipient,
+            message="Admin sent you a contact media message.",
+        )
+        return None
+
+    if is_peer_chat:
+        thread, created = PeerChatThread.get_or_create_for_users(sender, recipient)
+        update_fields = {"last_contact_at": timezone.now()}
+        if recipient.id == thread.user_one_id:
+            update_fields["unread_count_user_one"] = F("unread_count_user_one") + 1
+        else:
+            update_fields["unread_count_user_two"] = F("unread_count_user_two") + 1
+
+        if created:
+            for field_name, value in update_fields.items():
+                setattr(thread, field_name, 1 if field_name.startswith("unread") else value)
+            thread.save(update_fields=list(update_fields.keys()))
+        else:
+            PeerChatThread.objects.filter(pk=thread.pk).update(**update_fields)
+        Notification.objects.create(
+            user=recipient,
+            message=f"{sender.username} sent you a media message.",
+        )
+    return None
+
+
+@login_required
+@require_POST
+def direct_chat_media_upload(request, user_id):
+    other_user = get_object_or_404(
+        CustomUser.objects.exclude(id=request.user.id)
+        .exclude(is_suspended_by_admin=True)
+        .filter(is_active=True),
+        id=user_id,
+    )
+    is_user_contacting_admin = other_user.is_admin() and not request.user.is_admin()
+    is_admin_replying_to_user = request.user.is_admin() and not other_user.is_admin()
+    is_peer_chat = (
+        not request.user.is_admin()
+        and not other_user.is_admin()
+        and users_can_peer_chat(request.user, other_user)
+    )
+    if not (is_user_contacting_admin or is_admin_replying_to_user or is_peer_chat):
+        return HttpResponseForbidden()
+
+    upload = request.FILES.get("media")
+    if not upload:
+        return JsonResponse({"status": "error", "message": "Choose a file to share."}, status=400)
+    if upload.size > 10 * 1024 * 1024:
+        return JsonResponse({"status": "error", "message": "Media must be 10MB or smaller."}, status=400)
+
+    content_type = (upload.content_type or "").lower()
+    extension = Path(upload.name or "").suffix.lower()
+    if content_type.startswith("image/"):
+        media_type = "image"
+        allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+    elif content_type.startswith("audio/"):
+        media_type = "audio"
+        allowed_extensions = {".mp3", ".m4a", ".aac", ".wav", ".ogg", ".webm"}
+    elif content_type.startswith("video/"):
+        media_type = "video"
+        allowed_extensions = {".mp4", ".webm", ".mov", ".m4v"}
+    elif content_type in {"application/pdf", "text/plain"}:
+        media_type = "file"
+        allowed_extensions = {".pdf", ".txt"}
+    else:
+        return JsonResponse({"status": "error", "message": "Unsupported media type."}, status=400)
+    if extension not in allowed_extensions:
+        return JsonResponse({"status": "error", "message": "File extension does not match a supported media type."}, status=400)
+
+    message = DirectChatMessage.objects.create(
+        sender=request.user,
+        recipient=other_user,
+        body=(request.POST.get("body") or "").strip()[:2000],
+        media_file=upload,
+        media_type=media_type,
+        media_name=upload.name[:160],
+    )
+    admin_counts = _record_direct_media_contact(
+        request.user,
+        other_user,
+        is_user_contacting_admin,
+        is_admin_replying_to_user,
+        is_peer_chat,
+    )
+    payload = {
+        "type": "message",
+        "message_id": message.id,
+        "client_id": message.client_id,
+        "body": message.body,
+        "sender": request.user.username,
+        "sender_id": request.user.id,
+        "recipient_id": other_user.id,
+        "created_at": message.created_at.isoformat(),
+        "delivery_status": 1,
+        "media_url": message.media_file.url,
+        "media_type": message.media_type,
+        "media_name": message.media_name,
+    }
+    channel_layer = get_channel_layer()
+    if channel_layer:
+        user_ids = sorted([request.user.id, other_user.id])
+        async_to_sync(channel_layer.group_send)(
+            f"direct_chat_{user_ids[0]}_{user_ids[1]}",
+            {"type": "direct.message", "message": payload},
+        )
+        if admin_counts:
+            async_to_sync(channel_layer.group_send)(
+                user_events_group(other_user.id),
                 {
-                    "type": "message",
-                    "message_id": item.id,
-                    "client_id": item.client_id,
-                    "body": item.body,
-                    "sender": item.sender.username,
-                    "sender_id": item.sender_id,
-                    "recipient_id": item.recipient_id,
-                    "created_at": item.created_at.isoformat(),
-                    "delivery_status": 2
-                    if item.read_at
-                    else (1 if item.sender_id == request.user.id else 0),
-                }
-                for item in history_items
-            ]
+                    "type": "user.event",
+                    "event": {
+                        "type": "admin_counts",
+                        **admin_counts,
+                    },
+                },
+            )
+    return JsonResponse(
+        {
+            "status": "ok",
+            "message": payload,
         }
     )
 
@@ -604,6 +797,7 @@ def admin_inbox(request):
             "pending_mission_requests": pending_mission_requests,
             "pending_mission_rows": pending_mission_rows,
             "online_players": online_players,
+            "admin_start_players": _admin_start_mission_player_rows(),
             "active_mission_templates": active_mission_templates,
             "policy_review_route_mode": mode,
             "policy_review_route_mode_label": mode_label_map.get(mode, "Alternate"),
@@ -618,7 +812,7 @@ def admin_assign_mission_opponent(request, mission_id):
         return HttpResponseForbidden()
 
     mission = get_object_or_404(
-        MissionSession.objects.select_related("requester", "opponent", "mission_template"),
+        MissionSession.objects.select_related("requester", "opponent", "mission_template", "opponent_mission_template"),
         pk=mission_id,
     )
     if mission.assigned_admin_id and mission.assigned_admin_id != request.user.id:
@@ -672,6 +866,65 @@ def admin_assign_mission_opponent(request, mission_id):
             f"Mission #{mission.id} matched: {mission.requester.username} "
             f"vs {opponent.username}."
         ),
+    )
+    broadcast_mission_update(mission)
+    broadcast_admin_counts()
+    return redirect(_admin_mission_return(request))
+
+
+@login_required
+@require_POST
+def admin_start_mission(request):
+    if not request.user.is_admin():
+        return HttpResponseForbidden()
+
+    try:
+        requester_id = int(request.POST.get("requester_id"))
+        opponent_id = int(request.POST.get("opponent_id"))
+    except (TypeError, ValueError):
+        messages.error(request, "Choose two valid players.")
+        return redirect(_admin_mission_return(request))
+
+    requester_user = get_object_or_404(
+        CustomUser.objects.exclude(role=Role.ADMIN)
+        .exclude(is_suspended_by_admin=True)
+        .filter(is_active=True),
+        pk=requester_id,
+    )
+    opponent_user = get_object_or_404(
+        CustomUser.objects.exclude(role=Role.ADMIN)
+        .exclude(is_suspended_by_admin=True)
+        .filter(is_active=True),
+        pk=opponent_id,
+    )
+
+    selected_template = None
+    mission_template_raw = request.POST.get("mission_template_id")
+    if mission_template_raw:
+        try:
+            mission_template_id = int(mission_template_raw)
+        except (TypeError, ValueError):
+            messages.error(request, "Choose a valid mission template.")
+            return redirect(_admin_mission_return(request))
+        selected_template = get_object_or_404(
+            MissionTemplate.objects.filter(is_active=True),
+            pk=mission_template_id,
+        )
+
+    try:
+        mission = create_admin_started_mission(
+            admin_user=request.user,
+            requester_user=requester_user,
+            opponent_user=opponent_user,
+            mission_template=selected_template,
+        )
+    except (ValueError, PermissionError) as exc:
+        messages.error(request, str(exc))
+        return redirect(_admin_mission_return(request))
+
+    messages.success(
+        request,
+        f"Mission #{mission.id} started: {requester_user.username} vs {opponent_user.username}.",
     )
     broadcast_mission_update(mission)
     broadcast_admin_counts()
@@ -746,6 +999,7 @@ def admin_mission_control_action(request, mission_id):
         if not mission.ended_at:
             mission.ended_at = timezone.now()
         mission.save(update_fields=["status", "assigned_admin", "assigned_at", "ended_at", "updated_at"])
+        cleanup_mission_chat_media(mission)
         MissionQueueEntry.objects.filter(mission_session=mission).update(
             status=MissionQueueEntry.QueueStatus.CLOSED,
             reason="Cancelled by admin",
@@ -779,6 +1033,7 @@ def admin_mission_control_action(request, mission_id):
             return redirect(_admin_mission_return(request))
 
         mission_id_label = mission.id
+        cleanup_mission_chat_media(mission)
         MissionQueueEntry.objects.filter(mission_session=mission).update(
             status=MissionQueueEntry.QueueStatus.CLOSED,
             reason="Mission record removed by admin",
@@ -825,11 +1080,15 @@ def admin_review_center(request):
         "mission_session__requester",
         "mission_session__opponent",
         "mission_session__mission_template",
+        "mission_session__opponent_mission_template",
     ).order_by("created_at"))
     pending_mission_requests, pending_mission_rows, online_players = _build_pending_mission_rows(request.user)
+    active_mission_templates = list(
+        MissionTemplate.objects.filter(is_active=True).order_by("title")
+    )
     monitored_missions = list(
         MissionSession.objects.filter(status__in=MISSION_MONITOR_STATUSES)
-        .select_related("requester", "opponent", "winner", "loser", "mission_template", "assigned_admin")
+        .select_related("requester", "opponent", "winner", "loser", "mission_template", "opponent_mission_template", "assigned_admin")
         .order_by("-updated_at")[:50]
     )
     for mission in monitored_missions:
@@ -877,9 +1136,12 @@ def admin_review_center(request):
             "pending_mission_rows": pending_mission_rows,
             "monitored_missions": monitored_missions,
             "online_players": online_players,
+            "admin_start_players": _admin_start_mission_player_rows(),
+            "active_mission_templates": active_mission_templates,
             "review_route_filter": route_filter,
             "review_sort_mode": sort_mode,
             "policy_review_route_mode": policy.get("review_route_mode", "alternate"),
+            "mission_timer_minutes": max(1, int(policy.get("mission_timer_seconds", 120)) // 60),
             "route_mode_is_alternate": policy.get("review_route_mode", "alternate") == "alternate",
             "route_mode_is_manual_only": policy.get("review_route_mode", "alternate") == "manual_only",
             "route_mode_is_ai_preferred": policy.get("review_route_mode", "alternate") == "ai_preferred",
@@ -984,6 +1246,24 @@ def admin_review_bulk_token_action(request):
 
 @login_required
 @require_POST
+def admin_mission_timer_update(request):
+    if not request.user.is_admin():
+        return HttpResponseForbidden()
+
+    minutes_raw = request.POST.get("mission_timer_minutes")
+    try:
+        minutes = max(1, min(int(minutes_raw), 60))
+    except (TypeError, ValueError):
+        messages.error(request, "Choose a valid mission timer.")
+        return redirect("chatapp:admin_review_center")
+
+    control = set_mission_timer_seconds(minutes * 60, admin_user=request.user)
+    messages.success(request, f"Mission timer set to {control.mission_timer_seconds // 60} minute(s).")
+    return redirect("chatapp:admin_review_center")
+
+
+@login_required
+@require_POST
 def admin_review_mission_action(request, evidence_id):
     if not request.user.is_admin():
         return HttpResponseForbidden()
@@ -1066,7 +1346,7 @@ def mission_center(request):
 
     mission_sessions = list(
         MissionSession.objects.filter(mission_filter)
-        .select_related("requester", "opponent", "winner", "loser", "mission_template")
+        .select_related("requester", "opponent", "winner", "loser", "mission_template", "opponent_mission_template")
         .order_by("-created_at")[:80]
     )
     active_mission = None
@@ -1205,14 +1485,18 @@ def _mission_payload(mission, viewer=None):
         viewer_role = "admin"
 
     requester_instruction = mission.mission_template.instruction_text if mission.mission_template else None
-    opponent_instruction = "You are part of a secret mission. Chat naturally and respond to your opponent without knowing their objective."
+    opponent_instruction = (
+        mission.opponent_mission_template.instruction_text
+        if mission.opponent_mission_template
+        else "Chat naturally and respond to your opponent without knowing their objective."
+    )
     viewer_instruction = requester_instruction
     instruction_label = "Your Mission"
     if viewer_role == "opponent":
         viewer_instruction = opponent_instruction
-        instruction_label = "Mission Chat"
+        instruction_label = "Your Mission"
     elif viewer_role == "admin":
-        instruction_label = "Mission"
+        instruction_label = "Missions"
 
     return {
         "id": mission.id,
@@ -1222,6 +1506,7 @@ def _mission_payload(mission, viewer=None):
         "viewer_id": viewer_id,
         "viewer_role": viewer_role,
         "mission_template_id": mission.mission_template_id,
+        "opponent_mission_template_id": mission.opponent_mission_template_id,
         "mission_instruction": viewer_instruction,
         "requester_instruction": requester_instruction if viewer_role in {"requester", "admin"} else None,
         "opponent_instruction": opponent_instruction if viewer_role in {"opponent", "admin"} else None,
@@ -1279,7 +1564,7 @@ def mission_request(request):
 @login_required
 def mission_detail(request, mission_id):
     mission = get_object_or_404(
-        MissionSession.objects.select_related("requester", "opponent", "mission_template"),
+        MissionSession.objects.select_related("requester", "opponent", "mission_template", "opponent_mission_template"),
         pk=mission_id,
     )
     if not request.user.is_admin() and request.user.id not in {
@@ -1299,7 +1584,7 @@ def mission_latest(request):
             Q(requester=request.user) | Q(opponent=request.user),
             status__in=PLAYER_ONGOING_MISSION_STATUSES,
         )
-        .select_related("requester", "opponent", "mission_template")
+        .select_related("requester", "opponent", "mission_template", "opponent_mission_template")
         .order_by("-created_at")
         .first()
     )
@@ -1315,7 +1600,7 @@ def mission_latest(request):
 @require_POST
 def mission_action(request, mission_id):
     mission = get_object_or_404(
-        MissionSession.objects.select_related("requester", "opponent", "mission_template"),
+        MissionSession.objects.select_related("requester", "opponent", "mission_template", "opponent_mission_template"),
         pk=mission_id,
     )
     payload = _parse_json_body(request)

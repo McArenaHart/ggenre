@@ -1,45 +1,104 @@
 {% extends "includes/base.html" %}
 {% load static %}
 
-{% block title %}Live Streams{% endblock %}
+{% block title %}Live{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/livestream.css' %}" rel="stylesheet" />
+<link href="{% static 'css/pages/livestream.css' %}?v=20260810b" rel="stylesheet" />
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid livestream-page">
-  <header class="livestream-header">
-    <div>
-      <h1>Live Streams</h1>
-      <p>Watch artists perform live without a third-party streaming API.</p>
+<div class="container-fluid livestream-page livestream-hub">
+  <section class="livestream-hero">
+    <div class="livestream-hero-copy">
+      <span class="livestream-status livestream-status-live">
+        <span class="livestream-onair-dot" aria-hidden="true"></span>
+        Live
+      </span>
+      <h1>Live now</h1>
+      <p>Jump into active artist rooms, watch the broadcast, and chat with everyone in real time.</p>
+      <div class="livestream-hero-stats">
+        <span><b>{{ live_count }}</b> live</span>
+        <span><b>{{ scheduled_count }}</b> scheduled</span>
+      </div>
     </div>
     {% if request.user.is_artist or request.user.is_admin %}
-      <a href="{% url 'livestream:create' %}" class="btn btn-primary">
-        <i class="fas fa-video"></i> Start Stream
+      <a href="{% url 'livestream:create' %}" class="btn btn-primary livestream-hero-action">
+        <i class="fas fa-video" aria-hidden="true"></i> Start a Live
       </a>
     {% endif %}
-  </header>
+  </section>
+
+  {% for stream in streams %}
+    {% if forloop.first %}
+      <section class="livestream-featured">
+        <div class="livestream-featured-stage">
+          <i class="fas fa-broadcast-tower" aria-hidden="true"></i>
+          <span class="livestream-status livestream-status-{{ stream.status }}">{{ stream.get_status_display }}</span>
+        </div>
+        <div class="livestream-featured-copy">
+          <p class="livestream-eyebrow">Featured room</p>
+          <h2>{{ stream.title }}</h2>
+          <p>{{ stream.description|default:"The host is ready to go live."|truncatechars:160 }}</p>
+          <div class="livestream-meta">
+            <span><i class="fas fa-user" aria-hidden="true"></i> {{ stream.host.username }}</span>
+            {% if stream.scheduled_for %}
+              <span><i class="far fa-clock" aria-hidden="true"></i> {{ stream.scheduled_for|date:"M d, H:i" }}</span>
+            {% endif %}
+            {% if stream.is_restricted %}
+              <span><i class="fas fa-lock" aria-hidden="true"></i> Restricted</span>
+            {% endif %}
+          </div>
+          <a href="{% url 'livestream:room' stream.stream_key %}" class="btn btn-primary">
+            <i class="fas fa-play" aria-hidden="true"></i> Enter Live Room
+          </a>
+        </div>
+      </section>
+    {% endif %}
+  {% endfor %}
+
+  <section class="livestream-section-head">
+    <div>
+      <h2>Available streams</h2>
+      <p>Only active rooms are shown to fans. Admins can also see scheduled rooms.</p>
+    </div>
+  </section>
 
   <section class="livestream-grid">
     {% for stream in streams %}
-      <article class="livestream-card">
-        <div>
+      <article class="livestream-card livestream-stream-card">
+        <div class="livestream-card-media">
+          <i class="fas fa-video" aria-hidden="true"></i>
           <span class="livestream-status livestream-status-{{ stream.status }}">{{ stream.get_status_display }}</span>
-          {% if stream.is_restricted %}<span class="livestream-status">Restricted</span>{% endif %}
         </div>
-        <h2>{{ stream.title }}</h2>
-        <p>{{ stream.description|default:"No description provided."|truncatechars:120 }}</p>
-        <div class="livestream-meta">
-          <span><i class="fas fa-user"></i> {{ stream.host.username }}</span>
-          {% if stream.scheduled_for %}<span><i class="far fa-clock"></i> {{ stream.scheduled_for|date:"M d, H:i" }}</span>{% endif %}
+        <div class="livestream-card-body">
+          <h2>{{ stream.title }}</h2>
+          <p>{{ stream.description|default:"No description provided."|truncatechars:120 }}</p>
+          <div class="livestream-meta">
+            <span><i class="fas fa-user" aria-hidden="true"></i> {{ stream.host.username }}</span>
+            {% if stream.scheduled_for %}
+              <span><i class="far fa-clock" aria-hidden="true"></i> {{ stream.scheduled_for|date:"M d, H:i" }}</span>
+            {% endif %}
+            {% if stream.is_restricted %}
+              <span><i class="fas fa-lock" aria-hidden="true"></i> Restricted</span>
+            {% endif %}
+          </div>
+          <a href="{% url 'livestream:room' stream.stream_key %}" class="btn btn-outline-primary btn-sm">
+            Open Stream
+          </a>
         </div>
-        <a href="{% url 'livestream:room' stream.stream_key %}" class="btn btn-outline-primary btn-sm">
-          Open Stream
-        </a>
       </article>
     {% empty %}
-      <div class="app-empty">No streams are live right now.</div>
+      <div class="livestream-empty">
+        <i class="fas fa-broadcast-tower" aria-hidden="true"></i>
+        <h2>No one is live right now</h2>
+        <p>When an artist starts broadcasting, the room will appear here immediately after it goes live.</p>
+        {% if request.user.is_artist or request.user.is_admin %}
+          <a href="{% url 'livestream:create' %}" class="btn btn-primary">
+            <i class="fas fa-video" aria-hidden="true"></i> Start a Live
+          </a>
+        {% endif %}
+      </div>
     {% endfor %}
   </section>
 </div>

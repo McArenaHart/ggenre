@@ -1,61 +1,31 @@
 (function () {
   "use strict";
 
-  const STANDARD_EMOJIS = [
-    "\u{1F600}",
-    "\u{1F602}",
-    "\u{1F60A}",
-    "\u{1F60D}",
-    "\u{1F618}",
-    "\u{1F970}",
-    "\u{1F923}",
-    "\u{1F609}",
-    "\u{1F914}",
-    "\u{1F92F}",
-    "\u{1F44D}",
-    "\u{1F44E}",
-    "\u{1F64F}",
-    "\u{1F44F}",
-    "\u{1F91D}",
-    "\u{1F4AA}",
-    "\u{1F525}",
-    "\u{1F389}",
-    "\u{1F3C6}",
-    "\u2764\uFE0F",
-    "\u{1F499}",
-    "\u{1F49C}",
-    "\u{1F48B}",
-    "\u{1F3B5}",
-    "\u{1F3B6}",
-    "\u{1F3A4}",
-    "\u{1F3A7}",
-    "\u{1F941}",
-    "\u{1F3B8}",
-    "\u2B50",
-    "\u2728",
-    "\u{1F60E}",
-    "\u{1F622}",
-    "\u{1F62E}",
-    "\u{1F621}",
-    "\u{1F92B}",
-    "\u{1F633}",
-    "\u{1F64C}",
-    "\u{1F4AF}",
-    "\u2705",
-    "\u274C",
-    "\u{1F440}",
-    "\u{1F4A1}",
-    "\u{1F4AC}",
-    "\u{1F680}",
-    "\u{1F451}",
-    "\u{1F48E}",
-    "\u{1F37F}",
-    "\u{1F3AC}",
-    "\u{1F4F8}",
-    "\u{1F3AF}",
-    "\u{1F48C}",
-    "\u{1F44B}",
-  ];
+  const STANDARD_EMOJI_CATEGORIES = {
+    reactions: ["\u{1F600}", "\u{1F603}", "\u{1F604}", "\u{1F601}", "\u{1F606}", "\u{1F605}", "\u{1F602}", "\u{1F923}", "\u{1F60A}", "\u{1F642}", "\u{1F643}", "\u{1F609}", "\u{1F60C}", "\u{1F60D}", "\u{1F970}", "\u{1F618}", "\u{1F617}", "\u{1F619}", "\u{1F61A}", "\u{1F60B}", "\u{1F61B}", "\u{1F61C}", "\u{1F92A}", "\u{1F61D}", "\u{1F92D}", "\u{1F92B}", "\u{1F914}", "\u{1FAE1}", "\u{1F928}", "\u{1F610}", "\u{1F611}", "\u{1F636}", "\u{1FAE0}", "\u{1F644}", "\u{1F60F}", "\u{1F612}", "\u{1F62C}", "\u{1F62E}", "\u{1F62F}", "\u{1F632}", "\u{1F633}", "\u{1F97A}", "\u{1F979}", "\u{1F622}", "\u{1F62D}", "\u{1F624}", "\u{1F620}", "\u{1F621}", "\u{1F92F}", "\u{1F631}", "\u{1F628}", "\u{1F630}", "\u{1F634}", "\u{1F971}", "\u{1F924}", "\u{1F913}", "\u{1F60E}", "\u{1F973}", "\u{1F929}", "\u{1F920}", "\u{1F9D0}", "\u{1F607}", "\u{1F917}", "\u{1FAE3}", "\u{1FAE5}", "\u{1F910}", "\u{1F648}", "\u{1F649}", "\u{1F64A}", "\u{1F926}", "\u{1F937}", "\u{1F480}"],
+    affection: ["\u2764\uFE0F", "\u{1FA77}", "\u{1F9E1}", "\u{1F49B}", "\u{1F49A}", "\u{1FA75}", "\u{1F499}", "\u{1F49C}", "\u{1F90E}", "\u{1F5A4}", "\u{1F90D}", "\u{1F496}", "\u{1F497}", "\u{1F493}", "\u{1F49E}", "\u{1F495}", "\u{1F498}", "\u{1F49D}", "\u{1F49F}", "\u2764\uFE0F\u200D\u{1F525}", "\u2764\uFE0F\u200D\u{1FA79}", "\u2763\uFE0F"],
+    chemistry: ["\u{1F440}", "\u2728", "\u{1F4AB}", "\u{1F525}", "\u{1F339}", "\u{1F98B}", "\u{1F48C}", "\u{1F48B}"],
+    gestures: ["\u{1F44D}", "\u{1F44E}", "\u{1F44C}", "\u270C\uFE0F", "\u{1F91E}", "\u{1F91F}", "\u{1F918}", "\u{1F919}", "\u{1F44B}", "\u{1F44F}", "\u{1F64C}", "\u{1F450}", "\u{1F932}", "\u{1F91D}", "\u{1F64F}", "\u{1F4AA}", "\u{1FAF6}", "\u{1F449}", "\u{1F448}", "\u261D\uFE0F", "\u{1F447}", "\u{1F446}", "\u270B", "\u{1F91A}", "\u{1F590}\uFE0F", "\u{1FAF5}", "\u{1F90C}"],
+    celebration: ["\u2B50", "\u{1F31F}", "\u26A1", "\u{1F389}", "\u{1F38A}", "\u{1F3C6}", "\u{1F947}", "\u{1F4AF}", "\u{1F680}", "\u{1F4A5}", "\u{1F3AF}", "\u{1F48E}", "\u{1F451}", "\u2705", "\u274C", "\u2714\uFE0F", "\u2757", "\u2753"],
+    music: ["\u{1F3B5}", "\u{1F3B6}", "\u{1F3A7}", "\u{1F3A4}", "\u{1F399}\uFE0F", "\u{1F3B8}", "\u{1F3B9}", "\u{1F941}", "\u{1F3B7}", "\u{1F3BA}", "\u{1F3BB}", "\u{1FA95}", "\u{1F4FB}", "\u{1F4BF}"],
+    entertainment: ["\u{1F3AC}", "\u{1F3A5}", "\u{1F37F}", "\u{1F4FA}", "\u{1F3AD}", "\u{1F3AE}", "\u{1F579}\uFE0F", "\u{1F3B2}", "\u265F\uFE0F", "\u{1F0CF}", "\u{1F3A8}", "\u{1F4F8}", "\u{1F4F7}"],
+    food: ["\u{1F355}", "\u{1F354}", "\u{1F35F}", "\u{1F32D}", "\u{1F357}", "\u{1F356}", "\u{1F32E}", "\u{1F32F}", "\u{1F35C}", "\u{1F35D}", "\u{1F363}", "\u{1F35A}", "\u{1F957}", "\u{1F96A}", "\u{1F373}", "\u{1F95E}", "\u{1F9C7}", "\u{1F366}", "\u{1F368}", "\u{1F369}", "\u{1F36A}", "\u{1F382}", "\u{1F370}", "\u{1F36B}", "\u{1F36C}", "\u{1F36D}", "\u{1F353}", "\u{1F349}", "\u{1F34D}", "\u{1F96D}", "\u{1F34E}", "\u2615", "\u{1F9CB}", "\u{1F964}", "\u{1F9C3}", "\u{1F4A7}"],
+    travel: ["\u2708\uFE0F", "\u{1F697}", "\u{1F699}", "\u{1F3CD}\uFE0F", "\u{1F6B2}", "\u{1F686}", "\u{1F682}", "\u{1F6A2}", "\u{1F6F6}", "\u{1F3D5}\uFE0F", "\u{1F3D6}\uFE0F", "\u{1F3DD}\uFE0F", "\u{1F3DC}\uFE0F", "\u{1F3D4}\uFE0F", "\u26F0\uFE0F", "\u{1F30D}", "\u{1F30E}", "\u{1F30F}", "\u{1F5FA}\uFE0F", "\u{1F9F3}", "\u{1F4CD}", "\u{1F305}", "\u{1F304}", "\u{1F303}", "\u{1F306}"],
+    nature: ["\u2600\uFE0F", "\u{1F31E}", "\u{1F324}\uFE0F", "\u26C5", "\u{1F327}\uFE0F", "\u26C8\uFE0F", "\u{1F308}", "\u{1F319}", "\u{1F338}", "\u{1F33A}", "\u{1F33B}", "\u{1F337}", "\u{1F340}", "\u{1F334}", "\u{1F30A}", "\u2744\uFE0F"],
+    sports: ["\u26BD", "\u{1F3C0}", "\u{1F3C8}", "\u26BE", "\u{1F3BE}", "\u{1F3D0}", "\u{1F3C9}", "\u{1F94A}", "\u{1F3CB}\uFE0F", "\u{1F3C3}", "\u{1F6B4}", "\u{1F3CA}", "\u26F9\uFE0F"],
+    ambition: ["\u{1F4BC}", "\u{1F4BB}", "\u{1F5A5}\uFE0F", "\u2328\uFE0F", "\u{1F4F1}", "\u{1F4CA}", "\u{1F4C8}", "\u{1F4C9}", "\u{1F4A1}", "\u{1F9E0}", "\u{1F4B0}", "\u{1F4B5}", "\u{1F4B8}", "\u{1F4DA}", "\u270D\uFE0F", "\u{1F4DD}"],
+    conversation: ["\u{1F4AC}", "\u{1F5E8}\uFE0F", "\u{1F4AD}", "\u2754", "\u2755", "\u2049\uFE0F", "\u203C\uFE0F", "\u{1F4D6}"],
+    social: ["\u{1F46F}", "\u{1F5E3}\uFE0F"],
+    cute: ["\u263A\uFE0F", "\u{1F43B}", "\u{1F43C}", "\u{1F436}", "\u{1F431}"],
+    animals: ["\u{1F42D}", "\u{1F439}", "\u{1F430}", "\u{1F98A}", "\u{1F428}", "\u{1F42F}", "\u{1F981}", "\u{1F438}", "\u{1F435}", "\u{1F427}", "\u{1F426}", "\u{1F41D}", "\u{1F422}", "\u{1F42C}"],
+  };
+  const STANDARD_EMOJIS = Array.from(
+    new Set(
+      Object.keys(STANDARD_EMOJI_CATEGORIES).reduce(function (allEmojis, categoryName) {
+        return allEmojis.concat(STANDARD_EMOJI_CATEGORIES[categoryName]);
+      }, [])
+    )
+  );
   const DEFAULT_MESSAGE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
   const FLOATING_CHAT_OPEN_STORAGE_KEY = "ggenre:floating-chat-open";
   const initializedChatRoots = new WeakMap();
@@ -214,6 +184,7 @@
     const currentUser = root.getAttribute("data-current-user") || "";
     const otherUser = root.getAttribute("data-other-user") || "them";
     const historyUrl = root.getAttribute("data-chat-history-url") || "";
+    const mediaUploadUrl = root.getAttribute("data-media-upload-url") || "";
     const messages = root.querySelector("[data-chat-messages]");
     const form = root.querySelector("[data-chat-form]");
     const input = root.querySelector("[data-chat-input]");
@@ -244,6 +215,36 @@
 
     const sendButton = form.querySelector("button[type='submit']");
     initEmojiPicker(form, input);
+    let mediaInput = null;
+    if (mediaUploadUrl && !form.querySelector("[data-chat-media-input]")) {
+      const mediaWrapper = document.createElement("span");
+      mediaWrapper.className = "chat-media-picker";
+      const mediaButton = document.createElement("button");
+      mediaButton.type = "button";
+      mediaButton.className = "btn btn-outline-primary chat-media-toggle";
+      mediaButton.setAttribute("aria-label", "Share media: images, audio, video, PDF, or text files");
+      mediaButton.setAttribute("aria-describedby", "chat-media-hint-" + otherUserId);
+      mediaButton.innerHTML = '<i class="fas fa-paperclip" aria-hidden="true"></i>';
+      const mediaHint = document.createElement("span");
+      mediaHint.className = "chat-media-hint";
+      mediaHint.id = "chat-media-hint-" + otherUserId;
+      mediaHint.setAttribute("role", "tooltip");
+      mediaHint.textContent = "Images, audio, video, PDF, text";
+      mediaInput = document.createElement("input");
+      mediaInput.type = "file";
+      mediaInput.hidden = true;
+      mediaInput.setAttribute("data-chat-media-input", "");
+      mediaInput.accept = "image/*,audio/*,video/*,application/pdf,text/plain";
+      mediaButton.addEventListener("click", function () {
+        mediaInput.click();
+      });
+      mediaWrapper.appendChild(mediaButton);
+      mediaWrapper.appendChild(mediaHint);
+      form.insertBefore(mediaWrapper, input);
+      form.appendChild(mediaInput);
+    } else {
+      mediaInput = form.querySelector("[data-chat-media-input]");
+    }
 
     root.setAttribute("data-chat-initialized", "1");
 
@@ -461,15 +462,227 @@
 
     function storeMessage(message) {
       const stored = loadStoredMessages();
-      const existing = message.client_id ? stored.find(function (item) {
-        return item.client_id === message.client_id;
-      }) : null;
+      const persistentMessageId = String(message.message_id || "");
+      const existing = stored.find(function (item) {
+        if (message.client_id && item.client_id === message.client_id) {
+          return true;
+        }
+        return persistentMessageId && String(item.message_id || "") === persistentMessageId;
+      });
       if (existing) {
         Object.assign(existing, message);
       } else {
         stored.push(message);
       }
       saveStoredMessages(stored);
+    }
+
+    function safeMediaType(type) {
+      const normalized = String(type || "").toLowerCase();
+      return ["image", "audio", "video", "file"].indexOf(normalized) >= 0 ? normalized : "file";
+    }
+
+    function safeMediaUrl(url) {
+      const raw = String(url || "");
+      if (!raw) {
+        return "";
+      }
+      try {
+        const parsed = new URL(raw, window.location.origin);
+        if (["http:", "https:"].indexOf(parsed.protocol) < 0) {
+          return "";
+        }
+        if (parsed.origin !== window.location.origin) {
+          return "";
+        }
+        return parsed.href;
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function mediaTypeLabel(type) {
+      if (type === "image") {
+        return "Image";
+      }
+      if (type === "audio") {
+        return "Audio";
+      }
+      if (type === "video") {
+        return "Video";
+      }
+      return "File";
+    }
+
+    function mediaTypeIcon(type) {
+      if (type === "image") {
+        return "fa-image";
+      }
+      if (type === "audio") {
+        return "fa-volume-up";
+      }
+      if (type === "video") {
+        return "fa-play";
+      }
+      return "fa-file-alt";
+    }
+
+    function closeMediaViewer(viewer) {
+      if (!viewer) {
+        return;
+      }
+      viewer.querySelectorAll("audio, video").forEach(function (player) {
+        player.pause();
+        player.removeAttribute("src");
+        player.load();
+      });
+      viewer.remove();
+    }
+
+    function openMediaViewer(media) {
+      const type = safeMediaType(media.type);
+      const url = safeMediaUrl(media.url);
+      if (!url) {
+        return;
+      }
+      const name = String(media.name || mediaTypeLabel(type));
+      closeMediaViewer(document.querySelector("[data-chat-media-viewer]"));
+
+      const overlay = document.createElement("div");
+      overlay.className = "chat-media-viewer";
+      overlay.setAttribute("data-chat-media-viewer", "");
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-label", "Media viewer");
+
+      const dialog = document.createElement("div");
+      dialog.className = "chat-media-viewer-dialog";
+      const header = document.createElement("header");
+      header.className = "chat-media-viewer-header";
+      const title = document.createElement("div");
+      const titleStrong = document.createElement("strong");
+      titleStrong.textContent = name;
+      const titleSpan = document.createElement("span");
+      titleSpan.textContent = mediaTypeLabel(type);
+      title.appendChild(titleStrong);
+      title.appendChild(titleSpan);
+      const closeButton = document.createElement("button");
+      closeButton.type = "button";
+      closeButton.className = "btn btn-outline-primary chat-media-viewer-close";
+      closeButton.setAttribute("aria-label", "Close media viewer");
+      closeButton.innerHTML = '<i class="fas fa-times" aria-hidden="true"></i>';
+      header.appendChild(title);
+      header.appendChild(closeButton);
+
+      const body = document.createElement("div");
+      body.className = "chat-media-viewer-body";
+      if (type === "image") {
+        const image = document.createElement("img");
+        image.src = url;
+        image.alt = name;
+        body.appendChild(image);
+      } else if (type === "audio") {
+        const audio = document.createElement("audio");
+        audio.controls = true;
+        audio.preload = "metadata";
+        audio.src = url;
+        body.appendChild(audio);
+      } else if (type === "video") {
+        const video = document.createElement("video");
+        video.controls = true;
+        video.playsInline = true;
+        video.preload = "metadata";
+        video.src = url;
+        body.appendChild(video);
+      } else {
+        const fileBox = document.createElement("div");
+        fileBox.className = "chat-media-viewer-file";
+        const icon = document.createElement("i");
+        icon.className = "fas fa-file-alt";
+        icon.setAttribute("aria-hidden", "true");
+        const fileName = document.createElement("strong");
+        fileName.textContent = name;
+        const note = document.createElement("span");
+        note.textContent = "Preview is limited for this file type.";
+        const openLink = document.createElement("a");
+        openLink.className = "btn btn-primary btn-sm";
+        openLink.href = url;
+        openLink.target = "_blank";
+        openLink.rel = "noopener";
+        openLink.textContent = "Open file";
+        const frame = document.createElement("iframe");
+        frame.className = "chat-media-viewer-frame";
+        frame.src = url;
+        frame.title = name;
+        frame.setAttribute("sandbox", "");
+        fileBox.appendChild(icon);
+        fileBox.appendChild(fileName);
+        fileBox.appendChild(note);
+        fileBox.appendChild(frame);
+        fileBox.appendChild(openLink);
+        body.appendChild(fileBox);
+      }
+
+      dialog.appendChild(header);
+      dialog.appendChild(body);
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+      closeButton.focus();
+
+      closeButton.addEventListener("click", function () {
+        closeMediaViewer(overlay);
+      });
+      overlay.addEventListener("click", function (event) {
+        if (event.target === overlay) {
+          closeMediaViewer(overlay);
+        }
+      });
+      document.addEventListener("keydown", function handleEscape(event) {
+        if (event.key === "Escape") {
+          closeMediaViewer(overlay);
+          document.removeEventListener("keydown", handleEscape);
+        }
+      });
+    }
+
+    function createMediaPreview(message) {
+      const type = safeMediaType(message.media_type);
+      const url = safeMediaUrl(message.media_url);
+      if (!url) {
+        return null;
+      }
+      const name = String(message.media_name || mediaTypeLabel(type));
+      const mediaWrap = document.createElement("div");
+      mediaWrap.className = "chat-message-media";
+      const openButton = document.createElement("button");
+      openButton.type = "button";
+      openButton.className = "chat-media-open";
+      openButton.setAttribute("data-media-url", url);
+      openButton.setAttribute("aria-label", "Open " + mediaTypeLabel(type).toLowerCase() + ": " + name);
+
+      const iconWrap = document.createElement("span");
+      iconWrap.className = "chat-media-open-icon";
+      const icon = document.createElement("i");
+      icon.className = "fas " + mediaTypeIcon(type);
+      icon.setAttribute("aria-hidden", "true");
+      iconWrap.appendChild(icon);
+
+      const label = document.createElement("span");
+      label.className = "chat-media-open-label";
+      const labelStrong = document.createElement("strong");
+      labelStrong.textContent = name;
+      const labelSpan = document.createElement("span");
+      labelSpan.textContent = "Tap to open " + mediaTypeLabel(type).toLowerCase();
+      label.appendChild(labelStrong);
+      label.appendChild(labelSpan);
+
+      openButton.appendChild(iconWrap);
+      openButton.appendChild(label);
+      openButton.addEventListener("click", function () {
+        openMediaViewer({ type: type, url: url, name: name });
+      });
+      mediaWrap.appendChild(openButton);
+      return mediaWrap;
     }
 
     function addMessage(message) {
@@ -481,6 +694,27 @@
       }
       if (!existingItem && persistentMessageId) {
         existingItem = messages.querySelector('[data-message-id="' + persistentMessageId + '"]');
+      }
+      if (existingItem) {
+        const existingHasMedia = Boolean(existingItem.querySelector(".chat-message-media"));
+        const nextHasMedia = Boolean(message.media_url);
+        if (existingHasMedia !== nextHasMedia) {
+          existingItem.remove();
+        } else {
+          const existingMediaButton = existingItem.querySelector(".chat-media-open");
+          const existingMediaUrl = existingMediaButton ? existingMediaButton.getAttribute("data-media-url") || "" : "";
+          if (existingMediaUrl && message.media_url && existingMediaUrl !== safeMediaUrl(message.media_url)) {
+            existingItem.remove();
+          } else {
+            if (messageId) {
+              updateDeliveryStatus(messageId, Number(message.delivery_status || 1));
+            }
+            return;
+          }
+        }
+      }
+      if (existingItem && !document.body.contains(existingItem)) {
+        existingItem = null;
       }
       if (existingItem) {
         if (messageId) {
@@ -503,6 +737,10 @@
 
       const body = document.createElement("p");
       body.textContent = message.body || "";
+      const mediaWrap = message.media_url ? createMediaPreview(message) : null;
+      if (mediaWrap) {
+        item.appendChild(mediaWrap);
+      }
 
       const meta = document.createElement("span");
       meta.className = "chat-message-meta";
@@ -519,10 +757,60 @@
         meta.appendChild(delivery);
       }
 
-      item.appendChild(body);
+      if (message.body) {
+        item.appendChild(body);
+      }
       item.appendChild(meta);
       messages.appendChild(item);
       scrollToBottom();
+    }
+
+    function uploadMedia(file) {
+      if (!file || !mediaUploadUrl) {
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setConnectionStatus("Media must be 10MB or smaller", "closed");
+        return;
+      }
+      const formData = new FormData();
+      formData.append("media", file);
+      formData.append("body", input.value.trim());
+      setCanSend(false);
+      fetch(mediaUploadUrl, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "X-CSRFToken": getCookie("csrftoken"),
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        body: formData,
+      })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            if (!response.ok) {
+              throw new Error(data.message || "Media upload failed.");
+            }
+            return data;
+          });
+        })
+        .then(function (data) {
+          if (data.message) {
+            addMessage(data.message);
+            storeMessage(data.message);
+            input.value = "";
+          }
+          setConnectionStatus(socketReady ? "Connected" : "Connecting", socketReady ? "connected" : "pending");
+        })
+        .catch(function (error) {
+          setConnectionStatus(error.message || "Media upload failed", "closed");
+        })
+        .finally(function () {
+          setCanSend(socketReady);
+          if (mediaInput) {
+            mediaInput.value = "";
+          }
+        });
     }
 
     function mergeServerHistory(serverMessages) {
@@ -781,6 +1069,12 @@
     if (toggle) {
       toggle.addEventListener("click", function () {
         setWidgetOpen(!root.classList.contains("is-open"));
+      });
+    }
+
+    if (mediaInput) {
+      mediaInput.addEventListener("change", function () {
+        uploadMedia(mediaInput.files && mediaInput.files[0]);
       });
     }
 

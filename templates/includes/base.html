@@ -30,7 +30,7 @@
   <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.carousel.css' %}" />
   <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.theme.css' %}" />
   {% if admin_contact_user and other_user != admin_contact_user %}
-  <link href="{% static 'css/pages/admin-contact-chat.css' %}?v=20260807missionmobile1" rel="stylesheet" />
+  <link href="{% static 'css/pages/admin-contact-chat.css' %}?v=20260810navz1" rel="stylesheet" />
   {% endif %}
   {% block extra_css %}{% endblock %}
 </head>
@@ -430,6 +430,7 @@
   <section class="admin-contact-chat"
     data-direct-chat-user="{% if admin_contact_mission_chat_user %}{{ admin_contact_mission_chat_user.id }}{% else %}{{ admin_contact_user.id }}{% endif %}"
     data-chat-history-url="{% if admin_contact_mission_chat_user %}{% url 'chatapp:direct_history' admin_contact_mission_chat_user.id %}{% else %}{% url 'chatapp:direct_history' admin_contact_user.id %}{% endif %}"
+    data-media-upload-url="{% if admin_contact_mission_chat_user %}{% url 'chatapp:direct_media_upload' admin_contact_mission_chat_user.id %}{% else %}{% url 'chatapp:direct_media_upload' admin_contact_user.id %}{% endif %}"
     data-current-user-id="{{ user.id }}" data-current-user="{{ user.username }}"
     data-other-user="{% if admin_contact_mission_chat_user %}{{ admin_contact_mission_chat_user.username }}{% else %}{{ admin_contact_user.username }}{% endif %}"
     data-chat-widget="{% if admin_contact_mission_chat_user %}mission-chat{% else %}admin-contact{% endif %}"
@@ -495,6 +496,10 @@
           </button>
         </nav>
       </header>
+      <div class="admin-contact-pull-refresh" data-pull-refresh-indicator aria-live="polite">
+        <i class="fas fa-arrow-down" aria-hidden="true"></i>
+        <span>Pull to refresh</span>
+      </div>
       <section class="admin-contact-mission" data-player-mission-panel>
         <div class="admin-contact-mission-head">
           {% if admin_contact_latest_mission %}
@@ -502,24 +507,6 @@
           {% else %}
           <strong>Admin Contact</strong>
           {% endif %}
-          <div class="admin-contact-mission-head-actions">
-            <a href="{% url 'content_list' %}" class="btn btn-outline-primary btn-sm">
-              <i class="fas fa-home" aria-hidden="true"></i>
-              <span>Home</span>
-            </a>
-            <a href="{% url 'chatapp:index' %}" class="btn btn-outline-primary btn-sm">
-              <i class="fas fa-comments" aria-hidden="true"></i>
-              <span>Messages</span>
-            </a>
-            <a href="{% url 'chatapp:mission_center' %}" class="btn btn-primary btn-sm">
-              <i class="fas fa-bullseye" aria-hidden="true"></i>
-              <span>Missions</span>
-            </a>
-            <button type="button" class="btn btn-outline-primary btn-sm" data-mission-refresh-btn>
-              <i class="fas fa-sync-alt" aria-hidden="true"></i>
-              <span>Refresh</span>
-            </button>
-          </div>
         </div>
         <button type="button" class="btn btn-success btn-sm admin-contact-request-mission" data-mission-request-btn>
           <i class="fas fa-bullseye" aria-hidden="true"></i>
@@ -621,8 +608,8 @@
   <script src="{% static 'js/custom.js' %}"></script>
   <script src="{% static 'js/pages/base-shell.js' %}?v=20260807backbutton1"></script>
   {% if admin_contact_user and other_user != admin_contact_user %}
-  <script src="{% static 'js/pages/chatapp.js' %}?v=20260807panelnavclick1"></script>
-  <script src="{% static 'js/pages/chatapp_missions.js' %}?v=20260807secret1"></script>
+  <script src="{% static 'js/pages/chatapp.js' %}?v=20260810mediacacheclean1"></script>
+  <script src="{% static 'js/pages/chatapp_missions.js' %}?v=20260810pullrefresh1"></script>
   {% endif %}
 
   {% block extra_js %}{% endblock %}

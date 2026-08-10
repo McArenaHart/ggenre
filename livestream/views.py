@@ -16,7 +16,16 @@ def stream_list(request):
     )
     if not request.user.is_authenticated or not request.user.is_admin():
         streams = streams.filter(status=LiveStream.STATUS_LIVE)
-    return render(request, "livestream/list.html", {"streams": streams})
+    stream_list = list(streams)
+    return render(
+        request,
+        "livestream/list.html",
+        {
+            "streams": stream_list,
+            "live_count": sum(1 for stream in stream_list if stream.status == LiveStream.STATUS_LIVE),
+            "scheduled_count": sum(1 for stream in stream_list if stream.status == LiveStream.STATUS_SCHEDULED),
+        },
+    )
 
 
 @login_required

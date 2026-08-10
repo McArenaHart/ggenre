@@ -7,6 +7,7 @@ app_name = "chatapp"
 urlpatterns = [
     path("", views.chat_index, name="index"),
     path("admin-inbox/", views.admin_inbox, name="admin_inbox"),
+    path("admin-inbox/missions/start/", views.admin_start_mission, name="admin_start_mission"),
     path(
         "admin-inbox/missions/<int:mission_id>/claim/",
         views.admin_claim_mission_request,
@@ -27,6 +28,11 @@ urlpatterns = [
         "admin-inbox/review-center/route-mode/",
         views.admin_review_route_mode_update,
         name="admin_review_route_mode_update",
+    ),
+    path(
+        "admin-inbox/review-center/mission-timer/",
+        views.admin_mission_timer_update,
+        name="admin_mission_timer_update",
     ),
     path(
         "admin-inbox/review-center/missions/<int:evidence_id>/",
@@ -54,6 +60,7 @@ urlpatterns = [
     path("token-purchases/request/", views.token_purchase_create, name="token_purchase_create"),
     path("token-purchases/<int:request_id>/review/", views.token_purchase_review, name="token_purchase_review"),
     path("rate/<int:user_id>/", views.rate_user, name="rate_user"),
+    path("u/<int:user_id>/media/", views.direct_chat_media_upload, name="direct_media_upload"),
     path("u/<int:user_id>/history/", views.direct_chat_history, name="direct_history"),
     path("u/<int:user_id>/", views.direct_chat, name="direct"),
 ]

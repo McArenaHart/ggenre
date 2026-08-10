@@ -4,36 +4,35 @@
 {% block title %}{{ stream.title }}{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/livestream.css' %}?v=20260615a" rel="stylesheet" />
+<link href="{% static 'css/pages/livestream.css' %}?v=20260810a" rel="stylesheet" />
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid livestream-room" data-stream-key="{{ stream.stream_key }}"
   data-is-host="{% if is_host %}1{% else %}0{% endif %}" data-current-user-id="{{ request.user.id }}"
-  data-current-user="{{ request.user.username }}">
+  data-current-user="{{ request.user.username }}" data-stream-status="{{ stream.status }}"
+  data-stream-started-at="{% if stream.started_at %}{{ stream.started_at|date:'c' }}{% endif %}">
   <header class="livestream-room-header">
-    <div>
+    <div class="livestream-title-block">
+      <div class="livestream-room-kicker">
+        <span class="livestream-status livestream-status-{{ stream.status }}" data-room-status>
+          {{ stream.get_status_display }}
+        </span>
+        {% if stream.is_restricted %}<span class="livestream-status">Restricted</span>{% endif %}
+      </div>
       <h1>{{ stream.title }}</h1>
-      <p>Hosted by {{ stream.host.username }} - {{ stream.get_status_display }}</p>
+      <p>{{ stream.description|default:"Live room" }}</p>
+      <div class="livestream-room-meta">
+        <span><i class="fas fa-user-circle" aria-hidden="true"></i> {{ stream.host.username }}</span>
+        <span><i class="fas fa-eye" aria-hidden="true"></i> <b data-viewer-count>0</b> watching</span>
+        <span><i class="far fa-clock" aria-hidden="true"></i> <b data-live-duration>00:00</b></span>
+      </div>
     </div>
     <div class="livestream-room-actions">
+      <a href="{% url 'livestream:index' %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i> Streams
+      </a>
       {% if is_host %}
-      {% if stream.status != stream.STATUS_LIVE %}
-      <form method="post" action="{% url 'livestream:start' stream.stream_key %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-success">
-          <i class="fas fa-broadcast-tower" aria-hidden="true"></i> Go Live
-        </button>
-      </form>
-      {% endif %}
-      {% if stream.status == stream.STATUS_LIVE %}
-      <form method="post" action="{% url 'livestream:end' stream.stream_key %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger">
-          <i class="fas fa-stop" aria-hidden="true"></i> End
-        </button>
-      </form>
-      {% endif %}
       <a href="{% url 'livestream:manage_access' stream.stream_key %}" class="btn btn-outline-primary">
         <i class="fas fa-lock" aria-hidden="true"></i> Access
       </a>
@@ -43,6 +42,10 @@
 
   <section class="livestream-room-layout">
     <div class="livestream-stage">
+      <div class="livestream-stage-topbar">
+        <span class="livestream-onair-dot" aria-hidden="true"></span>
+        <span data-live-status>Connecting...</span>
+      </div>
       <video data-local-video autoplay playsinline muted></video>
       <video data-remote-video autoplay playsinline></video>
       <div class="livestream-stage-empty" data-stage-empty>
@@ -51,19 +54,69 @@
       </div>
       <div class="livestream-stage-controls">
         {% if is_host %}
-        <button type="button" class="btn btn-primary btn-sm" data-camera-toggle>
-          <i class="fas fa-video" aria-hidden="true"></i> Camera
-        </button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-camera-flip>
-          <i class="fas fa-sync-alt" aria-hidden="true"></i> Flip Camera
-        </button>
+        {% if stream.status != stream.STATUS_LIVE %}
+        <form method="post" action="{% url 'livestream:start' stream.stream_key %}" class="livestream-stage-action-form">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-success btn-sm livestream-control livestream-live-action">
+            <i class="fas fa-broadcast-tower" aria-hidden="true"></i>
+            <span>Go Live</span>
+          </button>
+        </form>
         {% endif %}
-        <span data-live-status>Connecting...</span>
+        {% if stream.status == stream.STATUS_LIVE %}
+        <form method="post" action="{% url 'livestream:end' stream.stream_key %}" class="livestream-stage-action-form">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger btn-sm livestream-control livestream-live-action">
+            <i class="fas fa-stop" aria-hidden="true"></i>
+            <span>End</span>
+          </button>
+        </form>
+        {% endif %}
+        <button type="button" class="btn btn-light btn-sm livestream-control" data-camera-toggle aria-pressed="false"
+          title="Start or stop camera">
+          <i class="fas fa-video" aria-hidden="true"></i>
+          <span>Camera</span>
+        </button>
+        <button type="button" class="btn btn-light btn-sm livestream-control" data-mic-toggle aria-pressed="true"
+          title="Mute or unmute microphone">
+          <i class="fas fa-microphone" aria-hidden="true"></i>
+          <span>Mic</span>
+        </button>
+        <button type="button" class="btn btn-light btn-sm livestream-control" data-camera-flip
+          title="Switch front/back camera">
+          <i class="fas fa-sync-alt" aria-hidden="true"></i>
+          <span>Rotate</span>
+        </button>
+        <button type="button" class="btn btn-light btn-sm livestream-control" data-screen-share aria-pressed="false"
+          title="Share screen">
+          <i class="fas fa-desktop" aria-hidden="true"></i>
+          <span>Screen</span>
+        </button>
+        <select class="form-control form-control-sm livestream-device-select" data-camera-select
+          aria-label="Choose camera">
+          <option value="">Camera</option>
+        </select>
+        <select class="form-control form-control-sm livestream-device-select" data-mic-select
+          aria-label="Choose microphone">
+          <option value="">Microphone</option>
+        </select>
+        {% endif %}
+        <button type="button" class="btn btn-light btn-sm livestream-control" data-fullscreen-toggle
+          title="Fullscreen">
+          <i class="fas fa-expand" aria-hidden="true"></i>
+          <span>Full</span>
+        </button>
       </div>
     </div>
 
     <aside class="livestream-chat">
-      <h2>Live Chat</h2>
+      <div class="livestream-chat-header">
+        <div>
+          <h2>Live Chat</h2>
+          <span data-chat-status>Realtime chat ready</span>
+        </div>
+        <span class="livestream-chat-pill"><i class="fas fa-comments" aria-hidden="true"></i></span>
+      </div>
       <div class="chat-messages livestream-chat-messages" data-chat-messages></div>
       <form class="chat-compose" data-chat-form>
         <input type="text" class="form-control" data-chat-input maxlength="2000" autocomplete="off"
@@ -79,5 +132,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/pages/livestream-room.js' %}?v=20260615a"></script>
+<script src="{% static 'js/pages/livestream-room.js' %}?v=20260810a"></script>
 {% endblock %}

@@ -512,6 +512,259 @@
     }
   }
 
+  function syncAdminChatBadges(unreadCount) {
+    const count = Number(unreadCount) || 0;
+    document.querySelectorAll("[data-admin-chat-badge]").forEach(function (badge) {
+      badge.textContent = String(count);
+      badge.hidden = count <= 0;
+    });
+  }
+
+  function showAdminChatToast(unreadCount, inboxUrl, message) {
+    if (!inboxUrl || (unreadCount <= 0 && !message)) {
+      return;
+    }
+
+    const existing = document.querySelector("[data-admin-chat-toast]");
+    if (existing) {
+      existing.remove();
+    }
+
+    const toast = document.createElement("a");
+    toast.href = inboxUrl;
+    toast.className = "pwa-network-pill is-online";
+    toast.setAttribute("data-admin-chat-toast", "");
+    toast.setAttribute("role", "status");
+    toast.textContent = message || (unreadCount === 1 ? "New admin chat message" : unreadCount + " admin chat messages");
+    document.body.appendChild(toast);
+
+    window.setTimeout(function () {
+      toast.remove();
+    }, 4200);
+  }
+
+  function initAdminChatUnreadPolling() {
+    const body = document.body;
+    if (
+      !body ||
+      body.dataset.authenticated !== "1" ||
+      body.dataset.userRole !== "admin" ||
+      !body.dataset.adminChatUnreadUrl
+    ) {
+      return;
+    }
+
+    const unreadUrl = body.dataset.adminChatUnreadUrl;
+    const inboxUrl = body.dataset.adminChatInboxUrl;
+    const firstBadge = document.querySelector("[data-admin-chat-badge]");
+    let lastCount = Number(firstBadge ? firstBadge.textContent : "0") || 0;
+    let lastMissionRequestCount = Number(body.dataset.adminMissionRequestCount || "0") || 0;
+
+    function pollUnread() {
+      fetch(unreadUrl, { credentials: "include" })
+        .then(function (response) {
+          if (!response.ok) {
+            return null;
+          }
+          return response.json();
+        })
+        .then(function (data) {
+          if (!data) {
+            return;
+          }
+          const nextUnreadCount = Number(data.unread_count) || 0;
+          const nextMissionRequestCount = Number(data.mission_request_count) || 0;
+          const nextCount = Number(data.total_action_count) || (nextUnreadCount + nextMissionRequestCount);
+          syncAdminChatBadges(nextCount);
+          if (nextMissionRequestCount > lastMissionRequestCount) {
+            const added = nextMissionRequestCount - lastMissionRequestCount;
+            showAdminChatToast(
+              nextCount,
+              inboxUrl,
+              added === 1 ? "New mission request" : added + " new mission requests"
+            );
+          } else if (nextCount > lastCount) {
+            showAdminChatToast(nextCount, inboxUrl);
+          }
+          lastCount = nextCount;
+          lastMissionRequestCount = nextMissionRequestCount;
+        })
+        .catch(function () {
+          // Ignore polling failures; the next interval can recover.
+        });
+    }
+
+    pollUnread();
+    window.setInterval(pollUnread, 3000);
+  }
+
+  let floatingChatRefreshPending = false;
+
+  function refreshFloatingChatWidget() {
+    const currentWidget = document.querySelector(".admin-contact-chat");
+    if (!currentWidget || floatingChatRefreshPending) {
+      return;
+    }
+
+    floatingChatRefreshPending = true;
+    const wasOpen = currentWidget.classList.contains("is-open");
+    const url = window.location.pathname + window.location.search;
+    fetch(url, {
+      credentials: "include",
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          return null;
+        }
+        return response.text();
+      })
+      .then(function (html) {
+        if (!html) {
+          return;
+        }
+        const parsed = new DOMParser().parseFromString(html, "text/html");
+        const nextWidget = parsed.querySelector(".admin-contact-chat");
+        if (!nextWidget) {
+          if (typeof window.ggenreDisposeDirectChat === "function") {
+            window.ggenreDisposeDirectChat(currentWidget);
+          }
+          currentWidget.remove();
+          document.body.classList.remove("admin-contact-fullscreen-open");
+          return;
+        }
+        if (typeof window.ggenreDisposeDirectChat === "function") {
+          window.ggenreDisposeDirectChat(currentWidget);
+        }
+        currentWidget.replaceWith(nextWidget);
+        if (wasOpen) {
+          nextWidget.classList.add("is-open");
+          const panel = nextWidget.querySelector("[data-chat-panel]");
+          const toggle = nextWidget.querySelector("[data-chat-toggle]");
+          if (panel) {
+            panel.setAttribute("aria-hidden", "false");
+          }
+          if (toggle) {
+            toggle.setAttribute("aria-expanded", "true");
+          }
+          document.body.classList.add("admin-contact-fullscreen-open");
+        }
+        if (typeof window.ggenreInitDirectChat === "function") {
+          window.ggenreInitDirectChat(nextWidget);
+        }
+        if (typeof window.ggenreInitMissionPanels === "function") {
+          window.ggenreInitMissionPanels(nextWidget);
+        }
+      })
+      .catch(function () {
+        // The mission panel itself still receives mission updates; widget replacement can retry on the next event.
+      })
+      .finally(function () {
+        floatingChatRefreshPending = false;
+      });
+  }
+
+  function navigateActiveMissionChat(data) {
+    if (!data || data.status !== "mission_active") {
+      return;
+    }
+    const body = document.body;
+    const chatPage = document.querySelector(".chat-page[data-direct-chat-user]");
+    if (!body || body.dataset.userRole === "admin" || !chatPage) {
+      return;
+    }
+    const currentUserId = Number(chatPage.getAttribute("data-current-user-id") || "0");
+    const currentChatUserId = Number(chatPage.getAttribute("data-direct-chat-user") || "0");
+    const requesterId = Number(data.requester_id || "0");
+    const opponentId = Number(data.opponent_id || "0");
+    if (!currentUserId || !requesterId || !opponentId) {
+      return;
+    }
+    const missionChatUserId = currentUserId === requesterId ? opponentId : (currentUserId === opponentId ? requesterId : 0);
+    if (!missionChatUserId || currentChatUserId === missionChatUserId) {
+      return;
+    }
+    window.location.href = "/chat/u/" + String(missionChatUserId) + "/";
+  }
+
+  function initUserEventSocket() {
+    const body = document.body;
+    if (!body || body.dataset.authenticated !== "1") {
+      return;
+    }
+
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(protocol + "://" + window.location.host + "/ws/events/");
+
+    socket.addEventListener("message", function (event) {
+      let data = null;
+      try {
+        data = JSON.parse(event.data);
+      } catch (error) {
+        return;
+      }
+      if (!data || !data.type) {
+        return;
+      }
+
+      if (data.type === "admin_counts") {
+        const unreadCount = Number(data.unread_count) || 0;
+        const missionRequestCount = Number(data.mission_request_count) || 0;
+        const totalCount = Number(data.total_action_count) || (unreadCount + missionRequestCount);
+        syncAdminChatBadges(totalCount);
+        window.dispatchEvent(new CustomEvent("ggenre:admin-counts", { detail: data }));
+        if (body.dataset.userRole === "admin") {
+          showAdminChatToast(
+            totalCount,
+            body.dataset.adminChatInboxUrl,
+            missionRequestCount > 0 ? "Admin inbox updated" : ""
+          );
+        }
+        return;
+      }
+
+      if (data.type === "mission_updated") {
+        window.dispatchEvent(new CustomEvent("ggenre:mission-updated", { detail: data }));
+        refreshFloatingChatWidget();
+        navigateActiveMissionChat(data);
+      }
+    });
+  }
+
+  function initFloatingBackButton() {
+    const button = document.querySelector("[data-floating-back]");
+    if (!button) {
+      return;
+    }
+
+    const currentUrl = window.location.pathname + window.location.search;
+    const fallbackUrl = button.getAttribute("data-fallback-url") || "/";
+    const fallbackPath = new URL(fallbackUrl, window.location.origin).pathname;
+    const previousUrl = window.sessionStorage.getItem("app-last-page-url");
+    let hasInternalReferrer = false;
+    try {
+      hasInternalReferrer = Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin;
+    } catch (error) {
+      hasInternalReferrer = false;
+    }
+    const hasShiftedPages = Boolean(previousUrl && previousUrl !== currentUrl) || hasInternalReferrer;
+    const isFallbackPage = window.location.pathname === fallbackPath;
+    if (!isFallbackPage || hasShiftedPages) {
+      button.classList.add("is-visible");
+    }
+    window.sessionStorage.setItem("app-last-page-url", currentUrl);
+
+    button.addEventListener("click", function () {
+      if (window.history.length > 1) {
+        window.history.back();
+        return;
+      }
+      window.location.href = fallbackUrl;
+    });
+  }
+
   applyTheme(resolveTheme());
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -521,5 +774,8 @@
     initInstallFlow();
     initServiceWorker();
     initNetworkStateIndicator();
+    initUserEventSocket();
+    initAdminChatUnreadPolling();
+    initFloatingBackButton();
   });
 })();

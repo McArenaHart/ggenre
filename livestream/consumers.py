@@ -7,6 +7,8 @@ from .models import LiveStream
 
 
 class LiveStreamSignalConsumer(AsyncWebsocketConsumer):
+    stream_peers = {}
+
     async def connect(self):
         self.stream_key = self.scope["url_route"]["kwargs"]["stream_key"]
         self.user = self.scope["user"]
@@ -22,6 +24,10 @@ class LiveStreamSignalConsumer(AsyncWebsocketConsumer):
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
+        self.stream_peers.setdefault(self.group_name, {})[self.channel_name] = {
+            "peer_id": self.peer_id,
+            "is_host": self.is_host,
+        }
         await self.channel_layer.group_send(
             self.group_name,
             {
@@ -32,9 +38,14 @@ class LiveStreamSignalConsumer(AsyncWebsocketConsumer):
                 "sender": self.channel_name,
             },
         )
+        await self.broadcast_viewer_count()
 
     async def disconnect(self, close_code):
         if hasattr(self, "group_name"):
+            peers = self.stream_peers.get(self.group_name, {})
+            peers.pop(self.channel_name, None)
+            if not peers:
+                self.stream_peers.pop(self.group_name, None)
             await self.channel_layer.group_send(
                 self.group_name,
                 {
@@ -46,6 +57,7 @@ class LiveStreamSignalConsumer(AsyncWebsocketConsumer):
                 },
             )
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
+            await self.broadcast_viewer_count()
 
     async def receive(self, text_data=None, bytes_data=None):
         if not text_data:
@@ -98,6 +110,18 @@ class LiveStreamSignalConsumer(AsyncWebsocketConsumer):
                     "payload": event.get("payload"),
                 }
             )
+        )
+
+    async def broadcast_viewer_count(self):
+        peers = self.stream_peers.get(getattr(self, "group_name", ""), {})
+        count = sum(1 for peer in peers.values() if not peer.get("is_host"))
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                "type": "peer.event",
+                "event": "viewer_count",
+                "payload": {"count": count},
+            },
         )
 
     @sync_to_async

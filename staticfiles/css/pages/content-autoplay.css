@@ -1,0 +1,148 @@
+/* Autoplay Toggle Button */
+.watch-autoplay-toggle {
+  color: rgba(232, 238, 252, 0.85);
+}
+
+.watch-autoplay-toggle:hover,
+.watch-autoplay-toggle:focus {
+  border-color: rgba(122, 237, 238, 0.6);
+  background: rgba(122, 237, 238, 0.1);
+  color: var(--gg-neon-cyan);
+}
+
+.watch-autoplay-toggle.autoplay-enabled {
+  background: rgba(122, 237, 238, 0.15);
+  border-color: rgba(122, 237, 238, 0.5);
+  color: var(--gg-neon-cyan);
+}
+
+.watch-autoplay-toggle i {
+  font-size: 1.1em;
+}
+
+.watch-autoplay-toggle [data-autoplay-status] {
+  display: inline-block;
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
+/* Play Next Button */
+.watch-play-next-btn {
+  border: 1px solid rgba(122, 237, 238, 0.6);
+  background: rgba(122, 237, 238, 0.1);
+  color: var(--gg-neon-cyan);
+}
+
+.watch-play-next-btn:hover,
+.watch-play-next-btn:focus {
+  background: rgba(122, 237, 238, 0.2);
+  border-color: rgba(122, 237, 238, 0.8);
+  box-shadow: 0 0 12px rgba(122, 237, 238, 0.4);
+}
+
+.watch-play-next-btn i {
+  font-size: 1rem;
+}
+
+/* Autoplay Countdown Overlay */
+.watch-autoplay-countdown {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  margin: 1.5rem;
+  z-index: 1000;
+  display: none;
+}
+
+.countdown-card {
+  background: linear-gradient(135deg, rgba(16, 26, 47, 0.95), rgba(11, 18, 33, 0.96));
+  border: 1px solid rgba(122, 237, 238, 0.3);
+  border-radius: 12px;
+  padding: 1.2rem;
+  box-shadow: 0 8px 24px rgba(5, 11, 28, 0.6);
+  min-width: 280px;
+  max-width: 380px;
+}
+
+.countdown-card h5 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(232, 238, 252, 0.7);
+}
+
+.countdown-title {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gg-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.countdown-timer {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--gg-neon-cyan);
+  font-family: "Sora", "Segoe UI", monospace;
+}
+
+.countdown-timer span {
+  font-size: 2.5rem;
+}
+
+.countdown-card .btn {
+  width: 100%;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+/* Next-item label only. Card layout/colors live in content-detail.css. */
+.watch-related-card.is-next::before {
+  content: "NEXT";
+  position: absolute;
+  top: 0.42rem;
+  right: 0.45rem;
+  z-index: 1;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #06141e;
+  background: var(--gg-neon-cyan);
+  padding: 0.16rem 0.38rem;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(5, 11, 28, 0.24);
+}
+
+body.app-theme[data-theme="light"] .watch-related-card.is-next::before {
+  color: #ffffff;
+  background: #163978;
+  box-shadow: none;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .watch-autoplay-countdown {
+    margin: 1rem;
+    left: 1rem;
+    right: 1rem;
+    bottom: auto;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .countdown-card {
+    min-width: auto;
+  }
+
+  .watch-autoplay-toggle,
+  .watch-play-next-btn {
+    justify-content: center;
+  }
+}

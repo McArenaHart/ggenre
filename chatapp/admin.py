@@ -90,7 +90,7 @@ class MissionQueueEntryAdmin(admin.ModelAdmin):
 
 @admin.register(MissionReviewControl)
 class MissionReviewControlAdmin(admin.ModelAdmin):
-    list_display = ("id", "route_mode", "reason", "updated_at")
+    list_display = ("id", "route_mode", "mission_timer_seconds", "reason", "updated_at")
     list_filter = ("route_mode", "updated_at")
     search_fields = ("reason",)
     readonly_fields = ("created_at", "updated_at")

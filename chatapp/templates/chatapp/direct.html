@@ -4,7 +4,7 @@
 {% block title %}Chat with {{ other_user.username }}{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/chatapp.css' %}?v=20260807missionmobile1" rel="stylesheet" />
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260810navz1" rel="stylesheet" />
 {% endblock %}
 
 {% block content %}
@@ -15,6 +15,7 @@
   data-mission-request-url="{% url 'chatapp:mission_request' %}"
   data-mission-latest-url="{% url 'chatapp:mission_latest' %}"
   data-mission-detail-template="{% url 'chatapp:mission_detail' 0 %}"
+  data-media-upload-url="{% url 'chatapp:direct_media_upload' other_user.id %}"
   data-token-request-url="{% url 'chatapp:token_purchase_create' %}">
   <header class="chat-header chat-direct-nav">
     {% if request.user.is_admin %}
@@ -335,6 +336,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/pages/chatapp.js' %}?v=20260807panelnavclick1"></script>
-<script src="{% static 'js/pages/chatapp_missions.js' %}?v=20260807secret1"></script>
+<script src="{% static 'js/pages/chatapp.js' %}?v=20260810mediacacheclean1"></script>
+<script src="{% static 'js/pages/chatapp_missions.js' %}?v=20260810pullrefresh1"></script>
 {% endblock %}

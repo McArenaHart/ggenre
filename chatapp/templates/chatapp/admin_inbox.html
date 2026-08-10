@@ -4,7 +4,7 @@
 {% block title %}Admin Chat Inbox{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/chatapp.css' %}?v=20260807missionmobile1" rel="stylesheet" />
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260810mediamissions1" rel="stylesheet" />
 {% endblock %}
 
 {% block extra_js %}
@@ -93,11 +93,14 @@
         <span>{{ thread_count }} total</span>
         <span>{{ total_unread }} unread</span>
       </div>
-      <a href="{% url 'chatapp:admin_review_center' %}" class="btn btn-primary btn-sm">
+      <a href="{% url 'chatapp:admin_review_center' %}#admin-start-mission" class="btn btn-primary btn-sm">
+        Start Mission
+      </a>
+      <a href="{% url 'chatapp:admin_review_center' %}#mission-proof" class="btn btn-outline-primary btn-sm">
         Review Proof
       </a>
       <p class="chat-admin-controls-note">
-        Match players and review submitted proof from the queues below.
+        Start missions manually, match waiting players, and review submitted proof from the queues below.
       </p>
 
       <div class="chat-admin-review-queues">

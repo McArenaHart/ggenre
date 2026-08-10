@@ -4,7 +4,7 @@
 {% block title %}My Mission Center{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/chatapp.css' %}?v=20260807missionmobile1" rel="stylesheet" />
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260810missionmobileux1" rel="stylesheet" />
 {% endblock %}
 
 {% block content %}
@@ -139,10 +139,14 @@
                     </p>
                 </div>
                 <div class="chat-mission-session-brief">
-                    {% if mission.mission_template %}
                     {% if request.user.id == mission.opponent_id %}
-                    <p>You are part of a secret mission. Chat naturally and respond to your opponent without knowing their objective.</p>
+                    {% if mission.opponent_mission_template %}
+                    <p>Your mission: {{ mission.opponent_mission_template.instruction_text }}</p>
+                    {% elif mission.mission_template %}
+                    <p>Your mission: Chat naturally and respond to your opponent without knowing their objective.</p>
+                    {% endif %}
                     {% else %}
+                    {% if mission.mission_template %}
                     <p>Your mission: {{ mission.mission_template.instruction_text }}</p>
                     {% endif %}
                     {% endif %}

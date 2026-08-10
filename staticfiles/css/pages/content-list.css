@@ -28,8 +28,12 @@
 
 .content-card-link {
   display: block;
+  width: 100%;
   height: 100%;
   color: inherit;
+  position: relative;
+  z-index: 10;
+  cursor: pointer;
 }
 
 .content-item {
@@ -66,7 +70,7 @@
 }
 
 .content-item .content-card {
-  --content-card-height: clamp(440px, 56vh, 520px);
+  --content-card-height: clamp(400px, 48vh, 480px);
   height: var(--content-card-height);
   min-height: var(--content-card-height);
   max-height: var(--content-card-height);
@@ -89,10 +93,17 @@
   min-height: 0;
 }
 
+.content-card-media {
+  position: relative;
+  overflow: hidden;
+}
+
+.content-item .content-card:hover .content-card-media {
+  display: block;
+}
+
 .video-container {
   position: relative;
-  height: auto;
-  min-height: 0;
   overflow: hidden;
   background: #0a1022;
 }
@@ -171,13 +182,17 @@
 }
 
 .content-item .content-card-body {
-  flex: 0 0 42%;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
   overflow: hidden;
   padding: 0.95rem 1.05rem 0.5rem !important;
   min-height: 0;
+}
+
+.content-item .content-card:hover .content-card-body {
+  flex: 0 0 42%;
 }
 
 .content-item .content-card-body h5 {

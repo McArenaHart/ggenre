@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
+import tempfile
 from channels.db import database_sync_to_async
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
@@ -529,7 +530,8 @@ class ChatAppTests(TestCase):
         mission.refresh_from_db()
         self.assertEqual(mission.opponent, self.member)
         self.assertEqual(mission.status, MissionSession.Status.OPPONENT_PROPOSED)
-        self.assertIsNone(mission.mission_template)
+        self.assertIsNotNone(mission.mission_template)
+        self.assertIsNotNone(mission.opponent_mission_template)
         self.assertTrue(
             AdminDecisionLog.objects.filter(
                 mission_session=mission,
@@ -643,8 +645,43 @@ class ChatAppTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(MissionTemplate.objects.filter(difficulty=1, category="level_1_warmup").exists())
-        self.assertTrue(MissionTemplate.objects.filter(difficulty=5, category="level_5_bold").exists())
+        self.assertTrue(MissionTemplate.objects.filter(difficulty=1, category="mixed_icebreaker").exists())
+        self.assertTrue(MissionTemplate.objects.filter(difficulty=4, category="mixed_chemistry").exists())
+        self.assertTrue(MissionTemplate.objects.filter(difficulty=5, category="mixed_mutual_interest").exists())
+
+    def test_mission_timer_scales_with_highest_assigned_difficulty(self):
+        green_template = MissionTemplate.objects.create(
+            title="Green Timer Mission",
+            instruction_text="Start with a simple opener.",
+            difficulty=1,
+            is_active=True,
+        )
+        gold_template = MissionTemplate.objects.create(
+            title="Gold Timer Mission",
+            instruction_text="Keep the conversation going naturally.",
+            difficulty=5,
+            is_active=True,
+        )
+        mission = MissionSession.objects.create(
+            requester=self.owner,
+            opponent=self.member,
+            mission_template=green_template,
+            opponent_mission_template=gold_template,
+            status=MissionSession.Status.MISSION_PROPOSED,
+            timer_seconds=120,
+        )
+
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse("chatapp:mission_action", args=[mission.id]),
+            data='{"action": "accept_mission"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        mission.refresh_from_db()
+        self.assertEqual(mission.status, MissionSession.Status.MISSION_ACTIVE)
+        self.assertEqual(mission.timer_seconds, 360)
 
     def test_opponent_cannot_accept_requesters_match(self):
         MissionTemplate.objects.create(
@@ -933,10 +970,84 @@ class ChatAppTests(TestCase):
         self.assertContains(response, "Review Center")
         self.assertContains(response, "total mission")
         self.assertContains(response, "Sort queue")
+        self.assertContains(response, "Mission timer")
+        self.assertContains(response, reverse("chatapp:admin_mission_timer_update"))
+        self.assertContains(response, 'name="mission_timer_minutes"')
         self.assertContains(response, "Start Mission")
+        self.assertContains(response, "Start Mission Manually")
+        self.assertContains(response, reverse("chatapp:admin_start_mission"))
+        self.assertContains(response, 'name="requester_id"')
+        self.assertContains(response, 'name="opponent_id"')
         self.assertContains(response, "Mission Requests")
         self.assertContains(response, "Mission Proof")
         self.assertContains(response, "Token Requests")
+
+    def test_admin_review_center_replaces_chat_proof_placeholder_with_transcript(self):
+        mission = MissionSession.objects.create(
+            requester=self.owner,
+            opponent=self.member,
+            status=MissionSession.Status.PROOF_SUBMITTED,
+        )
+        MissionEvidence.objects.create(
+            mission_session=mission,
+            submitted_by=self.owner,
+            chat_transcript="[2026-08-10 10:00] chat_owner: proof line",
+            review_status=MissionEvidence.ReviewStatus.SUBMITTED,
+        )
+
+        self.client.login(username="chat_admin", password="password123")
+        response = self.client.get(reverse("chatapp:admin_review_center"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Captured mission chat")
+        self.assertContains(response, "proof line")
+        self.assertContains(response, "Transcript below")
+        self.assertNotContains(response, "chat-review-transcript-inset")
+        self.assertNotContains(response, "Chat proof captured")
+
+    def test_admin_can_start_mission_without_player_request(self):
+        template = MissionTemplate.objects.create(
+            title="Admin Started Mission",
+            instruction_text="Start a playful conversation.",
+            opponent_instruction_text="Respond naturally.",
+            is_active=True,
+        )
+
+        self.client.login(username="chat_admin", password="password123")
+        response = self.client.post(
+            reverse("chatapp:admin_start_mission"),
+            data={
+                "requester_id": self.owner.id,
+                "opponent_id": self.member.id,
+                "mission_template_id": template.id,
+                "next": reverse("chatapp:admin_review_center"),
+            },
+        )
+
+        self.assertRedirects(response, reverse("chatapp:admin_review_center"))
+        mission = MissionSession.objects.get(requester=self.owner, opponent=self.member)
+        self.assertEqual(mission.status, MissionSession.Status.OPPONENT_PROPOSED)
+        self.assertEqual(mission.mission_template, template)
+        self.assertTrue(
+            AdminDecisionLog.objects.filter(
+                mission_session=mission,
+                action="admin_started_mission",
+                actor_user=self.admin,
+            ).exists()
+        )
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.owner,
+                message__contains="Admin started a mission",
+            ).exists()
+        )
+        self.assertTrue(
+            MissionQueueEntry.objects.filter(
+                user=self.member,
+                status=MissionQueueEntry.QueueStatus.MATCHED,
+                mission_session=mission,
+            ).exists()
+        )
 
     def test_admin_review_center_shows_mission_requests_for_matching(self):
         mission = MissionSession.objects.create(
@@ -1151,6 +1262,28 @@ class ChatAppTests(TestCase):
         self.assertIsNotNone(control)
         self.assertEqual(control.route_mode, MissionReviewControl.RouteMode.MANUAL_ONLY)
         self.assertContains(response, "Mission review route mode updated to manual_only")
+
+    def test_admin_can_set_global_mission_timer(self):
+        pending_mission = MissionSession.objects.create(
+            requester=self.owner,
+            opponent=self.member,
+            status=MissionSession.Status.MISSION_PROPOSED,
+        )
+
+        self.client.login(username="chat_admin", password="password123")
+        response = self.client.post(
+            reverse("chatapp:admin_mission_timer_update"),
+            {"mission_timer_minutes": "5"},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        control = MissionReviewControl.objects.order_by("-updated_at", "-id").first()
+        self.assertIsNotNone(control)
+        self.assertEqual(control.mission_timer_seconds, 300)
+        pending_mission.refresh_from_db()
+        self.assertEqual(pending_mission.timer_seconds, 300)
+        self.assertContains(response, "Mission timer set to 5 minute(s).")
 
     def test_review_routing_stays_manual_only(self):
         manual_mission = MissionSession.objects.create(
@@ -1395,6 +1528,7 @@ class ChatAppTests(TestCase):
         mission.refresh_from_db()
         self.assertEqual(mission.status, MissionSession.Status.MISSION_PROPOSED)
         self.assertIsNotNone(mission.mission_template)
+        self.assertIsNotNone(mission.opponent_mission_template)
 
         response = self.client.post(
             reverse("chatapp:mission_action", args=[mission.id]),
@@ -1404,6 +1538,8 @@ class ChatAppTests(TestCase):
         self.assertEqual(response.status_code, 200)
         mission.refresh_from_db()
         self.assertEqual(mission.status, MissionSession.Status.MISSION_ACTIVE)
+        expected_timer = 120 + (max(mission.mission_template.difficulty, mission.opponent_mission_template.difficulty) - 1) * 60
+        self.assertEqual(mission.timer_seconds, expected_timer)
 
         response = self.client.post(
             reverse("chatapp:mission_action", args=[mission.id]),
@@ -1518,10 +1654,16 @@ class ChatAppTests(TestCase):
             opponent_instruction_text="Pick the song title that fits their mood best and say why.",
             is_active=True,
         )
+        opponent_template = MissionTemplate.objects.create(
+            title="Question Streak",
+            instruction_text="Get your opponent to ask two follow-up questions naturally.",
+            is_active=True,
+        )
         mission = MissionSession.objects.create(
             requester=self.owner,
             opponent=self.member,
             mission_template=template,
+            opponent_mission_template=opponent_template,
             status=MissionSession.Status.MISSION_PROPOSED,
         )
 
@@ -1539,8 +1681,8 @@ class ChatAppTests(TestCase):
         self.assertNotEqual(opponent_payload["mission_instruction"], template.instruction_text)
         self.assertNotEqual(opponent_payload["mission_instruction"], template.opponent_instruction_text)
         self.assertIsNone(opponent_payload["requester_instruction"])
-        self.assertEqual(opponent_payload["mission_instruction_label"], "Mission Chat")
-        self.assertIn("without knowing their objective", opponent_payload["mission_instruction"])
+        self.assertEqual(opponent_payload["mission_instruction"], opponent_template.instruction_text)
+        self.assertEqual(opponent_payload["mission_instruction_label"], "Your Mission")
 
     def test_peer_chat_renders_active_mission_panel_for_proof_submission(self):
         template = MissionTemplate.objects.create(
@@ -1571,6 +1713,106 @@ class ChatAppTests(TestCase):
         self.assertContains(response, "Mission Chat")
         self.assertContains(response, "data-mission-action=\"submit_proof\"")
         self.assertContains(response, "After review, you can continue chatting from your inbox.")
+
+    def test_direct_chat_media_upload_creates_shareable_message(self):
+        self.create_match(self.owner, self.member)
+        upload = SimpleUploadedFile(
+            "proof.png",
+            b"fake-image-bytes",
+            content_type="image/png",
+        )
+
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse("chatapp:direct_media_upload", args=[self.member.id]),
+            data={"media": upload, "body": "Look at this"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["message"]
+        self.assertEqual(payload["media_type"], "image")
+        self.assertEqual(payload["media_name"], "proof.png")
+        self.assertEqual(payload["body"], "Look at this")
+        message = DirectChatMessage.objects.get(pk=payload["message_id"])
+        self.assertEqual(message.sender, self.owner)
+        self.assertEqual(message.recipient, self.member)
+        self.assertTrue(message.media_file)
+        thread = PeerChatThread.objects.get(user_one=self.owner, user_two=self.member)
+        self.assertEqual(thread.unread_count_for(self.member), 1)
+        self.assertTrue(
+            Notification.objects.filter(user=self.member, message__contains="media message").exists()
+        )
+
+    def test_direct_chat_media_upload_rejects_mismatched_extension(self):
+        self.create_match(self.owner, self.member)
+        upload = SimpleUploadedFile(
+            "proof.exe",
+            b"fake-image-bytes",
+            content_type="image/png",
+        )
+
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse("chatapp:direct_media_upload", args=[self.member.id]),
+            data={"media": upload},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(DirectChatMessage.objects.count(), 0)
+        self.assertIn("extension", response.json()["message"])
+
+    def test_mission_review_cleans_chat_media_but_keeps_text(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                mission_template = MissionTemplate.objects.create(
+                    title="Media Cleanup Mission",
+                    instruction_text="Use chat normally.",
+                    is_active=True,
+                )
+                mission = MissionSession.objects.create(
+                    requester=self.owner,
+                    opponent=self.member,
+                    mission_template=mission_template,
+                    status=MissionSession.Status.PROOF_SUBMITTED,
+                    started_at=timezone.now() - timedelta(minutes=1),
+                )
+                message = DirectChatMessage.objects.create(
+                    sender=self.owner,
+                    recipient=self.member,
+                    body="This text should stay.",
+                    media_file=SimpleUploadedFile(
+                        "mission-photo.png",
+                        b"temporary-mission-media",
+                        content_type="image/png",
+                    ),
+                    media_type="image",
+                    media_name="mission-photo.png",
+                )
+                media_name = message.media_file.name
+                storage = message.media_file.storage
+                self.assertTrue(storage.exists(media_name))
+                evidence = MissionEvidence.objects.create(
+                    mission_session=mission,
+                    submitted_by=self.owner,
+                    explanation="Proof from chat.",
+                    review_status=MissionEvidence.ReviewStatus.SUBMITTED,
+                )
+
+                self.client.force_login(self.admin)
+                with self.captureOnCommitCallbacks(execute=True):
+                    response = self.client.post(
+                        reverse("chatapp:mission_action", args=[mission.id]),
+                        data=f'{{"action": "approve_proof", "evidence_id": {evidence.id}}}',
+                        content_type="application/json",
+                    )
+
+                self.assertEqual(response.status_code, 200)
+                message.refresh_from_db()
+                self.assertEqual(message.body, "This text should stay.")
+                self.assertFalse(message.media_file)
+                self.assertEqual(message.media_type, "")
+                self.assertEqual(message.media_name, "")
+                self.assertFalse(storage.exists(media_name))
 
     def test_mission_submit_proof_supports_multipart_with_screenshot(self):
         MissionTemplate.objects.create(

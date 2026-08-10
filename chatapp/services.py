@@ -29,6 +29,9 @@ from .models import (
 CHAT_ACCESS_DURATION = timedelta(days=1)
 MISSION_AI_REVIEW_CONFIDENCE_THRESHOLD = 0.75
 MISSION_MATCH_REMATCH_COOLDOWN_HOURS = 12
+MISSION_DEFAULT_TIMER_SECONDS = 120
+MISSION_DIFFICULTY_TIMER_STEP_SECONDS = 60
+MISSION_MAX_TIMER_SECONDS = 3600
 
 
 def _mission_policy_settings():
@@ -51,6 +54,7 @@ def _mission_policy_settings():
         "manual_matchmaking": True,
         "rematch_cooldown_hours": MISSION_MATCH_REMATCH_COOLDOWN_HOURS,
         "bulk_review_max_items": 10,
+        "mission_timer_seconds": MISSION_DEFAULT_TIMER_SECONDS,
     }
     configured = getattr(settings, "CHATAPP_MISSION_POLICY", {}) or {}
     policy = {**defaults, **configured}
@@ -58,6 +62,7 @@ def _mission_policy_settings():
     runtime_control = MissionReviewControl.objects.order_by("-updated_at", "-id").first()
     if runtime_control and runtime_control.route_mode:
         policy["review_route_mode"] = runtime_control.route_mode
+        policy["mission_timer_seconds"] = runtime_control.mission_timer_seconds
 
     # Mission review is deliberately manual-only for now.
     policy["review_route_mode"] = "manual_only"
@@ -73,6 +78,10 @@ def _mission_policy_settings():
         policy["bulk_review_max_items"] = max(1, int(policy.get("bulk_review_max_items", 10)))
     except (TypeError, ValueError):
         policy["bulk_review_max_items"] = 10
+    try:
+        policy["mission_timer_seconds"] = max(60, min(int(policy.get("mission_timer_seconds", MISSION_DEFAULT_TIMER_SECONDS)), 3600))
+    except (TypeError, ValueError):
+        policy["mission_timer_seconds"] = MISSION_DEFAULT_TIMER_SECONDS
     policy["prefer_online_opponent"] = _as_bool(policy.get("prefer_online_opponent", True), default=True)
     policy["require_homepage_win_opponent"] = _as_bool(
         policy.get("require_homepage_win_opponent", False),
@@ -102,6 +111,35 @@ def set_mission_review_route_mode(route_mode, reason=""):
     control.route_mode = normalized
     control.reason = (reason or "")[:255]
     control.save(update_fields=["route_mode", "reason", "updated_at"])
+    return control
+
+
+def set_mission_timer_seconds(timer_seconds, admin_user=None):
+    try:
+        normalized = max(60, min(int(timer_seconds), 3600))
+    except (TypeError, ValueError):
+        raise ValueError("Choose a valid mission timer.")
+
+    control = MissionReviewControl.objects.order_by("-updated_at", "-id").first()
+    if not control:
+        control = MissionReviewControl.objects.create(
+            route_mode=MissionReviewControl.RouteMode.MANUAL_ONLY,
+            mission_timer_seconds=normalized,
+            reason="Mission timer updated by admin.",
+        )
+    else:
+        control.mission_timer_seconds = normalized
+        control.save(update_fields=["mission_timer_seconds", "updated_at"])
+
+    MissionSession.objects.filter(
+        status__in=[
+            MissionSession.Status.REQUESTED,
+            MissionSession.Status.MATCHING,
+            MissionSession.Status.OPPONENT_PROPOSED,
+            MissionSession.Status.MISSION_PROPOSED,
+        ],
+        started_at__isnull=True,
+    ).update(timer_seconds=normalized, updated_at=timezone.now())
     return control
 
 
@@ -350,6 +388,23 @@ def _user_gender_value(user):
     return str(value).strip().lower()
 
 
+def _mission_pair_pool(first_user, second_user):
+    first_gender = _user_gender_value(first_user)
+    second_gender = _user_gender_value(second_user)
+    girl_values = {"girl", "female", "woman", "f"}
+    boy_values = {"boy", "male", "man", "m"}
+    if first_gender in girl_values and second_gender in girl_values:
+        return "girl_girl"
+    if first_gender in boy_values and second_gender in boy_values:
+        return "boy_boy"
+    if (
+        (first_gender in girl_values and second_gender in boy_values)
+        or (first_gender in boy_values and second_gender in girl_values)
+    ):
+        return "boy_girl"
+    return "mixed"
+
+
 def _users_are_gender_compatible(first_user, second_user):
     first_gender = _user_gender_value(first_user)
     second_gender = _user_gender_value(second_user)
@@ -429,8 +484,8 @@ def _assign_opponent_or_keep_matching(mission):
     return mission
 
 
-def _default_mission_templates():
-    defaults = [
+def _legacy_default_mission_templates_unused():
+    legacy_defaults = [
         (
             "Level 1: Emoji Vibe Check",
             "Get your opponent to describe your vibe using exactly one emoji and one word.",
@@ -516,11 +571,201 @@ def _default_mission_templates():
             5,
         ),
     ]
+    pool_defaults = []
+
+    def add(pool, level, title, instruction):
+        level_labels = {1: "Green", 2: "Blue", 3: "Purple", 4: "Gold"}
+        points = {1: 5, 2: 10, 3: 20, 4: 50}
+        pool_defaults.append(
+            (
+                f"{level_labels[level]}: {title}",
+                instruction,
+                "Chat naturally and respond honestly. Keep it respectful and comfortable.",
+                f"{pool}_level_{level}",
+                level,
+            )
+        )
+
+    for pool in ["girl_girl", "mixed"]:
+        add(pool, 1, "Really?", 'Get your opponent to naturally say "Really?"')
+        add(pool, 1, "Laugh Line", "Make your opponent laugh.")
+        add(pool, 1, "Heart Emoji", "Get your opponent to use ❤️.")
+        add(pool, 1, "Name Drop", "Get your opponent to say your name.")
+        add(pool, 1, "Three Emojis", "Get your opponent to send three emojis.")
+        add(pool, 2, "Movie Pick", "Get your opponent to recommend a movie.")
+        add(pool, 2, "Favourite Colour", "Get your opponent to tell you their favourite colour.")
+        add(pool, 2, "Good Compliment", "Get your opponent to give you a respectful compliment.")
+        add(pool, 2, "Dream Trip", "Get your opponent to tell you their dream destination.")
+        add(pool, 3, "Advice Moment", "Get your opponent to give you one useful piece of advice.")
+        add(pool, 3, "Secret Talent", "Get your opponent to tell you a secret talent.")
+        add(pool, 3, "Keep It Going", "Keep the conversation going for 20 total messages.")
+
+    for pool in ["boy_boy", "mixed"]:
+        add(pool, 1, "Bro Moment", 'Get your opponent to naturally say "Bro."')
+        add(pool, 1, "No Way", 'Get your opponent to say "No way!"')
+        add(pool, 1, "Fire Emoji", "Get your opponent to use 🔥.")
+        add(pool, 1, "Music Mention", "Get your opponent to mention music.")
+        add(pool, 2, "Team Talk", "Get your opponent to recommend a football team.")
+        add(pool, 2, "Favourite Car", "Get your opponent to tell you their favourite car.")
+        add(pool, 2, "Business Mention", "Get your opponent to mention business.")
+        add(pool, 2, "Three Questions", "Get your opponent to ask three questions.")
+        add(pool, 3, "Dream Business", "Get your opponent to tell you their dream business.")
+        add(pool, 3, "Big Win", "Get your opponent to tell you their biggest achievement.")
+        add(pool, 3, "Team Logic", "Get your opponent to explain why they support their team.")
+        add(pool, 3, "Keep It Going", "Keep the conversation going for 25 total messages.")
+
+    for pool in ["boy_girl", "mixed"]:
+        add(pool, 1, "Yes", 'Get your opponent to naturally say "Yes."')
+        add(pool, 1, "Really?", 'Get your opponent to naturally say "Really?"')
+        add(pool, 1, "Smile Emoji", "Get your opponent to use 😊.")
+        add(pool, 1, "What You Do", "Get your opponent to ask what you do.")
+        add(pool, 1, "Interesting", 'Get your opponent to say "Interesting."')
+        add(pool, 2, "Know More", "Get your opponent to ask to know more about you.")
+        add(pool, 2, "Favourite Food", "Get your opponent to mention their favourite food.")
+        add(pool, 2, "Favourite Artist", "Get your opponent to tell you their favourite artist.")
+        add(pool, 2, "Hobbies", "Get your opponent to ask what hobbies you have.")
+        add(pool, 2, "Dream Holiday", "Get your opponent to tell you their dream holiday.")
+        add(pool, 2, "Voice Note", "Get your opponent to send a voice note or short audio message.")
+        add(pool, 3, "Enjoyed Chatting", "Get your opponent to say they enjoyed chatting with you.")
+        add(pool, 3, "Profile Thought", "Get your opponent to tell you what they first thought about your profile.")
+        add(pool, 3, "Later Here", "Get your opponent to invite you to continue the conversation later in this app.")
+        add(pool, 3, "Follow Ups", "Get your opponent to ask two natural follow-up questions.")
+        add(pool, 3, "Online Again", "Get your opponent to ask when you'll be online again.")
+        add(pool, 4, "Legendary Flow", "Keep the conversation going for 30 total messages while staying respectful.")
+
+    return legacy_defaults + pool_defaults
+
+
+def _default_mission_templates():
+    defaults = []
+    level_labels = {
+        1: ("Green", "icebreaker"),
+        2: ("Blue", "discovery"),
+        3: ("Purple", "connection"),
+        4: ("Orange", "chemistry"),
+        5: ("Gold", "mutual_interest"),
+    }
+    opponent_instruction = "Chat naturally and respond honestly. Keep it respectful and comfortable."
+
+    def add(level, title, instruction):
+        label, slug = level_labels[level]
+        defaults.append(
+            (
+                f"{label}: {title}",
+                instruction,
+                opponent_instruction,
+                f"mixed_{slug}",
+                level,
+            )
+        )
+
+    green = [
+        ("Make Them Laugh", "Get your opponent to show amusement with a laugh, haha, lol, or a laughing emoji."),
+        ("One Question", "Get your opponent to ask one question about you."),
+        ("Something In Common", "Discover one harmless thing you both like."),
+        ("Song Recommendation", "Get your opponent to recommend one song."),
+        ("Three Emojis", "Get your opponent to describe the current vibe with three emojis."),
+        ("Guess Something", "Get your opponent to make a playful guess about you."),
+        ("Friendly Disagreement", "Get your opponent to disagree lightly and explain why."),
+        ("Favourite Snack", "Get your opponent talking about a snack or food they could eat often."),
+        ("Today In One Word", "Get your opponent to describe their day in one word."),
+        ("Warm Reaction", "Get a warm reaction to something you share, such as nice, aww, smile, or a friendly emoji."),
+        ("Quick Recommendation", "Get your opponent to recommend anything they currently enjoy."),
+        ("Playful Surprise", "Share something light that makes your opponent respond with surprise or curiosity."),
+        ("Your Turn", 'Get your opponent to ask "what about you?" or return a question back to you.'),
+        ("Mini Opinion", "Get your opponent to share an opinion on a light topic."),
+        ("Vibe Emoji", "Get your opponent to describe your vibe using one emoji and one word."),
+        ("Would You Rather", "Ask a playful would-you-rather question and get your opponent to explain their choice."),
+        ("Really Moment", 'Get your opponent to naturally say "really" or show the same kind of surprised reaction.'),
+    ]
+    blue = [
+        ("Favourite Artist", "Get your opponent to tell you one artist they enjoy."),
+        ("Ideal Weekend", "Get your opponent to describe their ideal weekend."),
+        ("Dream Destination", "Get your opponent to name a dream place they would like to visit, without asking for private addresses."),
+        ("Hidden Hobby", "Get your opponent to mention a hobby people might not guess from their profile."),
+        ("Something To Learn", "Get your opponent to name something they would like to learn."),
+        ("Current Obsession", "Get your opponent to talk about something they are currently into."),
+        ("Childhood Favourite", "Get your opponent to mention a childhood favourite show, song, game, or snack."),
+        ("Bucket List", "Get your opponent to share one harmless thing on their bucket list."),
+        ("Unexpected Opinion", "Get your opponent to share a light opinion that might surprise people."),
+        ("Movie Pick", "Get your opponent to recommend a movie or series."),
+        ("Playlist Guess", "Send three song titles that match your mood and get your opponent to pick the one that fits you best."),
+        ("Know More", "Get your opponent to ask to know more about something you shared."),
+        ("Food Recommendation", "Get your opponent to recommend a meal, snack, or restaurant type they enjoy."),
+        ("Hobbies", "Get your opponent to ask what hobbies you have."),
+        ("Two Truths And A Spark", "Share two true facts and one playful lie about yourself, then get your opponent to guess the lie."),
+        ("First Follow Up", "Get your opponent to ask a follow-up question about something you shared."),
+        ("Swap Stories", "Get your opponent to trade a short story with you."),
+        ("Voice Note Invite", "Get your opponent to voluntarily send a short voice note or audio message inside the app."),
+    ]
+    purple = [
+        ("Two Follow Ups", "Get your opponent to ask two natural follow-up questions."),
+        ("Remember That", "Get your opponent to remember and mention something you said earlier in the chat."),
+        ("Inside Joke", "Create a tiny inside joke and get your opponent to refer back to it."),
+        ("Secret Talent", "Get your opponent to tell you a talent or skill people may not know about."),
+        ("Proud Moment", "Get your opponent to tell you something they are proud of."),
+        ("Unexpected Connection", "Find a surprising thing you both relate to."),
+        ("Ask To Hear More", "Get your opponent to ask you to continue or explain a story."),
+        ("Callback", "Get your opponent to bring back an earlier topic without you prompting it directly."),
+        ("Change My Mind", "Get your opponent to explain a light preference strongly enough that it could change your mind."),
+        ("Story Exchange", "Get your opponent to share a short personal story after you share one first."),
+        ("Three Questions", "Get your opponent to ask three questions across the conversation."),
+        ("Advice Moment", "Get your opponent to give one useful, harmless piece of advice."),
+        ("Big Win", "Get your opponent to tell you about a personal achievement."),
+        ("Dream Project", "Get your opponent to describe a project, career goal, or business idea they would like to build."),
+        ("Keep It Going 20", "Keep the conversation going for at least 20 total messages while staying natural."),
+        ("Respectful Debate", "Start a light debate and get your opponent to explain their side without the chat turning tense."),
+        ("Best Version", "Get your opponent to describe what a good year would look like for them."),
+    ]
+    orange = [
+        ("Good Compliment", "Get your opponent to give you one genuine, respectful compliment without directly asking for it."),
+        ("Profile Thought", "Get your opponent to tell you what they first thought about your profile."),
+        ("Personality Compliment", "Get your opponent to compliment something about your personality or conversation style."),
+        ("Nickname", "Get your opponent to give you a playful, respectful nickname."),
+        ("Made You Smile", "Get your opponent to say or clearly show that something you said made them smile."),
+        ("Something About You", "Get your opponent to tell you one thing they find interesting about you."),
+        ("Perfect Hangout", "Get your opponent to describe a harmless ideal hangout, keeping it inside normal conversation."),
+        ("One Thing", "Get your opponent to name one thing they would want to know before deciding someone's vibe."),
+        ("Curious About You", "Get your opponent to say they are curious about something about you."),
+        ("Chemistry Check", "Get your opponent to rate the conversation vibe from 1 to 10 and explain the score respectfully."),
+        ("Playful Tease", "Get your opponent to lightly tease you in a friendly, respectful way."),
+        ("You Seem Fun", "Get your opponent to say you seem fun, interesting, or easy to talk to."),
+        ("Guess My Type", "Describe your type with three respectful personality hints and get your opponent to guess one trait."),
+        ("Rate The Vibe", "Get your opponent to rate the chat vibe and explain what influenced the score."),
+        ("Emoji Chemistry", "Use only emojis to describe an ideal first hangout and get your opponent to guess it."),
+        ("Bold But Respectful", "Get your opponent to say what makes a conversation attractive to them, while keeping it respectful."),
+    ]
+    gold = [
+        ("Later Here", "Get your opponent to invite you to continue the conversation later in this app."),
+        ("Online Again", "Get your opponent to ask when you will be online again."),
+        ("Round Two", "Get your opponent to suggest playing or chatting again after this mission."),
+        ("Next Conversation", "Get your opponent to name a topic they want to continue next time."),
+        ("We Should Keep Talking", "Get your opponent to say they want to keep talking in the app."),
+        ("Bring Back The Joke", "Get your opponent to revive an inside joke later in the conversation."),
+        ("Dont Go Yet", "Get your opponent to ask you to stay in the conversation a little longer."),
+        ("Remember Me", "Get your opponent to mention something they will remember about you from this chat."),
+        ("Legendary Flow", "Keep the conversation going for at least 30 total messages while staying respectful and natural."),
+        ("Enjoyed Chatting", "Get your opponent to say they enjoyed chatting with you."),
+        ("Continue The Thread", "Get your opponent to suggest continuing from this exact topic later in the app."),
+    ]
+
+    for level, missions in [
+        (1, green),
+        (2, blue),
+        (3, purple),
+        (4, orange),
+        (5, gold),
+    ]:
+        for title, instruction in missions:
+            add(level, title, instruction)
+
     return defaults
 
 
 def ensure_default_mission_templates():
+    default_titles = set()
     for title, instruction, opponent_instruction, category, difficulty in _default_mission_templates():
+        default_titles.add(title)
         MissionTemplate.objects.update_or_create(
             title=title,
             defaults={
@@ -531,11 +776,66 @@ def ensure_default_mission_templates():
                 "is_active": True,
             },
         )
+    legacy_seed_filter = (
+        Q(category__startswith="level_")
+        | Q(category__startswith="mixed_level_")
+        | Q(category__startswith="girl_girl_level_")
+        | Q(category__startswith="boy_boy_level_")
+        | Q(category__startswith="boy_girl_level_")
+    )
+    MissionTemplate.objects.filter(legacy_seed_filter).exclude(title__in=default_titles).update(is_active=False)
 
 
-def _pick_random_mission_template():
+def _mission_pool_filter(pool):
+    pool_filter = Q(category__startswith="mixed_")
+    if pool:
+        pool_filter |= Q(category__startswith=f"{pool}_")
+    return pool_filter
+
+
+def _pick_random_mission_template(pool=None, max_difficulty=None):
     ensure_default_mission_templates()
-    return MissionTemplate.objects.filter(is_active=True).order_by("?").first()
+    queryset = MissionTemplate.objects.filter(is_active=True)
+    if pool:
+        pooled = queryset.filter(_mission_pool_filter(pool))
+        if pooled.exists():
+            queryset = pooled
+    if max_difficulty:
+        queryset = queryset.filter(difficulty__lte=max_difficulty)
+    return queryset.order_by("?").first()
+
+
+def _pick_mission_templates_for_players(first_user, second_user, selected_template=None):
+    pool = _mission_pair_pool(first_user, second_user)
+    requester_template = selected_template or _pick_random_mission_template(pool=pool)
+    opponent_template = _pick_random_mission_template(pool=pool)
+    if requester_template and opponent_template and requester_template.id == opponent_template.id:
+        alternate = (
+            MissionTemplate.objects.filter(is_active=True)
+            .filter(_mission_pool_filter(pool))
+            .exclude(pk=requester_template.pk)
+            .order_by("?")
+            .first()
+        )
+        if alternate:
+            opponent_template = alternate
+    return requester_template, opponent_template
+
+
+def _mission_session_difficulty(mission):
+    difficulties = []
+    if mission.mission_template_id:
+        difficulties.append(mission.mission_template.difficulty or 1)
+    if mission.opponent_mission_template_id:
+        difficulties.append(mission.opponent_mission_template.difficulty or 1)
+    return max(difficulties or [1])
+
+
+def _mission_timer_seconds_for_session(mission):
+    base_seconds = _mission_policy_settings()["mission_timer_seconds"]
+    difficulty = _mission_session_difficulty(mission)
+    scaled_seconds = base_seconds + max(0, difficulty - 1) * MISSION_DIFFICULTY_TIMER_STEP_SECONDS
+    return max(60, min(scaled_seconds, MISSION_MAX_TIMER_SECONDS))
 
 
 def get_admin_contact_user():
@@ -681,6 +981,100 @@ def request_mission_for_user(user):
 
 
 @transaction.atomic
+def create_admin_started_mission(admin_user, requester_user, opponent_user, mission_template=None):
+    if not admin_user or not admin_user.has_role(Role.ADMIN):
+        raise PermissionError("Only admins can start missions.")
+    _validate_mission_player(requester_user)
+    _validate_mission_player(opponent_user)
+    if requester_user.id == opponent_user.id:
+        raise ValueError("Choose two different players.")
+    if not users_are_valid_peer_candidates(requester_user, opponent_user):
+        raise ValueError("Selected players are not eligible for mission matchmaking.")
+    if not _users_are_gender_compatible(requester_user, opponent_user):
+        raise ValueError("Selected players are not suitable for this mission match.")
+    _enforce_loser_support_rule(requester_user)
+    _enforce_loser_support_rule(opponent_user)
+    if not _eligible_for_new_mission(requester_user):
+        raise ValueError("The first selected player already has an active mission.")
+    if not _eligible_for_new_mission(opponent_user):
+        raise ValueError("The opponent already has an active mission.")
+
+    mission = MissionSession.objects.create(
+        requester=requester_user,
+        opponent=opponent_user,
+        status=MissionSession.Status.OPPONENT_PROPOSED,
+    )
+    requester_template, opponent_template = _pick_mission_templates_for_players(
+        requester_user,
+        opponent_user,
+        selected_template=mission_template,
+    )
+    mission.mission_template = requester_template
+    mission.opponent_mission_template = opponent_template
+    mission.save(update_fields=["mission_template", "opponent_mission_template", "updated_at"])
+    MissionQueueEntry.objects.update_or_create(
+        user=requester_user,
+        defaults={
+            "status": MissionQueueEntry.QueueStatus.MATCHED,
+            "reason": f"Started by admin for mission #{mission.pk}",
+            "mission_session": mission,
+        },
+    )
+    MissionQueueEntry.objects.update_or_create(
+        user=opponent_user,
+        defaults={
+            "status": MissionQueueEntry.QueueStatus.MATCHED,
+            "reason": f"Started by admin for mission #{mission.pk}",
+            "mission_session": mission,
+        },
+    )
+    AdminDecisionLog.objects.create(
+        actor_type=AdminDecisionLog.ActorType.MANUAL,
+        actor_user=admin_user,
+        mission_session=mission,
+        action="admin_started_mission",
+        rationale="Admin manually started a mission without a player request.",
+        confidence=1,
+    )
+    Notification.objects.bulk_create(
+        [
+            Notification(
+                user=requester_user,
+                message=(
+                    f"Admin started a mission with {opponent_user.username}. "
+                    "Open the Mission panel to accept or request another opponent."
+                ),
+            ),
+            Notification(
+                user=opponent_user,
+                message=(
+                    f"Admin started a mission with {requester_user.username}. "
+                    "Open the Mission panel to review the match."
+                ),
+            ),
+        ]
+    )
+    contact_admin = _mission_admin_sender(admin_user)
+    _send_admin_mission_message(
+        contact_admin,
+        requester_user,
+        (
+            f"Admin started a mission with {opponent_user.username}. "
+            "Open this Mission panel to accept the opponent or request another match."
+        ),
+    )
+    _send_admin_mission_message(
+        contact_admin,
+        opponent_user,
+        (
+            f"Admin started a mission with {requester_user.username}. "
+            "Open this Mission panel to review the match."
+        ),
+    )
+    return mission
+
+
+@transaction.atomic
 def request_another_opponent(mission, acting_user):
     if not _mission_visible_to_user(mission, acting_user):
         raise PermissionError("You cannot update this mission.")
@@ -711,13 +1105,18 @@ def accept_opponent(mission, acting_user):
     if not mission.opponent:
         raise ValueError("No opponent is currently assigned.")
 
-    selected_template = mission.mission_template or _pick_random_mission_template()
+    selected_template, opponent_template = _pick_mission_templates_for_players(
+        mission.requester,
+        mission.opponent,
+        selected_template=mission.mission_template,
+    )
     if not selected_template:
         raise ValueError("No active mission template is available.")
 
     mission.mission_template = selected_template
+    mission.opponent_mission_template = opponent_template
     mission.status = MissionSession.Status.MISSION_PROPOSED
-    mission.save(update_fields=["mission_template", "status", "updated_at"])
+    mission.save(update_fields=["mission_template", "opponent_mission_template", "status", "updated_at"])
     admin_user = _mission_admin_sender(mission.assigned_admin)
     _send_admin_mission_message(
         admin_user,
@@ -746,13 +1145,14 @@ def request_another_mission(mission, acting_user):
     if mission.reroll_count >= mission.max_rerolls:
         raise ValueError("Mission reroll limit reached.")
 
-    selected_template = _pick_random_mission_template()
+    selected_template, opponent_template = _pick_mission_templates_for_players(mission.requester, mission.opponent)
     if not selected_template:
         raise ValueError("No active mission template is available.")
 
     mission.mission_template = selected_template
+    mission.opponent_mission_template = opponent_template
     mission.reroll_count = mission.reroll_count + 1
-    mission.save(update_fields=["mission_template", "reroll_count", "updated_at"])
+    mission.save(update_fields=["mission_template", "opponent_mission_template", "reroll_count", "updated_at"])
     return mission
 
 
@@ -777,8 +1177,15 @@ def assign_mission_opponent_by_admin(mission, admin_user, opponent_user, mission
         raise ValueError("Selected opponent already has an active mission.")
 
     mission.opponent = opponent_user
-    if mission_template:
-        mission.mission_template = mission_template
+    requester_template, opponent_template = _pick_mission_templates_for_players(
+        mission.requester,
+        opponent_user,
+        selected_template=mission_template,
+    )
+    if requester_template:
+        mission.mission_template = requester_template
+    if opponent_template:
+        mission.opponent_mission_template = opponent_template
     mission.status = MissionSession.Status.OPPONENT_PROPOSED
     mission.assigned_admin = None
     mission.assigned_at = None
@@ -786,6 +1193,7 @@ def assign_mission_opponent_by_admin(mission, admin_user, opponent_user, mission
         update_fields=[
             "opponent",
             "mission_template",
+            "opponent_mission_template",
             "status",
             "assigned_admin",
             "assigned_at",
@@ -870,8 +1278,7 @@ def accept_mission(mission, acting_user):
 
     mission.status = MissionSession.Status.MISSION_ACTIVE
     mission.started_at = timezone.now()
-    if not mission.timer_seconds:
-        mission.timer_seconds = 120
+    mission.timer_seconds = _mission_timer_seconds_for_session(mission)
     mission.save(update_fields=["status", "started_at", "timer_seconds", "updated_at"])
 
     # Mission start should unlock direct chat for the matched pair.
@@ -912,6 +1319,34 @@ def _mission_chat_transcript(mission):
         rows.append(f"[{timestamp}] {message.sender.username}: {message.body}")
 
     return "\n".join(rows)
+
+
+def cleanup_mission_chat_media(mission):
+    if not mission.requester_id or not mission.opponent_id:
+        return 0
+
+    lower_bound = mission.started_at or mission.created_at
+    upper_bound = mission.ended_at or timezone.now()
+    messages = (
+        DirectChatMessage.objects.filter(
+            Q(sender=mission.requester, recipient=mission.opponent)
+            | Q(sender=mission.opponent, recipient=mission.requester)
+        )
+        .exclude(media_file="")
+        .filter(media_file__isnull=False, created_at__gte=lower_bound, created_at__lte=upper_bound)
+    )
+
+    cleaned = 0
+    for message in messages.iterator():
+        if not message.media_file:
+            continue
+        message.media_file.delete(save=False)
+        message.media_file = None
+        message.media_type = ""
+        message.media_name = ""
+        message.save(update_fields=["media_file", "media_type", "media_name"])
+        cleaned += 1
+    return cleaned
 
 
 @transaction.atomic
@@ -993,6 +1428,7 @@ def review_mission_evidence(
         mission.ended_at = timezone.now()
         mission.save(update_fields=["winner", "loser", "status", "ended_at", "updated_at"])
         evidence.save(update_fields=["reviewed_by", "review_notes", "review_status", "updated_at"])
+        transaction.on_commit(lambda: cleanup_mission_chat_media(mission))
         MissionWinFeed.objects.update_or_create(
             mission_session=mission,
             defaults={
@@ -1006,8 +1442,11 @@ def review_mission_evidence(
     else:
         evidence.review_status = MissionEvidence.ReviewStatus.REJECTED
         mission.status = MissionSession.Status.REJECTED
-        mission.save(update_fields=["status", "updated_at"])
+        if not mission.ended_at:
+            mission.ended_at = timezone.now()
+        mission.save(update_fields=["status", "ended_at", "updated_at"])
         evidence.save(update_fields=["reviewed_by", "review_notes", "review_status", "updated_at"])
+        transaction.on_commit(lambda: cleanup_mission_chat_media(mission))
 
     AdminDecisionLog.objects.create(
         actor_type=actor_type,

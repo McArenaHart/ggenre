@@ -1,24 +1,85 @@
 {% extends "includes/base.html" %}
 {% load static %}
 
-{% block title %}Create Live Stream{% endblock %}
+{% block title %}Go Live{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/livestream.css' %}" rel="stylesheet" />
+<link href="{% static 'css/pages/livestream.css' %}?v=20260810b" rel="stylesheet" />
 {% endblock %}
 
 {% block content %}
-<div class="container py-4 livestream-page">
-  <section class="livestream-panel">
-    <h1>Create Live Stream</h1>
-    <form method="post">
-      {% csrf_token %}
-      {{ form.as_p }}
-      <button type="submit" class="btn btn-primary">
-        <i class="fas fa-video"></i> Create Stream
-      </button>
-      <a href="{% url 'livestream:index' %}" class="btn btn-outline-secondary">Cancel</a>
-    </form>
+<div class="container-fluid livestream-page">
+  <section class="livestream-setup">
+    <div class="livestream-setup-preview">
+      <div class="livestream-preview-screen">
+        <span class="livestream-status livestream-status-live">
+          <span class="livestream-onair-dot" aria-hidden="true"></span>
+          Ready
+        </span>
+        <i class="fas fa-video" aria-hidden="true"></i>
+      </div>
+      <div class="livestream-setup-notes">
+        <h2>Before you go live</h2>
+        <ul>
+          <li><i class="fas fa-check" aria-hidden="true"></i> Add a title viewers can understand quickly.</li>
+          <li><i class="fas fa-check" aria-hidden="true"></i> Choose whether the room is public or restricted.</li>
+          <li><i class="fas fa-check" aria-hidden="true"></i> After creating, test camera and microphone in the live room.</li>
+        </ul>
+      </div>
+    </div>
+
+    <section class="livestream-panel livestream-setup-form">
+      <div class="livestream-panel-header">
+        <div>
+          <h1>Set up your live</h1>
+          <p>This creates the room. You will start the actual broadcast from the next screen.</p>
+        </div>
+        <a href="{% url 'livestream:index' %}" class="btn btn-outline-secondary">
+          <i class="fas fa-arrow-left" aria-hidden="true"></i> Live
+        </a>
+      </div>
+
+      <form method="post" class="livestream-form">
+        {% csrf_token %}
+        <div class="livestream-field">
+          <label for="{{ form.title.id_for_label }}">Title</label>
+          {{ form.title }}
+          {{ form.title.errors }}
+        </div>
+        <div class="livestream-field">
+          <label for="{{ form.description.id_for_label }}">Description</label>
+          {{ form.description }}
+          {{ form.description.errors }}
+        </div>
+        <div class="livestream-field">
+          <label for="{{ form.scheduled_for.id_for_label }}">Schedule</label>
+          {{ form.scheduled_for }}
+          {{ form.scheduled_for.errors }}
+        </div>
+        <div class="livestream-toggle-grid">
+          <label class="livestream-toggle-card" for="{{ form.is_restricted.id_for_label }}">
+            {{ form.is_restricted }}
+            <span>
+              <b>Restricted room</b>
+              <small>Only approved viewers or pass holders can enter.</small>
+            </span>
+          </label>
+          <label class="livestream-toggle-card" for="{{ form.allow_free_access.id_for_label }}">
+            {{ form.allow_free_access }}
+            <span>
+              <b>Allow free access</b>
+              <small>Let viewers enter without individual access grants.</small>
+            </span>
+          </label>
+        </div>
+        <div class="livestream-form-actions">
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-video" aria-hidden="true"></i> Create Live Room
+          </button>
+          <a href="{% url 'livestream:index' %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </section>
   </section>
 </div>
 {% endblock %}

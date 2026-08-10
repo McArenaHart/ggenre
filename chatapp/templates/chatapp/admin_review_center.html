@@ -4,7 +4,7 @@
 {% block title %}Review Center{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/chatapp.css' %}?v=20260807missionmobile1" rel="stylesheet" />
+<link href="{% static 'css/pages/chatapp.css' %}?v=20260810proofvisible1" rel="stylesheet" />
 {% endblock %}
 
 {% block content %}
@@ -15,7 +15,7 @@
             <p>Start missions, approve wins, and handle token requests.</p>
         </div>
         <div class="chat-dashboard-header-actions">
-            <a href="#mission-requests" class="btn btn-primary btn-sm">
+            <a href="#admin-start-mission" class="btn btn-primary btn-sm">
                 <i class="fas fa-gamepad" aria-hidden="true"></i>
                 <span>Start Mission</span>
             </a>
@@ -67,6 +67,16 @@
             <strong>Admin controls</strong>
             <span>Use the cards below to match, cancel, approve, reject, or open a player chat.</span>
         </div>
+        <form method="post" action="{% url 'chatapp:admin_mission_timer_update' %}" class="chat-review-toolbar">
+            {% csrf_token %}
+            <label for="missionTimerMinutes">Mission timer</label>
+            <div class="chat-review-sort-control">
+                <i class="fas fa-stopwatch" aria-hidden="true"></i>
+                <input id="missionTimerMinutes" type="number" name="mission_timer_minutes" class="form-control form-control-sm"
+                    min="1" max="60" value="{{ mission_timer_minutes|default:2 }}" required />
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Set</button>
+        </form>
         <form method="get" class="chat-review-toolbar">
             <label for="reviewSortSelect">Sort queue</label>
             <div class="chat-review-sort-control">
@@ -81,6 +91,57 @@
     </section>
 
     <section class="chat-review-grid">
+        <article class="chat-panel chat-review-card chat-review-card-wide chat-review-card-compact" id="admin-start-mission">
+            <header class="chat-review-card-header">
+                <div>
+                    <h2>Start Mission Manually</h2>
+                    <p>Pick two available players and send them into the normal mission acceptance flow.</p>
+                </div>
+                <span>{{ admin_start_players|length }} players</span>
+            </header>
+            <form method="post" action="{% url 'chatapp:admin_start_mission' %}" class="chat-review-list chat-admin-start-mission-form">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'chatapp:admin_review_center' %}" />
+                <div class="chat-admin-start-grid">
+                    <label>
+                        <span>Requester</span>
+                        <select name="requester_id" class="form-select form-select-sm" required>
+                            <option value="">Select player</option>
+                            {% for row in admin_start_players %}
+                            <option value="{{ row.user.id }}" {% if row.is_busy %}disabled{% endif %}>
+                                {{ row.user.username }}{% if row.is_online %} - online{% else %} - offline{% endif %}{% if row.is_busy %} - busy{% endif %} - Badge L{{ row.badge_level }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        <span>Opponent</span>
+                        <select name="opponent_id" class="form-select form-select-sm" required>
+                            <option value="">Select opponent</option>
+                            {% for row in admin_start_players %}
+                            <option value="{{ row.user.id }}" {% if row.is_busy %}disabled{% endif %}>
+                                {{ row.user.username }}{% if row.is_online %} - online{% else %} - offline{% endif %}{% if row.is_busy %} - busy{% endif %} - Badge L{{ row.badge_level }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        <span>Mission</span>
+                        <select name="mission_template_id" class="form-select form-select-sm">
+                            <option value="">Random active mission</option>
+                            {% for template in active_mission_templates %}
+                            <option value="{{ template.id }}">{{ template.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-play" aria-hidden="true"></i>
+                        <span>Start Mission</span>
+                    </button>
+                </div>
+            </form>
+        </article>
+
         <article class="chat-panel chat-review-card chat-review-card-wide chat-review-card-compact" id="mission-monitor">
             <header class="chat-review-card-header">
                 <div>
@@ -104,7 +165,9 @@
                         </p>
                         {% if mission.mission_template %}
                         <p>Requester mission: {{ mission.mission_template.instruction_text }}</p>
-                        <p>Opponent role: {{ mission.mission_template.opponent_instruction_text|default:"Respond naturally and help complete the mission interaction." }}</p>
+                        {% endif %}
+                        {% if mission.opponent_mission_template %}
+                        <p>Opponent mission: {{ mission.opponent_mission_template.instruction_text }}</p>
                         {% endif %}
                         {% if mission.started_at %}
                         <p>Started: {{ mission.started_at|date:"M d, H:i" }}</p>
@@ -218,7 +281,11 @@
                             {% else %}
                             <div class="chat-review-proof-empty">
                                 <i class="fas fa-comments" aria-hidden="true"></i>
+                                {% if evidence.chat_transcript %}
+                                <span>Transcript below</span>
+                                {% else %}
                                 <span>Chat proof captured</span>
+                                {% endif %}
                             </div>
                             {% endif %}
                         </div>
@@ -232,7 +299,9 @@
                             </p>
                             {% if evidence.mission_session.mission_template %}
                             <p>Requester mission: {{ evidence.mission_session.mission_template.instruction_text }}</p>
-                            <p>Opponent role: {{ evidence.mission_session.mission_template.opponent_instruction_text|default:"Respond naturally and help complete the mission interaction." }}</p>
+                            {% endif %}
+                            {% if evidence.mission_session.opponent_mission_template %}
+                            <p>Opponent mission: {{ evidence.mission_session.opponent_mission_template.instruction_text }}</p>
                             {% endif %}
                             <p>Status: {{ evidence.get_review_status_display }}</p>
                         </div>
