@@ -126,24 +126,40 @@
 
 .welcome-mission-winners {
   border: 1px solid var(--gg-border);
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(8, 14, 30, 0.72), rgba(7, 12, 26, 0.82));
-  margin-bottom: 1.25rem;
-  padding: 1rem;
+  margin-bottom: 1rem;
+  max-height: 330px;
+  overflow: hidden;
+  padding: 0.75rem;
 }
 
 .welcome-winner-grid {
   display: grid;
-  gap: 0.7rem;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 180px));
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 150px));
   justify-content: start;
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+  scrollbar-color: rgba(122, 237, 238, 0.45) transparent;
+  scrollbar-width: thin;
+}
+
+.welcome-winner-grid::-webkit-scrollbar {
+  width: 6px;
+}
+
+.welcome-winner-grid::-webkit-scrollbar-thumb {
+  background: rgba(122, 237, 238, 0.45);
+  border-radius: 999px;
 }
 
 .welcome-winner-card {
   background: linear-gradient(180deg, rgba(16, 26, 47, 0.95), rgba(11, 18, 33, 0.96));
   border: 1px solid var(--gg-border);
   border-radius: 8px;
-  max-width: 180px;
+  max-width: 150px;
   overflow: hidden;
 }
 
@@ -164,27 +180,27 @@
   align-items: center;
   color: var(--gg-neon-cyan);
   display: flex;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   height: 100%;
   justify-content: center;
 }
 
 .welcome-winner-body {
   display: grid;
-  gap: 0.25rem;
-  padding: 0.55rem;
+  gap: 0.18rem;
+  padding: 0.42rem;
 }
 
 .welcome-winner-body p {
   color: var(--gg-text);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 800;
   margin: 0;
 }
 
 .welcome-winner-body span {
   color: var(--gg-text-muted);
-  font-size: 0.68rem;
+  font-size: 0.63rem;
 }
 
 .welcome-section-header {
@@ -192,17 +208,17 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.65rem;
 }
 
 .welcome-section-header h2 {
   margin: 0;
-  font-size: clamp(1.25rem, 2vw, 1.75rem);
+  font-size: clamp(1rem, 1.6vw, 1.3rem);
 }
 
 .welcome-section-note {
   color: var(--gg-text-muted);
-  font-size: 0.82rem;
+  font-size: 0.76rem;
 }
 
 .welcome-media-card {
@@ -490,7 +506,27 @@ body.app-theme[data-theme="light"] .welcome-metrics-row {
   .welcome-section-header {
     flex-direction: column;
     align-items: flex-start;
-    margin-bottom: 0.7rem;
+    gap: 0.15rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .welcome-mission-winners {
+    max-height: 280px;
+    padding: 0.65rem;
+  }
+
+  .welcome-winner-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 205px;
+    padding-right: 0.1rem;
+  }
+
+  .welcome-winner-card {
+    max-width: none;
+  }
+
+  .welcome-winner-body {
+    padding: 0.38rem;
   }
 
   .welcome-cta {

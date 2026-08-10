@@ -447,12 +447,14 @@
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--gg-border, rgba(255, 255, 255, 0.08));
   border-radius: 8px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   grid-column: 2;
   grid-row: 2 / 5;
   margin: clamp(1rem, 2.4vw, 1.65rem);
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -463,6 +465,7 @@
   display: flex;
   gap: 0.75rem;
   justify-content: space-between;
+  min-width: 0;
   padding: 0.78rem 0.9rem;
 }
 
@@ -491,7 +494,9 @@
   flex-direction: column;
   gap: 0.65rem;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: clamp(0.9rem, 2vw, 1.3rem);
 }
 
@@ -501,6 +506,7 @@
   border: 1px solid var(--gg-border, rgba(255, 255, 255, 0.08));
   color: var(--gg-text, #e8eefc);
   max-width: min(92%, 540px);
+  min-width: 0;
   padding: 0.68rem 0.8rem;
 }
 
@@ -521,6 +527,7 @@
   line-height: 1.42;
   margin: 0;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .admin-contact-chat .chat-message-media img,
@@ -759,6 +766,7 @@
   border-top: 1px solid var(--gg-border, rgba(255, 255, 255, 0.08));
   display: flex;
   gap: 0.5rem;
+  min-width: 0;
   padding: 0.85rem clamp(0.9rem, 2vw, 1.3rem) calc(0.85rem + env(safe-area-inset-bottom));
   position: relative;
 }
@@ -850,6 +858,7 @@
 }
 
 .admin-contact-compose .form-control {
+  min-width: 0;
   min-height: 38px;
 }
 
@@ -1078,6 +1087,8 @@ body.app-theme[data-theme="light"] .admin-contact-chat .chat-emoji-option:focus 
     inset: 0;
     right: auto;
     bottom: auto;
+    overflow-x: hidden;
+    width: 100%;
   }
 
   .admin-contact-panel {
@@ -1085,8 +1096,10 @@ body.app-theme[data-theme="light"] .admin-contact-chat .chat-emoji-option:focus 
     grid-template-rows: auto auto minmax(0, 1fr);
     height: 100dvh;
     min-height: 0;
+    max-width: 100%;
+    overflow-x: hidden;
     overflow-y: auto;
-    width: 100vw;
+    width: 100%;
   }
 
   .admin-contact-header {
@@ -1158,8 +1171,11 @@ body.app-theme[data-theme="light"] .admin-contact-chat .chat-emoji-option:focus 
   .admin-contact-chat-card {
     grid-column: 1;
     grid-row: 3;
+    justify-self: stretch;
     margin: 0.75rem 1rem calc(0.85rem + env(safe-area-inset-bottom));
+    max-width: none;
     min-height: min(430px, 58dvh);
+    width: auto;
   }
 }
 
@@ -1238,8 +1254,11 @@ body.app-theme[data-theme="light"] .admin-contact-chat .chat-emoji-option:focus 
   }
 
   .admin-contact-chat-card {
+    justify-self: stretch;
     margin: 0.65rem 0.7rem calc(0.65rem + env(safe-area-inset-bottom));
+    max-width: none;
     min-height: min(420px, 56dvh);
+    width: auto;
   }
 
   .admin-contact-chat-card-head {
@@ -1250,6 +1269,15 @@ body.app-theme[data-theme="light"] .admin-contact-chat .chat-emoji-option:focus 
     padding: 0.72rem;
   }
 
+  .admin-contact-chat .chat-message {
+    max-width: 100%;
+    width: fit-content;
+  }
+
+  .admin-contact-chat .chat-message.is-own {
+    max-width: 100%;
+  }
+
   .admin-contact-compose {
     gap: 0.38rem;
     padding: 0.62rem 0.7rem calc(0.62rem + env(safe-area-inset-bottom));
@@ -1258,5 +1286,37 @@ body.app-theme[data-theme="light"] .admin-contact-chat .chat-emoji-option:focus 
   .admin-contact-compose .chat-send-button {
     flex-basis: 38px;
     width: 38px;
+  }
+}
+
+@media (max-width: 380px) {
+  .admin-contact-header {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .admin-contact-nav {
+    gap: 0.28rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) 32px;
+  }
+
+  .admin-contact-mission {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .admin-contact-chat-card {
+    margin-left: 0.6rem;
+    margin-right: 0.6rem;
+  }
+
+  .admin-contact-messages {
+    padding-left: 0.58rem;
+    padding-right: 0.58rem;
+  }
+
+  .admin-contact-compose {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
   }
 }
