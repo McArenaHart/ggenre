@@ -46,15 +46,15 @@ class CustomUserAdmin(UserAdmin):
         ('Role-specific Info', {'fields': ('role', 'subscription_expiry')}),
     )
 
-    @admin.action(description="Grant free pass to selected users")
+    @admin.action(description="Grant token bypass to selected users")
     def grant_free_pass(self, request, queryset):
         updated = queryset.exclude(role=Role.ADMIN).update(has_free_pass=True)
-        self.message_user(request, f"Granted free pass to {updated} user(s).")
+        self.message_user(request, f"Granted token bypass to {updated} user(s).")
 
-    @admin.action(description="Revoke free pass from selected users")
+    @admin.action(description="Revoke token bypass from selected users")
     def revoke_free_pass(self, request, queryset):
         updated = queryset.exclude(role=Role.ADMIN).update(has_free_pass=False)
-        self.message_user(request, f"Revoked free pass from {updated} user(s).")
+        self.message_user(request, f"Revoked token bypass from {updated} user(s).")
 
     @admin.action(description="Suspend selected users")
     def suspend_users(self, request, queryset):

@@ -7,7 +7,10 @@ from django.utils.timezone import now
 from django.utils import timezone
 from datetime import timedelta
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 
+
+DEFAULT_FREE_OTP_VOTE_ALLOWANCE = 10
 
 
 class Notification(models.Model):
@@ -108,7 +111,10 @@ class Follow(models.Model):
 class OTP(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
     otp_code = models.CharField(max_length=6)
-    remaining_votes = models.IntegerField(default=0)
+    remaining_votes = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+    )
     is_active = models.BooleanField(default=True)
     last_vote_reset_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

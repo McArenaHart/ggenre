@@ -21,6 +21,7 @@ db.sqlite3
 *.sqlite
 *.db
 media/
+staticfiles/
 static_collected/
 *.log
 

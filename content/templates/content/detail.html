@@ -96,6 +96,13 @@
                   {% if not tokens_paused %}
                   <input type="text" id="otpCode_{{ content.id }}" placeholder="OTP code"
                     class="form-control form-control-sm" />
+                  <span class="watch-token-balance">
+                    {% if active_otp %}
+                    {{ active_otp.remaining_votes }} token{{ active_otp.remaining_votes|pluralize }} left
+                    {% else %}
+                    No active tokens
+                    {% endif %}
+                  </span>
                   {% endif %}
                   <input type="text" id="voterTag_{{ content.id }}" placeholder="Your tag"
                     class="form-control form-control-sm" />
@@ -122,6 +129,23 @@
                 </div>
 
                 <p id="voteMessage_{{ content.id }}" class="small mt-2 mb-0" style="display: none"></p>
+
+                {% if not tokens_paused %}
+                <div class="watch-token-purchase" data-token-purchase-panel data-token-request-url="{% url 'chatapp:token_purchase_create' %}" hidden>
+                  <div class="watch-token-purchase-copy">
+                    <strong>Need more votes?</strong>
+                    <span>Request a token bundle and admin will approve it after payment.</span>
+                  </div>
+                  <div class="watch-token-bundles">
+                    {% for bundle in token_bundles %}
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-token-purchase="{{ bundle }}">
+                      {{ bundle }}
+                    </button>
+                    {% endfor %}
+                  </div>
+                  <p class="small mt-2 mb-0" data-token-purchase-message hidden></p>
+                </div>
+                {% endif %}
               </div>
             </div>
             {% endif %}

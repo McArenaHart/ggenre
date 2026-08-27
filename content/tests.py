@@ -642,6 +642,10 @@ class VotingFlowTest(TestCase):
         self.assertContains(response, 'data-vote-toggle')
         self.assertContains(response, 'aria-expanded="false"')
         self.assertContains(response, 'data-vote-submit', count=10)
+        self.assertContains(response, '1 token left')
+        self.assertContains(response, 'data-token-purchase-panel')
+        self.assertContains(response, 'data-token-purchase="10"')
+        self.assertContains(response, 'data-token-purchase="100"')
         self.assertNotContains(response, 'onclick="submitDetailVote')
         self.assertNotContains(response, 'onclick="toggleDetailVoting')
 
@@ -723,7 +727,25 @@ class VotingFlowTest(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "error")
+        self.assertTrue(payload["purchase_required"])
+        self.assertEqual(payload["suggested_token_bundles"], [10, 25, 50, 100])
+        self.assertIn("Buy more tokens", payload["message"])
         self.assertFalse(Vote.objects.filter(content=self.content, fan=self.fan).exists())
+
+    def test_invalid_otp_does_not_show_purchase_required(self):
+        response = self.client.post(
+            reverse("vote_content", args=[self.content.id]),
+            data='{"vote_value": 4, "otp_code": "000000", "voter_tag": "blocked"}',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["message"], "Invalid/expired OTP")
+        self.assertNotIn("purchase_required", payload)
 
     def test_vote_rejected_without_voter_tag(self):
         response = self.client.post(

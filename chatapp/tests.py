@@ -733,6 +733,41 @@ class ChatAppTests(TestCase):
         self.assertEqual(mission.mission_template_id, selected_template.id)
         self.assertEqual(mission.status, MissionSession.Status.OPPONENT_PROPOSED)
 
+    def test_admin_can_assign_online_player_with_personalized_mission(self):
+        mission = MissionSession.objects.create(
+            requester=self.owner,
+            status=MissionSession.Status.MATCHING,
+        )
+        cache.set(f"direct_chat_presence:online:{self.member.id}", "1", timeout=60)
+
+        self.client.login(username="chat_admin", password="password123")
+        response = self.client.post(
+            reverse("chatapp:admin_assign_mission_opponent", args=[mission.id]),
+            {
+                "opponent_id": str(self.member.id),
+                "custom_mission_title": "Personalized Trust Check",
+                "custom_mission_instruction": "Get chat_member to share one studio habit.",
+                "custom_opponent_instruction": "Answer naturally without seeing the requester goal.",
+                "custom_mission_difficulty": "3",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        mission.refresh_from_db()
+        self.assertEqual(mission.status, MissionSession.Status.OPPONENT_PROPOSED)
+        self.assertEqual(mission.mission_template.title, "Personalized Trust Check")
+        self.assertEqual(mission.mission_template.category, "personalized")
+        self.assertEqual(mission.mission_template.difficulty, 3)
+        self.assertEqual(
+            mission.mission_template.instruction_text,
+            "Get chat_member to share one studio habit.",
+        )
+        self.assertEqual(
+            mission.mission_template.opponent_instruction_text,
+            "Answer naturally without seeing the requester goal.",
+        )
+
     def test_opponent_admin_chat_shows_assigned_mission(self):
         mission = MissionSession.objects.create(
             requester=self.owner,
@@ -978,6 +1013,8 @@ class ChatAppTests(TestCase):
         self.assertContains(response, reverse("chatapp:admin_start_mission"))
         self.assertContains(response, 'name="requester_id"')
         self.assertContains(response, 'name="opponent_id"')
+        self.assertContains(response, 'name="custom_mission_title"')
+        self.assertContains(response, 'name="custom_mission_instruction"')
         self.assertContains(response, "Mission Requests")
         self.assertContains(response, "Mission Proof")
         self.assertContains(response, "Token Requests")
@@ -1047,6 +1084,32 @@ class ChatAppTests(TestCase):
                 status=MissionQueueEntry.QueueStatus.MATCHED,
                 mission_session=mission,
             ).exists()
+        )
+
+    def test_admin_can_start_mission_with_personalized_mission(self):
+        self.client.login(username="chat_admin", password="password123")
+        response = self.client.post(
+            reverse("chatapp:admin_start_mission"),
+            data={
+                "requester_id": self.owner.id,
+                "opponent_id": self.member.id,
+                "custom_mission_title": "Fan Specific Invite",
+                "custom_mission_instruction": "Ask chat_member to recommend one beat style.",
+                "custom_opponent_instruction": "Respond naturally to the recommendation request.",
+                "custom_mission_difficulty": "2",
+                "next": reverse("chatapp:admin_review_center"),
+            },
+        )
+
+        self.assertRedirects(response, reverse("chatapp:admin_review_center"))
+        mission = MissionSession.objects.get(requester=self.owner, opponent=self.member)
+        self.assertEqual(mission.status, MissionSession.Status.OPPONENT_PROPOSED)
+        self.assertEqual(mission.mission_template.title, "Fan Specific Invite")
+        self.assertEqual(mission.mission_template.category, "personalized")
+        self.assertEqual(mission.mission_template.difficulty, 2)
+        self.assertEqual(
+            mission.mission_template.instruction_text,
+            "Ask chat_member to recommend one beat style.",
         )
 
     def test_admin_review_center_shows_mission_requests_for_matching(self):

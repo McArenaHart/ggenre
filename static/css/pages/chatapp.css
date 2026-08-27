@@ -1561,10 +1561,26 @@
   min-height: 38px;
 }
 
+.chat-admin-custom-mission-wide {
+  grid-column: span 2;
+}
+
+.chat-admin-custom-mission-fields {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.chat-admin-custom-mission-fields textarea,
+.chat-admin-start-grid textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
 .chat-mission-match-row {
   display: grid;
   gap: 0.45rem;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
 }
 
 .chat-mission-match-row .btn {

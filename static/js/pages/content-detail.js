@@ -15,6 +15,20 @@
     button.setAttribute("aria-expanded", isOpen ? "true" : "false");
   }
 
+  function showPurchasePanel(voteOptions, message) {
+    const purchasePanel = voteOptions?.querySelector("[data-token-purchase-panel]");
+    if (!purchasePanel) {
+      return;
+    }
+    purchasePanel.hidden = false;
+    const purchaseMessage = purchasePanel.querySelector("[data-token-purchase-message]");
+    if (purchaseMessage && message) {
+      purchaseMessage.hidden = false;
+      purchaseMessage.className = "small mt-2 mb-0 text-muted";
+      purchaseMessage.textContent = message;
+    }
+  }
+
   async function submitDetailVote(button, contentId) {
     const voteValue = parseInt(button.dataset.value, 10);
     const voteUrl = button.dataset.url;
@@ -84,6 +98,9 @@
       } else {
         messageElem.className = "small mt-2 mb-0 text-danger";
         messageElem.textContent = data.message || "Vote failed.";
+        if (data.purchase_required) {
+          showPurchasePanel(voteOptions, "Choose a bundle to request more voting tokens.");
+        }
         optionButtons.forEach((optionButton) => {
           optionButton.disabled = false;
         });
@@ -101,6 +118,62 @@
     }
   }
 
+  async function requestVotingTokens(button) {
+    const purchasePanel = button.closest("[data-token-purchase-panel]");
+    const tokenRequestUrl = purchasePanel?.dataset.tokenRequestUrl;
+    const requestedTokens = parseInt(button.dataset.tokenPurchase, 10);
+    const purchaseMessage = purchasePanel?.querySelector("[data-token-purchase-message]");
+    const bundleButtons = purchasePanel ? Array.from(purchasePanel.querySelectorAll("[data-token-purchase]")) : [button];
+
+    if (!tokenRequestUrl || !requestedTokens) {
+      return;
+    }
+
+    bundleButtons.forEach((bundleButton) => {
+      bundleButton.disabled = true;
+    });
+
+    try {
+      const response = await fetch(tokenRequestUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCsrfToken(),
+        },
+        body: JSON.stringify({
+          requested_tokens: requestedTokens,
+          payment_channel: "manual",
+          payment_reference: "vote-panel",
+        }),
+      });
+      const data = await response.json();
+      if (!purchaseMessage) {
+        return;
+      }
+      purchaseMessage.hidden = false;
+      if (response.ok && data.status === "ok") {
+        purchaseMessage.className = "small mt-2 mb-0 text-success";
+        purchaseMessage.textContent = "Token request #" + data.token_request.id + " submitted. Complete payment for admin approval.";
+      } else {
+        purchaseMessage.className = "small mt-2 mb-0 text-danger";
+        purchaseMessage.textContent = data.message || "Token request failed.";
+        bundleButtons.forEach((bundleButton) => {
+          bundleButton.disabled = false;
+        });
+      }
+    } catch (error) {
+      if (purchaseMessage) {
+        purchaseMessage.hidden = false;
+        purchaseMessage.className = "small mt-2 mb-0 text-danger";
+        purchaseMessage.textContent = "Network error while requesting tokens.";
+      }
+      bundleButtons.forEach((bundleButton) => {
+        bundleButton.disabled = false;
+      });
+      console.error("Error requesting voting tokens:", error);
+    }
+  }
+
   document.addEventListener("click", function (event) {
     const toggleButton = event.target.closest("[data-vote-toggle]");
     if (toggleButton) {
@@ -113,9 +186,17 @@
     if (submitButton) {
       event.preventDefault();
       submitDetailVote(submitButton, submitButton.dataset.contentId);
+      return;
+    }
+
+    const tokenPurchaseButton = event.target.closest("[data-token-purchase]");
+    if (tokenPurchaseButton) {
+      event.preventDefault();
+      requestVotingTokens(tokenPurchaseButton);
     }
   });
 
   window.toggleDetailVoting = toggleDetailVoting;
   window.submitDetailVote = submitDetailVote;
+  window.requestVotingTokens = requestVotingTokens;
 })();

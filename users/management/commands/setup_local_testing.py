@@ -4,7 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from content.models import ArtistUploadLimit, Content, Genre
-from users.models import OTP, Role
+from users.models import DEFAULT_FREE_OTP_VOTE_ALLOWANCE, OTP, Role
 
 
 class Command(BaseCommand):
@@ -33,9 +33,12 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--fan-votes",
-            default=1,
+            default=DEFAULT_FREE_OTP_VOTE_ALLOWANCE,
             type=int,
-            help="Initial OTP vote count for local_fan (default: 1).",
+            help=(
+                "Initial OTP vote count for local_fan "
+                f"(default: {DEFAULT_FREE_OTP_VOTE_ALLOWANCE})."
+            ),
         )
 
     @transaction.atomic

@@ -23,7 +23,15 @@ from django.core.mail import send_mail, BadHeaderError
 from django.core.cache import cache
 from django.utils.timezone import now
 from datetime import timedelta
-from .models import CustomUser, Role, Follow, OTP, TermsAndConditions, VotingTokenPolicy
+from .models import (
+    CustomUser,
+    DEFAULT_FREE_OTP_VOTE_ALLOWANCE,
+    Role,
+    Follow,
+    OTP,
+    TermsAndConditions,
+    VotingTokenPolicy,
+)
 from content.models import Content, Comment, Badge, Voucher
 from subscriptions.models import UserSubscription
 from content.models import ArtistUploadLimit, LivePerformance
@@ -632,13 +640,15 @@ def admin_dashboard(request):
     if request.method == "POST" and request.POST.get("otp_action"):
         otp_action = request.POST.get("otp_action")
         user_id = request.POST.get("user_id")
-        vote_count_raw = request.POST.get("vote_count", "1")
+        vote_count_raw = request.POST.get(
+            "vote_count", str(DEFAULT_FREE_OTP_VOTE_ALLOWANCE)
+        )
         regenerate_code = request.POST.get("regenerate_code") == "1"
 
         try:
             vote_count = max(1, int(vote_count_raw))
         except (TypeError, ValueError):
-            vote_count = 1
+            vote_count = DEFAULT_FREE_OTP_VOTE_ALLOWANCE
 
         otp_user = get_object_or_404(otp_users, id=user_id)
 
@@ -650,8 +660,8 @@ def admin_dashboard(request):
                 vote_count=vote_count,
                 regenerate_code=regenerate_code,
             )
-        except ValueError:
-            messages.error(request, "Invalid OTP action.")
+        except ValueError as exc:
+            messages.error(request, str(exc))
             return redirect("admin_dashboard")
 
         if otp_action == "cancel":
@@ -670,7 +680,9 @@ def admin_dashboard(request):
     if request.method == "POST" and request.POST.get("bulk_otp_action"):
         bulk_action = request.POST.get("bulk_otp_action")
         selected_ids = request.POST.getlist("bulk_user_ids")
-        vote_count = _positive_int(request.POST.get("bulk_vote_count"), 1)
+        vote_count = _positive_int(
+            request.POST.get("bulk_vote_count"), DEFAULT_FREE_OTP_VOTE_ALLOWANCE
+        )
         regenerate_code = request.POST.get("bulk_regenerate_code") == "1"
         selected_users = list(otp_users.filter(id__in=selected_ids))
 
@@ -689,8 +701,8 @@ def admin_dashboard(request):
                     regenerate_code=regenerate_code,
                 )
                 updated_count += 1
-            except ValueError:
-                messages.error(request, "Invalid bulk OTP action.")
+            except ValueError as exc:
+                messages.error(request, str(exc))
                 return redirect("admin_dashboard")
 
         messages.success(

@@ -610,13 +610,16 @@
           <div class="clearfix"></div>
         </div>
         <div class="x_content">
+          <p class="text-muted">
+            Free pass bypasses voting tokens and should be reserved for admin/test exceptions. Use OTP votes for normal free access and paid token grants.
+          </p>
           <div class="table-responsive">
             <table class="table table-striped">
               <thead>
                 <tr>
                   <th>User</th>
                   <th>Role</th>
-                  <th>Free Pass</th>
+                  <th>Token Bypass</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -651,11 +654,11 @@
                         {% if managed_user.has_free_pass %}
                         <button type="submit" name="user_access_action" value="revoke_free_pass"
                           class="btn btn-warning">
-                          Revoke Free Pass
+                          Revoke Bypass
                         </button>
                         {% else %}
                         <button type="submit" name="user_access_action" value="grant_free_pass" class="btn btn-primary">
-                          Grant Free Pass
+                          Grant Bypass
                         </button>
                         {% endif %}
                       </form>
@@ -722,7 +725,8 @@
 
             <div class="form-group">
               <label>Number of Votes</label>
-              <input type="number" name="bulk_vote_count" class="form-control" value="1" required min="1">
+              <input type="number" name="bulk_vote_count" class="form-control" value="10" required min="1">
+              <small class="form-text">Default free OTP access is 10 votes. Admins can grant more after a token purchase.</small>
             </div>
 
             <div class="custom-control custom-checkbox mb-3">
@@ -773,7 +777,7 @@
                     <form method="POST" class="admin-otp-inline-form">
                       {% csrf_token %}
                       <input type="hidden" name="user_id" value="{{ row.user.id }}">
-                      <input type="number" name="vote_count" class="form-control" value="1" min="1"
+                      <input type="number" name="vote_count" class="form-control" value="10" min="1"
                         aria-label="Vote count">
                       <button type="submit" name="otp_action" value="grant"
                         class="btn btn-primary btn-sm">Generate</button>

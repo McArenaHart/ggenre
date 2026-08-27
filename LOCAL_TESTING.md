@@ -32,7 +32,7 @@ What it does:
 Useful options:
 
 ```powershell
-.\scripts\start_local.ps1 -Reset -FanVotes 1
+.\scripts\start_local.ps1 -Reset -FanVotes 10
 .\scripts\start_local.ps1 -NoServer
 .\scripts\start_local.ps1 -ListenHost 0.0.0.0 -Port 8080
 ```
@@ -43,7 +43,7 @@ Useful options:
 $env:DJANGO_DEBUG="True"
 $env:LOCAL_CONSOLE_EMAIL="True"
 python manage.py migrate
-python manage.py setup_local_testing --reset --fan-votes 1
+python manage.py setup_local_testing --reset --fan-votes 10
 python manage.py runserver
 ```
 
@@ -52,7 +52,7 @@ python manage.py runserver
 - Admin: `local_admin` / `Admin123!`
 - Artist: `local_artist` / `Artist123!`
 - Fan: `local_fan` / `Fan123!`
-- OTP for fan: `123456` (default 1 vote)
+- OTP for fan: `123456` (default 10 votes)
 
 ## 5. Feature verification checklist
 
@@ -63,8 +63,9 @@ python manage.py runserver
 
 2. OTP single-use flow
 - Login as `local_fan`
-- Vote once using OTP `123456`
-- Try voting again and confirm it is blocked when votes reach zero
+- Vote for up to 10 content items using OTP `123456`
+- Confirm scores cannot be reused in the same genre during the active vote window
+- Confirm voting is blocked when votes reach zero
 
 3. Admin OTP controls
 - Login as `local_admin`

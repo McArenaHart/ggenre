@@ -11,7 +11,15 @@ from content.models import Comment, Content, LivePerformance, Vote
 from chatapp.models import AdminChatThread, MatchRating, MissionSession, MissionTemplate, PeerChatThread
 from chatapp.services import record_match_rating
 
-from .models import Announcement, DismissedAnnouncement, Notification, OTP, Role, VotingTokenPolicy
+from .models import (
+    Announcement,
+    DEFAULT_FREE_OTP_VOTE_ALLOWANCE,
+    DismissedAnnouncement,
+    Notification,
+    OTP,
+    Role,
+    VotingTokenPolicy,
+)
 
 CustomUser = get_user_model()
 
@@ -172,12 +180,12 @@ class UsersAppTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertNotIn("_auth_user_id", self.client.session)
 
-    def test_export_data_returns_pdf_unavailable_message_when_reportlab_missing(self):
+    def test_export_data_returns_pdf_when_reportlab_is_available(self):
         response = self.client.get(reverse("export_data"), {"format": "pdf"})
 
-        self.assertEqual(response.status_code, 503)
-        self.assertContains(response, "PDF export is unavailable")
-        self.assertEqual(response["Content-Type"], "text/plain; charset=utf-8")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertGreater(len(response.content), 0)
 
     def test_dashboard_redirects_by_role(self):
         self.client.login(
@@ -238,7 +246,8 @@ class UsersAppTests(TestCase):
         self.assertContains(response, "Admin Contact")
         self.assertNotContains(response, "Challenge room with")
         self.assertContains(response, "Admin chat navigation")
-        self.assertContains(response, "admin-contact-mission-head-actions")
+        self.assertContains(response, "admin-contact-mission-head")
+        self.assertContains(response, "admin-contact-mission-actions")
         self.assertContains(response, reverse("content_list"))
         self.assertContains(response, reverse("chatapp:index"))
         self.assertContains(response, reverse("chatapp:mission_center"))
@@ -260,7 +269,8 @@ class UsersAppTests(TestCase):
         self.assertContains(response, "Secret Mission")
         self.assertContains(response, "Mission Brief")
         self.assertContains(response, "Mission room navigation")
-        self.assertContains(response, "admin-contact-mission-head-actions")
+        self.assertContains(response, "admin-contact-mission-head")
+        self.assertContains(response, "admin-contact-mission-actions")
         self.assertContains(response, reverse("content_list"))
         self.assertContains(response, reverse("chatapp:index"))
         self.assertContains(response, reverse("chatapp:mission_center"))
@@ -502,6 +512,46 @@ class UsersAppTests(TestCase):
         otp.refresh_from_db()
         self.assertTrue(otp.is_active)
         self.assertEqual(otp.remaining_votes, 1)
+
+    def test_admin_otp_grant_defaults_to_ten_free_votes(self):
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
+
+        grant_response = self.client.post(
+            reverse("admin_dashboard"),
+            {
+                "otp_action": "grant",
+                "user_id": self.fan_user.id,
+            },
+        )
+
+        self.assertEqual(grant_response.status_code, 302)
+        otp = OTP.objects.get(user=self.fan_user)
+        self.assertEqual(otp.remaining_votes, DEFAULT_FREE_OTP_VOTE_ALLOWANCE)
+
+    def test_admin_can_grant_more_than_default_after_token_purchase(self):
+        self.client.login(
+            username=self.admin_user.username,
+            password=self.admin_data["password"],
+        )
+
+        response = self.client.post(
+            reverse("admin_dashboard"),
+            {
+                "otp_action": "grant",
+                "user_id": self.fan_user.id,
+                "vote_count": DEFAULT_FREE_OTP_VOTE_ALLOWANCE + 5,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        otp = OTP.objects.get(user=self.fan_user)
+        self.assertEqual(
+            otp.remaining_votes,
+            DEFAULT_FREE_OTP_VOTE_ALLOWANCE + 5,
+        )
 
     def test_admin_can_pause_and_resume_voting_tokens(self):
         self.client.login(

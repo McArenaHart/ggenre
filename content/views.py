@@ -463,6 +463,9 @@ def content_detail(request, content_id):
             content.votes.select_related('fan')
             .order_by('-timestamp')[:10]
         )
+    active_otp = None
+    if request.user.is_authenticated and not request.user.has_free_pass:
+        active_otp = OTP.objects.filter(user=request.user, is_active=True).first()
 
     return render(request, 'content/detail.html', {
         'content': content,
@@ -474,6 +477,8 @@ def content_detail(request, content_id):
         'comments': comments,
         'average_vote': round(average_vote, 1),  # Round to 1 decimal place
         'tokens_paused': VotingTokenPolicy.tokens_are_paused() or request.user.has_free_pass,
+        'active_otp': active_otp,
+        'token_bundles': [10, 25, 50, 100],
         'voting_suspended': voting_suspended,
         'can_vote': (
             content.is_approved
@@ -666,6 +671,17 @@ def vote_content(request, content_id):
     def vote_error(message, status_code=200):
         return JsonResponse({'status': 'error', 'message': message}, status=status_code)
 
+    def purchase_required(message):
+        return JsonResponse(
+            {
+                'status': 'error',
+                'message': message,
+                'purchase_required': True,
+                'token_request_url': reverse("chatapp:token_purchase_create"),
+                'suggested_token_bundles': [10, 25, 50, 100],
+            }
+        )
+
     try:
         if (request.content_type or "").startswith("application/json"):
             try:
@@ -702,6 +718,11 @@ def vote_content(request, content_id):
         tokens_paused = VotingTokenPolicy.tokens_are_paused() or request.user.has_free_pass
         otp = None
         if not tokens_paused:
+            user_otps = OTP.objects.filter(
+                user=request.user,
+                otp_code=otp_code,
+                is_active=True,
+            )
             otp = OTP.objects.filter(
                 user=request.user,
                 otp_code=otp_code,
@@ -709,6 +730,10 @@ def vote_content(request, content_id):
                 remaining_votes__gt=0
             ).first()
             if not otp:
+                if user_otps.filter(remaining_votes__lte=0).exists():
+                    return purchase_required(
+                        'You have used your 10 voting tokens. Buy more tokens to keep voting.'
+                    )
                 return vote_error('Invalid/expired OTP')
 
         active_vote_cutoff = now() - timedelta(days=1)
@@ -739,7 +764,9 @@ def vote_content(request, content_id):
                     remaining_votes__gt=0,
                 ).first()
                 if not locked_otp or not locked_otp.use_vote():
-                    return vote_error('OTP vote limit reached')
+                    return purchase_required(
+                        'You have used your voting tokens. Buy more tokens to keep voting.'
+                    )
 
             vote, created = Vote.objects.update_or_create(
                 content=content,
@@ -966,8 +993,6 @@ def classify_content(request, content_id):
         form = ContentClassificationForm(instance=content)
 
     return render(request, 'content/classify.html', {'form': form, 'content': content})
-
-
 
 
 

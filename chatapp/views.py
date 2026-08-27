@@ -112,6 +112,45 @@ def _admin_mission_return(request):
     return "chatapp:admin_inbox"
 
 
+def _active_mission_templates():
+    return MissionTemplate.objects.filter(is_active=True).order_by("title")
+
+
+def _mission_template_from_admin_post(request):
+    custom_title = (request.POST.get("custom_mission_title") or "").strip()
+    custom_instruction = (request.POST.get("custom_mission_instruction") or "").strip()
+    custom_opponent_instruction = (
+        request.POST.get("custom_opponent_instruction") or ""
+    ).strip()
+    has_custom_mission = bool(
+        custom_title or custom_instruction or custom_opponent_instruction
+    )
+    if has_custom_mission:
+        if not custom_title or not custom_instruction:
+            raise ValueError("Write both a custom mission title and mission instruction.")
+        try:
+            difficulty = int(request.POST.get("custom_mission_difficulty") or 1)
+        except (TypeError, ValueError):
+            difficulty = 1
+        return MissionTemplate.objects.create(
+            title=custom_title,
+            instruction_text=custom_instruction,
+            opponent_instruction_text=custom_opponent_instruction,
+            category="personalized",
+            difficulty=max(1, min(difficulty, 5)),
+            is_active=True,
+        )
+
+    mission_template_raw = request.POST.get("mission_template_id")
+    if not mission_template_raw:
+        return None
+    try:
+        mission_template_id = int(mission_template_raw)
+    except (TypeError, ValueError):
+        raise ValueError("Choose a valid mission template.")
+    return get_object_or_404(_active_mission_templates(), pk=mission_template_id)
+
+
 MISSION_MONITOR_STATUSES = [
     MissionSession.Status.REQUESTED,
     MissionSession.Status.MATCHING,
@@ -466,6 +505,9 @@ def direct_chat(request, user_id):
             "message_retention_ms": VotingTokenPolicy.message_retention_ms(),
             "mission_context": mission_context,
             "token_request_context": token_request_context,
+            "active_mission_templates": list(_active_mission_templates())
+            if request.user.is_admin()
+            else [],
         },
     )
 
@@ -781,9 +823,7 @@ def admin_inbox(request):
         "manual_only": "Manual Only",
         "ai_preferred": "AI Preferred",
     }
-    active_mission_templates = list(
-        MissionTemplate.objects.filter(is_active=True).order_by("title")
-    )
+    active_mission_templates = list(_active_mission_templates())
 
     return render(
         request,
@@ -832,18 +872,11 @@ def admin_assign_mission_opponent(request, mission_id):
         pk=opponent_id,
     )
 
-    selected_template = None
-    mission_template_raw = request.POST.get("mission_template_id")
-    if mission_template_raw:
-        try:
-            mission_template_id = int(mission_template_raw)
-        except (TypeError, ValueError):
-            messages.error(request, "Choose a valid mission template.")
-            return redirect(_admin_mission_return(request))
-        selected_template = get_object_or_404(
-            MissionTemplate.objects.filter(is_active=True),
-            pk=mission_template_id,
-        )
+    try:
+        selected_template = _mission_template_from_admin_post(request)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect(_admin_mission_return(request))
 
     if not cache.get(f"direct_chat_presence:online:{opponent.id}"):
         messages.error(request, "Selected player is no longer online.")
@@ -898,18 +931,11 @@ def admin_start_mission(request):
         pk=opponent_id,
     )
 
-    selected_template = None
-    mission_template_raw = request.POST.get("mission_template_id")
-    if mission_template_raw:
-        try:
-            mission_template_id = int(mission_template_raw)
-        except (TypeError, ValueError):
-            messages.error(request, "Choose a valid mission template.")
-            return redirect(_admin_mission_return(request))
-        selected_template = get_object_or_404(
-            MissionTemplate.objects.filter(is_active=True),
-            pk=mission_template_id,
-        )
+    try:
+        selected_template = _mission_template_from_admin_post(request)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect(_admin_mission_return(request))
 
     try:
         mission = create_admin_started_mission(
@@ -1083,9 +1109,7 @@ def admin_review_center(request):
         "mission_session__opponent_mission_template",
     ).order_by("created_at"))
     pending_mission_requests, pending_mission_rows, online_players = _build_pending_mission_rows(request.user)
-    active_mission_templates = list(
-        MissionTemplate.objects.filter(is_active=True).order_by("title")
-    )
+    active_mission_templates = list(_active_mission_templates())
     monitored_missions = list(
         MissionSession.objects.filter(status__in=MISSION_MONITOR_STATUSES)
         .select_related("requester", "opponent", "winner", "loser", "mission_template", "opponent_mission_template", "assigned_admin")

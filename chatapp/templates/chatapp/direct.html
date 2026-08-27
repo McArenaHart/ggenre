@@ -274,11 +274,27 @@
               </option>
               {% endfor %}
             </select>
+            <select name="mission_template_id" class="form-select form-select-sm">
+              <option value="">Random active mission</option>
+              {% for template in active_mission_templates %}
+              <option value="{{ template.id }}">{{ template.title }}</option>
+              {% endfor %}
+            </select>
             {% if mission_row.match_disabled %}
             <button type="submit" class="btn btn-primary btn-sm" disabled>Approve & Match</button>
             {% else %}
             <button type="submit" class="btn btn-primary btn-sm">Approve & Match</button>
             {% endif %}
+          </div>
+          <div class="chat-admin-custom-mission-fields">
+            <input type="text" name="custom_mission_title" class="form-control form-control-sm"
+              maxlength="120" placeholder="Personalized mission title" />
+            <textarea name="custom_mission_instruction" class="form-control form-control-sm" rows="3"
+              placeholder="Write a personalized mission for {{ mission_row.mission.requester.username }}"></textarea>
+            <textarea name="custom_opponent_instruction" class="form-control form-control-sm" rows="3"
+              placeholder="Optional opponent context"></textarea>
+            <input type="number" name="custom_mission_difficulty" class="form-control form-control-sm"
+              min="1" max="5" value="1" />
           </div>
           {% if not mission_row.available_count and not mission_row.claimed_by_other %}
           <div class="chat-admin-status">No free online opponents right now.</div>

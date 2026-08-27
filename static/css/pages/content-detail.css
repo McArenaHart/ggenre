@@ -247,7 +247,7 @@
 }
 
 .watch-vote-panel.active .watch-vote-options {
-  max-height: 320px;
+  max-height: 520px;
   opacity: 1;
   margin-top: 0.52rem;
   padding: 0.58rem;
@@ -261,6 +261,19 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.42rem;
   margin-bottom: 0.46rem;
+}
+
+.watch-token-balance {
+  min-height: 31px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(122, 237, 238, 0.18);
+  border-radius: 8px;
+  padding: 0.25rem 0.5rem;
+  color: var(--gg-text-muted);
+  font-size: 0.78rem;
+  text-align: center;
 }
 
 .watch-vote-grid {
@@ -279,6 +292,38 @@
 .watch-vote-option:disabled {
   cursor: not-allowed;
   opacity: 0.65;
+}
+
+.watch-token-purchase {
+  margin-top: 0.7rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.watch-token-purchase-copy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.45rem;
+  align-items: baseline;
+  color: var(--gg-text);
+  font-size: 0.82rem;
+}
+
+.watch-token-purchase-copy span {
+  color: var(--gg-text-muted);
+}
+
+.watch-token-bundles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.38rem;
+  margin-top: 0.5rem;
+}
+
+.watch-token-bundles .btn {
+  min-height: 32px;
+  border-radius: 8px;
+  font-size: 0.78rem;
 }
 
 .watch-description {
@@ -646,6 +691,11 @@ body.app-theme[data-theme="light"] .watch-sidebar-section+.watch-sidebar-section
 
   .watch-vote-panel {
     width: 100%;
+  }
+
+  .watch-vote-inputs,
+  .watch-token-bundles {
+    grid-template-columns: 1fr;
   }
 
   .watch-sidebar-list {
