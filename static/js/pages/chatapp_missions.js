@@ -561,6 +561,7 @@
             }
         }
 
+        let latestMissionRequest = null;
         async function refreshLatestMission(options) {
             const opts = options || {};
             const silent = Boolean(opts.silent);
@@ -574,7 +575,7 @@
                 if (!silent) {
                     setText(statusEl, "Checking for mission updates...");
                 }
-                const data = await getJson(missionLatestUrl);
+                const data = await (latestMissionRequest || (latestMissionRequest = getJson(missionLatestUrl).finally(function () { latestMissionRequest = null; })));
                 renderMissionStatus(data.mission);
             } catch (error) {
                 if (!silent) {

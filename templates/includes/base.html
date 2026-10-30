@@ -26,7 +26,7 @@
   <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet" />
   <link href="{% static 'vendor/fontawesome-free/css/all.min.css' %}" rel="stylesheet" />
   <link href="{% static 'css/styles.css' %}" rel="stylesheet" />
-  <link href="{% static 'css/app-shell.css' %}?v=20260625back3" rel="stylesheet" />
+  <link href="{% static 'css/app-shell.css' %}?v=20261030mobile1" rel="stylesheet" />
   <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.carousel.css' %}" />
   <link rel="stylesheet" href="{% static 'vendor/owl-carousel/owl.theme.css' %}" />
   {% if admin_contact_user and other_user != admin_contact_user %}
@@ -104,6 +104,7 @@
           </li>
           {% endif %}
           {% if user.role == 'artist' %}
+<li class="nav-item"><a class="nav-link" href="{% url 'studio:index' %}"><i class="fas fa-microphone"></i> Studio</a></li>
           <li class="nav-item">
             <a class="nav-link" href="{% url 'upload_content' %}">
               <i class="fas fa-fw fa-cloud-upload-alt"></i>
@@ -117,6 +118,7 @@
             </a>
           </li>
           {% elif user.role == 'admin' %}
+<li class="nav-item"><a class="nav-link" href="{% url 'studio:export_reviews' %}"><i class="fas fa-music"></i> Studio exports</a></li>
           <li class="nav-item">
             <a class="nav-link" href="{% url 'admin_dashboard' %}">
               <i class="fas fa-fw fa-tachometer-alt"></i>
@@ -230,6 +232,7 @@
       </li>
       {% endif %}
       {% if user.role == 'artist' %}
+<li class="nav-item"><a class="nav-link" href="{% url 'studio:index' %}"><i class="fas fa-microphone"></i> Studio</a></li>
       <li class="nav-item">
         <a class="nav-link" href="{% url 'upload_content' %}">
           <i class="fas fa-fw fa-cloud-upload-alt"></i>
@@ -243,6 +246,7 @@
         </a>
       </li>
       {% elif user.role == 'admin' %}
+<li class="nav-item"><a class="nav-link" href="{% url 'studio:export_reviews' %}"><i class="fas fa-music"></i> Studio exports</a></li>
       <li class="nav-item">
         <a class="nav-link" href="{% url 'admin_dashboard' %}">
           <i class="fas fa-fw fa-tachometer-alt"></i>
@@ -606,10 +610,10 @@
   <script src="{% static 'vendor/jquery-easing/jquery.easing.min.js' %}"></script>
   <script src="{% static 'vendor/owl-carousel/owl.carousel.js' %}"></script>
   <script src="{% static 'js/custom.js' %}"></script>
-  <script src="{% static 'js/pages/base-shell.js' %}?v=20260807backbutton1"></script>
-  {% if admin_contact_user and other_user != admin_contact_user %}
-  <script src="{% static 'js/pages/chatapp.js' %}?v=20260810mediacacheclean1"></script>
-  <script src="{% static 'js/pages/chatapp_missions.js' %}?v=20260810pullrefresh1"></script>
+  <script src="{% static 'js/pages/base-shell.js' %}?v=20261030performance1"></script>
+  {% if admin_contact_user and other_user != admin_contact_user and request.resolver_match.view_name != "chatapp:direct" %}
+  <script src="{% static 'js/pages/chatapp.js' %}?v=20261030performance1"></script>
+  <script src="{% static 'js/pages/chatapp_missions.js' %}?v=20261030performance1"></script>
   {% endif %}
 
   {% block extra_js %}{% endblock %}

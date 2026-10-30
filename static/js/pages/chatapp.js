@@ -895,11 +895,13 @@
       }).catch(function () { });
     }
 
+    let contactStateRequest = null;
     function refreshAdminContactState() {
       if (!isAdminContactWidget || !unreadUrl) {
         return;
       }
-      fetch(unreadUrl, { credentials: "include" })
+      if (contactStateRequest) return contactStateRequest;
+      contactStateRequest = fetch(unreadUrl, { credentials: "include" })
         .then(function (response) {
           if (!response.ok) {
             return null;
@@ -913,7 +915,8 @@
           updateAdminContactBadge(data.unread_count);
           renderOtpNotice(data.otp);
         })
-        .catch(function () { });
+        .catch(function () { }).finally(function () { contactStateRequest = null; });
+      return contactStateRequest;
     }
 
     function setWidgetOpen(isOpen) {

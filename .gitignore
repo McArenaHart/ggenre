@@ -47,3 +47,8 @@ htmlcov/
 *.backup
 *.bak
 datadump.json
+
+# Private Studio source audio and export snapshots
+studio_private/
+
+.local-backups/

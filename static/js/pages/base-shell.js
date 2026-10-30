@@ -560,8 +560,10 @@
     let lastCount = Number(firstBadge ? firstBadge.textContent : "0") || 0;
     let lastMissionRequestCount = Number(body.dataset.adminMissionRequestCount || "0") || 0;
 
+    let unreadPollRequest = null;
     function pollUnread() {
-      fetch(unreadUrl, { credentials: "include" })
+      if (unreadPollRequest) return unreadPollRequest;
+      unreadPollRequest = fetch(unreadUrl, { credentials: "include" })
         .then(function (response) {
           if (!response.ok) {
             return null;
@@ -591,7 +593,8 @@
         })
         .catch(function () {
           // Ignore polling failures; the next interval can recover.
-        });
+        }).finally(function () { unreadPollRequest = null; });
+      return unreadPollRequest;
     }
 
     pollUnread();

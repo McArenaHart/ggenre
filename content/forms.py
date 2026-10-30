@@ -7,7 +7,7 @@ class ContentUploadForm(forms.ModelForm):
     """
     class Meta:
         model = Content
-        fields = ['title', 'description', 'file', 'youtube_url', 'thumbnail', 'tags', 'genre']  # Include all required fields
+        fields = ['title', 'description', 'file', 'youtube_url', 'thumbnail', 'tags', 'genre', 'allow_collaboration']  # Include all required fields
         widgets = {
             'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter content title'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'placeholder': 'Enter a description', 'rows': 5}),
@@ -48,6 +48,8 @@ class ContentUploadForm(forms.ModelForm):
         if upload_file and youtube_url:
             raise forms.ValidationError("Provide either a file upload or a YouTube link, not both.")
 
+        if cleaned_data.get('allow_collaboration') and (not upload_file or not upload_file.name.lower().endswith('.mp4')):
+            raise forms.ValidationError("Vocal collaboration requires an uploaded MP4 video with sound.")
         return cleaned_data
     
 

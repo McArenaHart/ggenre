@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Studio timeline and recovery checks</title><style>body{background:#101827;color:#fff;font:16px system-ui;padding:24px}pre{white-space:pre-wrap}button{padding:12px}</style><link rel="stylesheet" href="/static/css/pages/studio.css?v=qa1"><h1>Studio timeline and recovery checks</h1><p>Generated audio and isolated recovery keys only. No microphone access.</p><button id="run">Run browser checks</button><pre id="result">Ready</pre><div id="timeline"></div><script src="/static/js/studio-drafts.js?v=qa1"></script><script src="/static/js/studio-timeline.js?v=qa1"></script><script>
+document.getElementById('run').onclick=async()=>{
+ const log=document.getElementById('result');log.textContent='Running…';
+ const assert=(condition,message)=>{if(!condition)throw new Error(message);log.textContent+='\nPASS '+message;};
+ const key='qa:'+Date.now(),draft=new StudioDrafts(key),other=new StudioDrafts(key+':other');let context;
+ try{
+ const samples=new Float32Array([0,.5,-.5,0]);await draft.write({base:'rev1',take:{samples,sampleRate:44100,position:2},tracks:[{id:1,gain:.5}]});
+ const recovered=await new StudioDrafts(key).read();assert(recovered.take.samples instanceof Float32Array&&recovered.take.samples[1]===.5,'typed audio survives closing and reopening the draft client');
+ assert(await other.read()===undefined,'account/project recovery keys are isolated');
+ const pending=draft.write({take:{samples},base:'rev2'});const clear=draft.clear();await Promise.all([pending,clear]);assert(await draft.read()===undefined,'clearing after an in-flight save prevents a stale recovery copy');
+ context=new AudioContext();const buffer=context.createBuffer(1,44100,44100);for(let i=0;i<44100;i++)buffer.getChannelData(0)[i]=Math.sin(i*.1)*.3;
+ const track={id:1,name:'Generated test vocal',offset:2,trim_start:0,trim_end:0,gain:1,muted:false};
+ new StudioTimeline.Timeline({container:document.getElementById('timeline'),tracks:[track],load:async()=>buffer,onChange:()=>{},onSeek:()=>{},locked:()=>false,onError:error=>{throw error;}});
+ await new Promise(resolve=>setTimeout(resolve,100));const canvas=document.querySelector('#timeline canvas');assert(canvas&&canvas.width>0,'waveform canvas renders from a decoded private-track buffer');
+ const clip=document.querySelector('.studio-clip');assert(clip.style.left==='32px','timeline clip uses its saved two-second offset');
+ log.textContent+='\nALL BROWSER CHECKS PASSED';
+ }catch(error){log.textContent+='\nFAIL '+error.stack;}finally{await draft.clear();await other.clear();await context?.close();}
+};
+</script></html>

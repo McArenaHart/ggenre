@@ -40,34 +40,8 @@ def admin_contact(request):
     peer_unread_count = 0
     if not user.has_role(Role.ADMIN):
         try:
-            from chatapp.models import PeerChatThread
-            from chatapp.services import users_can_peer_chat
-
-            one_threads = (
-                PeerChatThread.objects.filter(
-                    user_one=user,
-                    user_two__is_active=True,
-                    user_two__is_suspended_by_admin=False,
-                )
-                .exclude(user_two__role=Role.ADMIN)
-            )
-            two_threads = (
-                PeerChatThread.objects.filter(
-                    user_two=user,
-                    user_one__is_active=True,
-                    user_one__is_suspended_by_admin=False,
-                )
-                .exclude(user_one__role=Role.ADMIN)
-            )
-            peer_unread_count = sum(
-                thread.unread_count_user_one
-                for thread in one_threads.select_related("user_two")
-                if users_can_peer_chat(user, thread.user_two)
-            ) + sum(
-                thread.unread_count_user_two
-                for thread in two_threads.select_related("user_one")
-                if users_can_peer_chat(user, thread.user_one)
-            )
+            from chatapp.services import peer_unread_total
+            peer_unread_count = peer_unread_total(user)
         except Exception:
             peer_unread_count = 0
 
@@ -75,11 +49,7 @@ def admin_contact(request):
         try:
             from chatapp.models import AdminChatThread, MissionSession
 
-            unread_count = sum(
-                AdminChatThread.objects.filter(admin=user).values_list(
-                    "unread_count", flat=True
-                )
-            )
+            unread_count = AdminChatThread.objects.filter(admin=user).aggregate(total=Sum("unread_count"))["total"] or 0
             mission_request_count = MissionSession.objects.filter(
                 status__in=["requested", "matching", "opponent_proposed"]
             ).count()

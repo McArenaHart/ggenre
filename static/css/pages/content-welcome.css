@@ -541,3 +541,11 @@ body.app-theme[data-theme="light"] .welcome-metrics-row {
     min-height: 160px;
   }
 }
+
+/* Collaboration cards share the ordinary feed without clipping their join action. */
+.welcome-media-card.has-collaboration{max-height:none}
+.welcome-media-body{z-index:auto;min-width:0}
+.welcome-collaboration-actions{position:relative;z-index:3;margin-top:auto}
+.welcome-collaboration-actions .btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;white-space:normal;width:100%}
+.welcome-collaboration-credit{font-size:.8rem;color:var(--gg-text-muted);margin:0;overflow-wrap:anywhere}
+.welcome-media-title,.welcome-artist-link{overflow-wrap:anywhere;min-width:0}

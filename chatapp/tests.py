@@ -926,7 +926,7 @@ class ChatAppTests(TestCase):
         response = self.client.get(reverse("chatapp:admin_inbox"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Quick controls are also available below")
+        self.assertContains(response, reverse("chatapp:admin_review_center"))
         self.assertContains(
             response,
             reverse("chatapp:admin_review_mission_action", args=[evidence.id]),
@@ -1263,8 +1263,8 @@ class ChatAppTests(TestCase):
         response = self.client.get(reverse("chatapp:admin_review_center"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f"Evidence #{evidence.id}")
-        self.assertContains(response, f"Request #{token_request.id}")
+        self.assertContains(response, reverse("chatapp:admin_review_mission_action", args=[evidence.id]))
+        self.assertContains(response, reverse("chatapp:admin_review_token_action", args=[token_request.id]))
         self.assertNotContains(response, "Route: AI")
         self.assertNotContains(response, "Route: Manual")
         self.assertNotContains(response, "Confidence")
@@ -1306,8 +1306,8 @@ class ChatAppTests(TestCase):
         response = self.client.get(reverse("chatapp:admin_review_center"), {"route": "manual"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f"Evidence #{evidence.id}")
-        self.assertContains(response, f"Request #{token_request.id}")
+        self.assertContains(response, reverse("chatapp:admin_review_mission_action", args=[evidence.id]))
+        self.assertContains(response, reverse("chatapp:admin_review_token_action", args=[token_request.id]))
 
     def test_admin_can_switch_review_route_mode(self):
         self.client.login(username="chat_admin", password="password123")

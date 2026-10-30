@@ -75,6 +75,7 @@ class Content(models.Model):
         ('other', 'Other'),
     ]
 
+    allow_collaboration = models.BooleanField(default=False, help_text="Let artists add vocals to this video and publish credited collaborations on GGenre.")
     title = models.CharField(max_length=255)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
     genre = models.ForeignKey(Genre, on_delete=models.CASCADE, related_name="contents", null=True, blank=True)
@@ -97,6 +98,9 @@ class Content(models.Model):
         blank=True
     )
     tags = TaggableManager()  # Tags for content (e.g., music, dance, drama)
+
+    class Meta:
+        indexes = [models.Index(fields=["-upload_date", "is_approved", "is_visible"], name="content_feed_order_idx")]
 
     def __str__(self):
         return self.title
@@ -152,11 +156,15 @@ class Content(models.Model):
 
     @property
     def is_video_file(self):
-        return self.file_name_lower.endswith(".mp4") or self.file_name_lower.endswith(".mpeg")
+        return hasattr(self, "video_collaboration") or self.file_name_lower.endswith(".mp4") or self.file_name_lower.endswith(".mpeg")
+
+    @property
+    def collaboration_supported(self):
+        return not self.youtube_url and (hasattr(self, "video_collaboration") or self.file_name_lower.endswith(".mp4"))
 
     @property
     def is_audio_file(self):
-        return self.file_name_lower.endswith(".mp3")
+        return self.file_name_lower.endswith(".mp3") or hasattr(self, "studio_release")
 
     @property
     def is_image_file(self):
@@ -164,6 +172,12 @@ class Content(models.Model):
 
     @property
     def safe_file_url(self):
+        if hasattr(self, "video_collaboration"):
+            from django.urls import reverse
+            return reverse("studio:collaboration_play", args=[self.video_collaboration.pk])
+        if hasattr(self, "studio_release"):
+            from django.urls import reverse
+            return reverse("studio:play", args=[self.studio_release.pk])
         try:
             if self.file and self.file.name:
                 return self.file.url
@@ -191,7 +205,15 @@ class Content(models.Model):
     @property
     def view_count(self):
         """Property to maintain compatibility with templates expecting .views"""
+        if hasattr(self, "_view_count"):
+            return self._view_count
         return self.viewers.count()
+
+    @property
+    def vote_count(self):
+        if hasattr(self, "_vote_count"):
+            return self._vote_count
+        return self.votes.count()
 
     def save(self, *args, **kwargs):
         if self.thumbnail and hasattr(self.thumbnail, "file"):
@@ -261,6 +283,9 @@ class Comment(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='comments')
     text = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["content", "-timestamp"], name="content_comment_time_idx")]
 
     def __str__(self):
         return f"{self.user.username} on {self.content.title}"

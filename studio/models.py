@@ -1,0 +1,92 @@
+import uuid
+from django.conf import settings
+from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
+from .storage import private_storage
+
+
+def audio_path(instance, filename):
+    return f"audio/{uuid.uuid4().hex}.wav"
+
+class Project(models.Model):
+    TYPES = [("gospel", "Gospel"), ("acapella", "Acapella"), ("secular", "Secular / R&B / Hip Hop")]
+    artist = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    title = models.CharField(max_length=160)
+    category = models.CharField(max_length=16, choices=TYPES)
+    description = models.TextField(blank=True)
+    tempo = models.PositiveSmallIntegerField(default=80, validators=[MinValueValidator(40), MaxValueValidator(240)])
+    mix = models.FileField(storage=private_storage, upload_to=audio_path, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def workflow_label(self):
+        from .catalog import profile_for
+        return profile_for(self.category)["label"]
+
+    def __str__(self):
+        return self.title
+
+class Track(models.Model):
+    project = models.ForeignKey(Project, related_name="tracks", on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    kind = models.CharField(max_length=12, choices=[("vocal", "Vocal"), ("backing", "Imported backing"), ("beat", "Studio rhythm preset")], default="vocal")
+    beat_preset = models.CharField(max_length=48, blank=True)
+    beat_bpm = models.PositiveSmallIntegerField(null=True, blank=True, validators=[MinValueValidator(40), MaxValueValidator(240)])
+    audio = models.FileField(storage=private_storage, upload_to=audio_path)
+    gain = models.FloatField(default=1)
+    offset = models.FloatField(default=0)
+    trim_start = models.FloatField(default=0)
+    trim_end = models.FloatField(default=0)
+    muted = models.BooleanField(default=False)
+
+class ExportAllowance(models.Model):
+    artist = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    free_used = models.PositiveIntegerField(default=0, help_text="Free exports consumed since the last reset; repeat downloads do not count.")
+    free_limit = models.PositiveIntegerField(default=2, help_text="Free exports allowed before payment approval is required. Zero requires approval immediately.")
+
+    unlimited_exports = models.BooleanField(default=False, help_text="Suspend free export limits and payment approval for new exports. Existing usage is retained.")
+
+    @property
+    def free_remaining(self):
+        return max(0, self.free_limit - self.free_used)
+
+    def __str__(self):
+        return f"{self.artist} — unlimited exports" if self.unlimited_exports else f"{self.artist} — {self.free_remaining} free exports remaining"
+
+class Export(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    audio = models.FileField(storage=private_storage, upload_to=audio_path)
+    status = models.CharField(max_length=12, choices=[("free", "Free"), ("pending", "Awaiting payment approval"), ("approved", "Payment verified"), ("rejected", "Rejected")])
+    payment_reference = models.CharField(max_length=160, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="studio_export_reviews")
+
+class Release(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True)
+    content = models.OneToOneField("content.Content", related_name="studio_release", on_delete=models.CASCADE)
+    audio = models.FileField(storage=private_storage, upload_to=audio_path)
+
+
+class Instrumental(models.Model):
+    artist = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    title = models.CharField(max_length=160)
+    category = models.CharField(max_length=16, choices=[("gospel", "Gospel"), ("secular", "Circular / Secular")])
+    config = models.JSONField(default=dict)
+    audio = models.FileField(storage=private_storage, upload_to=audio_path, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title
+
+
+class VideoCollaboration(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    source = models.ForeignKey("content.Content", null=True, on_delete=models.SET_NULL, related_name="vocal_collaborations")
+    content = models.OneToOneField("content.Content", null=True, blank=True, on_delete=models.SET_NULL, related_name="video_collaboration")
+    source_title = models.CharField(max_length=255)
+    credits = models.JSONField(default=list)
+    role = models.CharField(max_length=32, default="Harmony")
+    status = models.CharField(max_length=12, default="processing", choices=[("processing", "Processing"), ("ready", "Ready"), ("published", "Published"), ("failed", "Failed")])
+    video = models.FileField(storage=private_storage, upload_to="collaborations/")
+    created_at = models.DateTimeField(auto_now_add=True)

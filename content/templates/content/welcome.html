@@ -4,7 +4,7 @@
 {% block title %}Welcome{% endblock title %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/content-welcome.css' %}?v=20260810winnercards2" rel="stylesheet" />
+<link href="{% static 'css/pages/content-welcome.css' %}?v=20261030collaboration1" rel="stylesheet" />
 {% endblock extra_css %}
 
 {% block content %}
@@ -95,7 +95,7 @@
         <div class="row">
             {% for content in featured_contents %}
             <div class="col-xl-4 col-md-6 mb-4">
-                <article class="welcome-media-card card h-100">
+                <article class="welcome-media-card card h-100{% if content.video_collaboration or content.allow_collaboration %} has-collaboration{% endif %}">
                     <a href="{% url 'content_detail' content.id %}" class="stretched-link welcome-detail-link" aria-label="Open {{ content.title }}"></a>
 
                     <div class="welcome-media-slot">
@@ -104,6 +104,7 @@
 
                     <div class="welcome-media-body">
                         <h3 class="welcome-media-title">{{ content.title }}</h3>
+                        {% if content.video_collaboration %}<p class="welcome-collaboration-credit">Vocal collaboration · {{ content.video_collaboration.credits|length }} parts</p>{% endif %}
 
                         <div class="welcome-artist-row">
                             {% include "partials/user_avatar.html" with avatar_user=content.artist size=30 class_name="welcome-artist-avatar" alt_text=content.artist.username %}
@@ -116,9 +117,10 @@
 
                         <div class="welcome-metrics-row">
                             <span><i class="far fa-eye"></i> <strong class="view-count" data-content-id="{{ content.id }}">{{ content.view_count }}</strong></span>
-                            <span><i class="fas fa-heart"></i> <strong>{{ content.votes.count }}</strong></span>
+                            <span><i class="fas fa-heart"></i> <strong>{{ content.vote_count }}</strong></span>
                             <span><i class="far fa-calendar-alt"></i> <strong>{{ content.upload_date|date:"M d" }}</strong></span>
                         </div>
+                        {% if content.allow_collaboration and content.collaboration_supported and request.user.is_artist %}<div class="welcome-collaboration-actions"><a href="{% url 'studio:collaborate' content.pk %}" class="btn btn-primary"><i class="fas fa-microphone" aria-hidden="true"></i> Add your voice</a></div>{% endif %}
                     </div>
                 </article>
             </div>

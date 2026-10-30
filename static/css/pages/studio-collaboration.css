@@ -1,0 +1,33 @@
+.collab-shell{height:100dvh;overflow:auto;background:#14151b;color:#eee}.collab-main{max-width:1200px;margin:auto;padding:24px;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px}.collab-stage,.collab-settings{min-width:0}.collab-stage video{width:100%;max-height:55dvh;background:#050609;border-radius:14px}.collab-stage audio{width:100%}.collab-clock{font:700 24px monospace;margin:12px 0;color:#c5b3ff}.collab-transport{display:flex;flex-wrap:wrap;gap:10px}.collab-shell label{display:block;margin:14px 0 6px}.collab-shell input:not([type=checkbox]),.collab-shell select,.collab-shell textarea{display:block;width:100%;padding:10px;background:#222530;color:#fff;border:1px solid #555b70;border-radius:8px}.collab-shell input[type=range]{accent-color:#aa91ee}.collab-shell p,.collab-shell li{line-height:1.6;color:#c2c5d1}.collab-settings{padding:20px;background:#1c1f29;border-radius:14px;align-self:start}.collab-shell h1{font-size:24px;margin:0}.collab-shell h2{font-size:19px;margin-top:22px}.collab-shell [hidden]{display:none!important}.collab-check{display:flex!important;gap:10px;align-items:center}.collab-shell form button{margin-top:12px}.collab-draft{border-top:1px solid #555;padding:12px 0}.collab-draft video{width:100%}.collab-shell button:focus-visible,.collab-shell a:focus-visible{outline:3px solid #d2c1ff;outline-offset:4px}@media(max-width:700px){.collab-main{grid-template-columns:1fr;padding:14px}.collab-stage video{max-height:45dvh}.collab-shell .studio-topbar{flex-wrap:wrap;height:auto;min-height:72px;padding:12px}.collab-settings{order:2}}
+
+.collab-transport{position:sticky;top:0;bottom:0;z-index:4;background:#14151b;padding:10px 0}
+
+.collab-transport .collab-clock{margin:0 8px 0 0;font-size:20px;align-self:center}
+
+/* Keep the complete vocal workflow usable on narrow and short phone screens. */
+.collab-shell,.collaboration-library{overflow-wrap:anywhere}
+.collab-shell .studio-topbar{gap:16px;flex-wrap:wrap}
+.collab-shell .studio-topbar>div{min-width:0;flex:1 1 200px}
+.collab-shell .studio-topbar span{display:block;overflow-wrap:anywhere}
+.collab-shell .studio-button,.collab-shell summary,.collaboration-library .studio-button{min-height:44px;white-space:normal;max-width:100%;font-size:14px;line-height:1.4}
+.collab-shell input:not([type=checkbox]),.collab-shell select,.collab-shell textarea{min-height:44px;font-size:16px}
+.collab-shell input[type=range]{padding:0;touch-action:pan-y}
+.collab-shell input[type=checkbox],.collaboration-library input[type=checkbox]{width:20px;height:20px;flex-shrink:0;vertical-align:middle}
+.collab-shell label,.collaboration-library label{font-size:14px;line-height:1.5;min-width:0}
+.collab-shell label:has(input[type=checkbox]),.collaboration-library label:has(input[type=checkbox]){display:flex;gap:10px;align-items:center;min-height:44px}
+.collab-shell summary{display:flex;align-items:center;cursor:pointer;padding:8px 0}
+.collab-shell a{display:inline-flex;align-items:center;min-height:44px}
+.collab-shell{scroll-padding-block:16px 120px}
+.collab-main{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+.collab-transport{padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));isolation:isolate}
+.collab-draft form{display:grid;gap:8px}
+.collab-draft label{margin:0}
+.collaboration-library .studio-topbar{flex-wrap:wrap;gap:12px}
+.collaboration-library .studio-topbar h1{min-width:0;flex:1 1 200px;font-size:clamp(20px,4vw,28px);line-height:1.3}
+.collaboration-library input:not([type=checkbox]){display:block;width:100%;min-height:44px;font-size:16px}
+.collaboration-library .studio-new-project{min-width:0}
+.collaboration-library form{display:grid;gap:14px}
+.collaboration-library form label{margin:0}
+.collaboration-library .studio-home-content{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+@media(max-width:700px){.collab-main{padding-inline:12px;gap:16px}.collab-settings{padding:16px}.collab-shell .studio-topbar{gap:8px}.collab-shell .studio-topbar>div{flex-basis:100%}.collab-transport{gap:8px}.collab-transport .studio-button{flex:1 1 100px}.collab-transport .collab-clock{font-size:18px}.collab-shell p{font-size:14px}.collab-shell .studio-topbar h1{font-size:22px}}
+@media(max-height:450px) and (orientation:landscape){.collab-main{grid-template-columns:minmax(0,1fr);max-width:800px}.collab-stage video{max-height:52dvh}.collab-shell .studio-topbar>div{flex-basis:200px}.collab-shell .studio-topbar{min-height:60px;padding-block:8px}.collab-transport{padding-block:6px}}

@@ -9,7 +9,7 @@
   <div class="gg-audio-wrapper">
     <img src="{{ content.audio_thumbnail_url }}" alt="{{ content.title }} thumbnail" class="gg-audio-thumb" loading="lazy" />
     <audio class="gg-audio-player" controls controlsList="nodownload" preload="metadata" oncontextmenu="return false">
-      <source src="{{ content.safe_file_url }}" type="audio/mpeg" />
+      <source src="{{ content.safe_file_url }}" type="{% if content.studio_release %}audio/wav{% else %}audio/mpeg{% endif %}" />
       Your browser does not support the audio tag.
     </audio>
   </div>

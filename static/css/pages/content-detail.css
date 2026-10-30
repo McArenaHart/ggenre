@@ -783,3 +783,10 @@ body.app-theme[data-theme="light"] .watch-sidebar-section+.watch-sidebar-section
     grid-template-columns: 1fr;
   }
 }
+
+.gg-collaboration{min-width:0;overflow-wrap:anywhere}
+.gg-collaboration form{min-width:0}
+.gg-collaboration .btn{min-height:44px;white-space:normal;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+@media(max-width:575.98px){.gg-collaboration .btn{width:100%}.gg-collaboration h2{font-size:1.05rem}.gg-collaboration p{line-height:1.6}}
+
+@media(max-width:991.98px){.watch-toolbar-btn,.watch-comment-form button{min-height:44px}.watch-comment-form textarea{font-size:16px}}

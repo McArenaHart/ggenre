@@ -73,12 +73,15 @@
 
               <div class="content-metrics-row">
                 <span>Views: <strong class="view-count" data-content-id="{{ content.id }}">{{ content.view_count }}</strong></span>
-                <span>Votes: <strong>{{ content.votes.count }}</strong></span>
+                <span>Votes: <strong>{{ content.vote_count }}</strong></span>
                 <span>{{ content.upload_date|date:"M d" }}</span>
               </div>
             </div>
           </article>
         </a>
+        {% if content.allow_collaboration and content.collaboration_supported and request.user.is_artist %}
+        <a class="btn btn-primary m-2" href="{% url 'studio:collaborate' content.pk %}"><i class="fas fa-microphone" aria-hidden="true"></i> Add your voice</a>
+        {% endif %}
       </div>
     {% empty %}
       <div class="col-12">

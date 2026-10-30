@@ -1,0 +1,32 @@
+from django.urls import path
+from . import views, instrumentals, collaborations
+app_name = "studio"
+urlpatterns = [
+    path("collaborations/", collaborations.library, name="collaboration_library"),
+    path("collaborate/<int:pk>/", collaborations.workspace, name="collaborate"),
+    path("collaborate/<int:pk>/permission/", collaborations.permission, name="collaboration_permission"),
+    path("collaborate/<int:pk>/source/", collaborations.source_video, name="collaboration_source"),
+    path("collaborate/<int:pk>/audio/", collaborations.source_audio, name="collaboration_audio"),
+    path("collaborations/<uuid:pk>/play/", collaborations.play, name="collaboration_play"),
+    path("collaborations/<uuid:pk>/publish/", collaborations.publish, name="collaboration_publish"),
+    path("keyboard-audio/", instrumentals.keyboard_audio, name="keyboard_audio"),
+    path("instrumentals/", instrumentals.library, name="instrumentals"),
+    path("instrumentals/new/", instrumentals.workspace, name="compose_new"),
+    path("instrumentals/save/", instrumentals.save, name="compose_save_new"),
+    path("instrumentals/<int:pk>/", instrumentals.workspace, name="compose"),
+    path("instrumentals/<int:pk>/save/", instrumentals.save, name="compose_save"),
+    path("instrumentals/<int:pk>/audio/", instrumentals.audio, name="instrumental_audio"),
+    path("instrumentals/<int:pk>/use/", instrumentals.use, name="instrumental_use"),
+    path("", views.index, name="index"),
+    path("exports/controls/", views.export_controls, name="export_controls"),
+    path("exports/", views.export_reviews, name="export_reviews"),
+    path("project/<int:pk>/", views.editor, name="editor"),
+    path("project/<int:pk>/save/", views.save, name="save"),
+    path("project/<int:pk>/track/", views.add_track, name="add_track"),
+    path("track/<int:pk>/audio/", views.track_audio, name="track_audio"),
+    path("track/<int:pk>/delete/", views.delete_track, name="delete_track"),
+    path("project/<int:pk>/publish/", views.publish, name="publish"),
+    path("project/<int:pk>/export/", views.export, name="export"),
+    path("export/<int:pk>/download/", views.download, name="download"),
+    path("release/<int:pk>/play/", views.play, name="play"),
+]

@@ -106,6 +106,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Private Studio projects and exports must never enter shared device caches.
+  if (url.pathname.startsWith("/studio/")) {
+    return;
+  }
+
   if (request.mode === "navigate") {
     event.respondWith(networkFirst(request));
     return;

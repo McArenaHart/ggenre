@@ -118,6 +118,7 @@ INSTALLED_APPS = [
     "search",
     "chatapp",
     "livestream",
+    "studio",
 ]
 
 MIDDLEWARE = [

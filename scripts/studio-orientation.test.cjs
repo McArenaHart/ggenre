@@ -1,0 +1,30 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const vm = require("node:vm");
+const fs = require("node:fs");
+const {needsLandscape} = require("../static/js/studio-orientation.js");
+test("portrait phones require rotation, landscape and full desktop do not", () => {
+  assert.equal(needsLandscape(390, 844), true);
+  assert.equal(needsLandscape(375, 812), true);
+  assert.equal(needsLandscape(844, 390), false);
+  assert.equal(needsLandscape(812, 375), false);
+  assert.equal(needsLandscape(1280, 720), false);
+  assert.equal(needsLandscape(1100, 1400), false);
+});
+test("orientation changes block editing without stopping or cancelling a recording", () => {
+  const events = {}, media = {matches: true, addEventListener(name, callback) { events[name] = callback; }};
+  const element = () => ({events: {}, hidden: false, disabled: false, textContent: "", addEventListener(name, callback) { this.events[name] = callback; }});
+  const root = {}, actions = element(), stop = element(), cancel = element(), description = element();
+  let stops = 0, cancels = 0, focus = 0;
+  const gate = {hidden: true, querySelector(selector) { return {"[data-orientation-actions]":actions,"[data-orientation-stop]":stop,"[data-orientation-cancel]":cancel,"[data-orientation-description]":description}[selector]; }, setAttribute() {}, focus() { focus++; }};
+  const window = {matchMedia: () => media, addEventListener() {}};
+  vm.runInNewContext(fs.readFileSync(require.resolve("../static/js/studio-orientation.js"),"utf8"), {window});
+  const controller = window.StudioOrientation.mount({root,gate,stop:()=>stops++,cancel:()=>cancels++});
+  assert.equal(controller.blocked(), true); assert.equal(root.inert, true); assert.equal(gate.hidden, false); assert.equal(focus, 1);
+  media.matches = false; events.change(); assert.equal(root.inert, false); assert.equal(gate.hidden, true);
+  controller.updateCapture({active:true,canStop:true}); media.matches=true; events.change();
+  assert.equal(stops, 0); assert.equal(cancels, 0); assert.equal(actions.hidden, false); assert.equal(stop.disabled, false);
+  stop.events.click(); cancel.events.click(); assert.equal(stops, 1); assert.equal(cancels, 1);
+  controller.updateCapture({active:true,canStop:false}); assert.equal(stop.disabled, true); assert.equal(cancel.disabled, false);
+  controller.updateCapture({active:false,canStop:false}); assert.equal(actions.hidden, true);
+});

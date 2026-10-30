@@ -30,6 +30,7 @@ urlpatterns = [
     path('', home, name='home'),  # Home page at the root URL
     path('users/', include('users.urls')),
     path('content/', include('content.urls')),
+    path('studio/', include('studio.urls')),
     path('chat/', include('chatapp.urls')),
     path('livestreams/', include('livestream.urls')),
     path('subscriptions/', include('subscriptions.urls')),

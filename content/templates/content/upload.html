@@ -4,7 +4,7 @@
 {% block title %}Upload Content{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/content-upload.css' %}?v=20260226b" rel="stylesheet" />
+<link href="{% static 'css/pages/content-upload.css' %}?v=20261030mobile1" rel="stylesheet" />
 {% endblock extra_css %}
 
 {% block content %}
@@ -112,6 +112,7 @@
                             {% endif %}
                         </section>
 
+                        <div class="upload-field"><label>{{ form.allow_collaboration }} Open this MP4 video to vocal collaborations</label><p>Other artists can add vocals and publish a new video that credits you. Existing collaborations remain if you later close this option.</p></div>
                         <div class="upload-submit-row">
                             <button type="submit" class="btn btn-primary btn-lg upload-submit-btn">
                                 <i class="fas fa-cloud-upload-alt"></i> Publish Content
@@ -147,5 +148,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/pages/content-upload.js' %}?v=20260226b"></script>
+<script src="{% static 'js/pages/content-upload.js' %}?v=20261030mobile1"></script>
 {% endblock extra_js %}

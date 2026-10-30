@@ -1,0 +1,18 @@
+{% if content.video_collaboration %}
+<section class="card p-3 my-3 gg-collaboration" aria-label="Song collaborators"><h2 class="h5">Voices in this collaboration</h2>
+<p>{% for credit in content.video_collaboration.credits %}<span>{{ credit.username }} · {{ credit.role }}</span>{% if not forloop.last %} / {% endif %}{% endfor %}</p>
+{% if content.video_collaboration.source %}<a href="{% url 'content_detail' content.video_collaboration.source_id %}">Built on {{ content.video_collaboration.source_title }}</a>{% else %}<p>Built on {{ content.video_collaboration.source_title }}</p>{% endif %}</section>
+{% endif %}
+{% if content.collaboration_supported %}
+<section class="card p-3 my-3 gg-collaboration" aria-label="Vocal collaboration">
+{% if content.allow_collaboration and content.is_approved and content.is_visible %}
+<p>Add your harmony, bass or beatbox. Keep this video, add your voice and pass the song on.</p>
+{% if request.user.is_artist %}<a class="btn btn-primary" href="{% url 'studio:collaborate' content.pk %}"><i class="fas fa-microphone" aria-hidden="true"></i> Add your voice</a>{% else %}<p>Artist accounts can join this song.</p>{% endif %}
+{% endif %}
+{% if request.user.pk == content.artist_id %}
+<form method="post" action="{% url 'studio:collaboration_permission' content.pk %}">{% csrf_token %}
+{% if content.allow_collaboration %}<p class="mt-2">Open to collaboration. Closing prevents new joins; existing collaborated posts remain.</p><button class="btn btn-outline-secondary" name="allow" value="no">Close new collaborations</button>{% else %}<p>Invite artists to add vocals and publish new videos that credit you.</p><button class="btn btn-outline-primary" name="allow" value="yes">Open to vocal collaborations</button>{% endif %}
+</form>{% endif %}
+</section>{% endif %}
+
+{% if collaboration_children %}<section class="card p-3 my-3 gg-collaboration"><h2 class="h5">This song is growing</h2><p>Hear the next voices in the chain.</p>{% for version in collaboration_children %}<p><a href="{% url 'content_detail' version.content_id %}">{{ version.content.title }}</a> · {{ version.creator.username }} · {{ version.role }}</p>{% endfor %}</section>{% endif %}

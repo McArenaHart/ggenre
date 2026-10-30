@@ -2056,3 +2056,4 @@ body.app-theme[data-theme="light"] .app-footer__inner {
   color: rgba(19, 41, 86, 0.72);
   box-shadow: 0 8px 20px rgba(19, 41, 86, 0.12);
 }
+@media(max-width:991.98px){.app-theme-toggle,.app-topbar .navbar-toggler,.app-floating-back{min-width:44px;min-height:44px}.app-topbar{flex-wrap:wrap}}

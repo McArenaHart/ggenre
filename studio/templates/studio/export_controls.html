@@ -1,0 +1,28 @@
+{% extends "includes/base.html" %}
+{% block title %}Studio export controls{% endblock %}
+{% block content %}
+<div class="container py-4">
+<h1>Studio export controls</h1>
+<p><a href="{% url 'studio:export_reviews' %}">Review payment approvals</a></p>
+<p>Set each artist’s free export allowance. New artists start with 2. Set the limit to 0 to require payment approval for new exports. Repeat downloads of an existing free or approved export do not consume credits.</p>
+<p>Reset clears free usage only and keeps the limit. Existing exports, files and payment decisions remain available. Changes apply to future export requests.</p>
+<form method="get" class="mb-4"><label for="artist-search">Find artist</label><input id="artist-search" name="q" value="{{ query }}" class="form-control" maxlength="150"><button class="btn btn-outline-primary mt-2">Search</button></form>
+{% for artist in page %}
+<section class="card p-3 mb-3">
+<h2 class="h4">{{ artist.username }}</h2>
+<p>{% if artist.studio_allowance.unlimited_exports %}Unlimited exports enabled{% else %}{{ artist.studio_allowance.free_remaining }} free remaining{% endif %} · {{ artist.export_total }} exports in history · {{ artist.pending_total }} awaiting payment approval</p>
+<form method="post">{% csrf_token %}
+<input type="hidden" name="artist_id" value="{{ artist.pk }}"><input type="hidden" name="previous_limit" value="{{ artist.studio_allowance.free_limit }}"><input type="hidden" name="previous_used" value="{{ artist.studio_allowance.free_used }}">
+<input type="hidden" name="previous_unlimited" value="{{ artist.studio_allowance.unlimited_exports|yesno:'true,false' }}">
+<div class="form-check my-3"><input class="form-check-input" type="checkbox" id="unlimited-{{ artist.pk }}" name="unlimited_exports" {% if artist.studio_allowance.unlimited_exports %}checked{% endif %}><label class="form-check-label" for="unlimited-{{ artist.pk }}">Suspend export limits · unlimited exports</label><p class="small mt-1">Allow new exports without payment approval. Usage is paused; uncheck and save to resume the previous allowance. Pending requests stay unchanged.</p></div>
+<div class="row g-3"><div class="col-sm-6"><label for="limit-{{ artist.pk }}">Free export limit</label><input class="form-control" id="limit-{{ artist.pk }}" name="free_limit" type="number" min="0" max="1000000" value="{{ artist.studio_allowance.free_limit }}" required></div>
+<div class="col-sm-6"><label for="used-{{ artist.pk }}">Free exports used</label><input class="form-control" id="used-{{ artist.pk }}" name="free_used" type="number" min="0" max="1000000" value="{{ artist.studio_allowance.free_used }}" required></div></div>
+<label class="mt-2" for="reason-{{ artist.pk }}">Reason for change or reset</label><input class="form-control" id="reason-{{ artist.pk }}" name="reason" maxlength="240" required>
+<button name="action" value="save" class="btn btn-primary mt-3">Save limits &amp; usage</button>
+<button name="action" value="reset" class="btn btn-outline-warning mt-3">Reset usage to 0 · keep limit</button>
+</form></section>
+{% empty %}<p>No matching artists.</p>{% endfor %}
+<nav aria-label="Artist pages">{% if page.has_previous %}<a href="?q={{ query|urlencode }}&amp;page={{ page.previous_page_number }}">Previous</a>{% endif %} Page {{ page.number }} of {{ page.paginator.num_pages }} {% if page.has_next %}<a href="?q={{ query|urlencode }}&amp;page={{ page.next_page_number }}">Next</a>{% endif %}</nav>
+<details class="card p-3 mt-4"><summary>Admin change history</summary><p class="small mt-2">Records who changed export access and why. Visible to admins only.</p>
+{% for entry in history %}<p>{{ entry.action_time|date:"M d, Y H:i" }} · {{ entry.user.username }} · {{ entry.object_repr }} · {{ entry.change_message }}</p>{% empty %}<p>No allowance changes recorded.</p>{% endfor %}
+</details></div>{% endblock %}

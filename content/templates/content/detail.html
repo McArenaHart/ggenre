@@ -4,7 +4,7 @@
 {% block title %}{{ content.title }}{% endblock %}
 
 {% block extra_css %}
-<link href="{% static 'css/pages/content-detail.css' %}?v=20260623b" rel="stylesheet" />
+<link href="{% static 'css/pages/content-detail.css' %}?v=20261030mobile2" rel="stylesheet" />
 <link href="{% static 'css/pages/content-autoplay.css' %}?v=20260623b" rel="stylesheet" />
 {% endblock extra_css %}
 
@@ -19,6 +19,7 @@
 
         <div class="card-body watch-main-body">
           <h1 class="watch-title">{{ content.title }}</h1>
+          {% include "studio/collaboration_post.html" %}
 
           <div class="watch-meta-row">
             <div class="watch-author">
@@ -43,7 +44,7 @@
               </span>
               <span>
                 <i class="fas fa-star"></i>
-                {{ content.votes.count }} vote{{ content.votes.count|pluralize }}
+                {{ content.vote_count }} vote{{ content.vote_count|pluralize }}
               </span>
               <span>
                 <i class="fas fa-chart-line"></i>
@@ -248,7 +249,7 @@
                 <h6>{{ related.title }}</h6>
                 <p class="watch-related-artist">{{ related.artist.username }}</p>
                 <p class="watch-related-stats">
-                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{ related.votes.count|pluralize }}
+                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.vote_count }} vote{{ related.vote_count|pluralize }}
                 </p>
               </div>
             </a>
@@ -284,7 +285,7 @@
                 <h6>{{ related.title }}</h6>
                 <p class="watch-related-artist">{{ related.artist.username }}</p>
                 <p class="watch-related-stats">
-                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{ related.votes.count|pluralize }}
+                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.vote_count }} vote{{ related.vote_count|pluralize }}
                 </p>
               </div>
             </a>
@@ -320,7 +321,7 @@
                 <h6>{{ related.title }}</h6>
                 <p class="watch-related-artist">{{ related.artist.username }}</p>
                 <p class="watch-related-stats">
-                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{ related.votes.count|pluralize }}
+                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.vote_count }} vote{{ related.vote_count|pluralize }}
                 </p>
               </div>
             </a>
@@ -356,7 +357,7 @@
                 <h6>{{ related.title }}</h6>
                 <p class="watch-related-artist">{{ related.artist.username }}</p>
                 <p class="watch-related-stats">
-                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.votes.count }} vote{{ related.votes.count|pluralize }}
+                  {{ related.view_count }} view{{ related.view_count|pluralize }} | {{ related.vote_count }} vote{{ related.vote_count|pluralize }}
                 </p>
               </div>
             </a>

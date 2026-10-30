@@ -6,6 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.forms import modelform_factory
 from .models import Content, Vote, LivePerformance, ArtistUploadLimit, Comment, Badge, Voucher
+from .querysets import with_content_stats
 from users.models import OTP, CustomUser, VotingTokenPolicy
 from .forms import ContentUploadForm, CommentForm, StartLiveStreamForm, VoucherEntryForm
 from django.db.models import Avg, Sum, Max
@@ -46,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 
 def public_content_queryset():
-    return Content.objects.filter(is_approved=True, is_visible=True)
+    return Content.objects.select_related("studio_release", "video_collaboration").filter(is_approved=True, is_visible=True)
 
 
 def can_view_content(user, content):
@@ -61,11 +62,10 @@ def track_content_view(content, user):
     """
     Record a unique view for an authenticated user and return the latest count.
     """
-    if not user.is_authenticated:
-        return content.viewers.count()
-
-    content.viewers.add(user)
-    return content.viewers.count()
+    if user.is_authenticated:
+        content.viewers.add(user)
+    content._view_count = content.viewers.count()
+    return content._view_count
 
 
 def get_up_next_contents(content, user=None, limit=4):
@@ -100,9 +100,9 @@ def _user_interest_profile(user, current_content, sample_size=50):
     )
 
     interest_contents = (
-        public_content_queryset().filter(Q(viewers=user) | Q(votes__fan=user))
+        public_content_queryset().select_related(None).filter(Q(viewers=user) | Q(votes__fan=user))
         .exclude(id=current_content.id)
-        .select_related("genre")
+        .only("id", "genre_id", "upload_date")
         .prefetch_related("tags")
         .distinct()
         .order_by("-upload_date")[:sample_size]
@@ -111,7 +111,7 @@ def _user_interest_profile(user, current_content, sample_size=50):
     for item in interest_contents:
         if item.genre_id:
             profile["genre_ids"].add(item.genre_id)
-        profile["tag_names"].update(item.tags.names())
+        profile["tag_names"].update(tag.name for tag in item.tags.all())
 
     return profile
 
@@ -214,7 +214,6 @@ def get_up_next_sections(content, user=None, limit=4):
         public_content_queryset()
         .exclude(id=content.id)
         .select_related("artist", "genre")
-        .prefetch_related("votes")
     )
 
     personalized_ids = _personalized_up_next_ids(base_queryset, content, user, limit)
@@ -275,7 +274,7 @@ def get_up_next_sections(content, user=None, limit=4):
 
     items_by_id = {
         item.id: item
-        for item in base_queryset.filter(id__in=selected_ids)
+        for item in with_content_stats(base_queryset.filter(id__in=selected_ids))
     }
 
     personalized_items = [items_by_id[item_id] for item_id in personalized_ids if item_id in items_by_id]
@@ -417,9 +416,8 @@ def send_upload_reset_notification(artist):
 
 def get_featured_contents(limit=50):
     return (
-        public_content_queryset()
+        with_content_stats(public_content_queryset())
         .select_related('artist', 'genre')
-        .prefetch_related('votes')
         .order_by('-upload_date')[:limit]
     )
 
@@ -447,14 +445,14 @@ def content_detail(request, content_id):
     """
     Display a single content item with detailed information.
     """
-    content = get_object_or_404(Content, id=content_id)
+    content = get_object_or_404(with_content_stats(Content.objects.select_related("artist", "genre", "studio_release", "video_collaboration__source")), id=content_id)
     if not can_view_content(request.user, content):
         messages.error(request, "This content is not available.")
         return redirect("content_list")
 
     track_content_view(content, request.user)
     up_next = get_up_next_sections(content, user=request.user, limit=4)
-    comments = Comment.objects.filter(content=content).order_by('-timestamp')  # Fetch comments for the content
+    comments = Comment.objects.filter(content=content).select_related('user').order_by('-timestamp')  # Fetch comments for the content
     average_vote = Vote.objects.filter(content=content).aggregate(Avg('value'))['value__avg'] or 0  # Calculate average vote
     voting_suspended = VotingTokenPolicy.voting_is_suspended()
     recent_votes = []
@@ -467,7 +465,10 @@ def content_detail(request, content_id):
     if request.user.is_authenticated and not request.user.has_free_pass:
         active_otp = OTP.objects.filter(user=request.user, is_active=True).first()
 
+    from studio.models import VideoCollaboration
+    collaborations = VideoCollaboration.objects.filter(source=content, content__is_approved=True, content__is_visible=True).select_related("content", "creator").order_by("-created_at")[:6]
     return render(request, 'content/detail.html', {
+        'collaboration_children': collaborations,
         'content': content,
         'related_contents': up_next['all_items'],
         'up_next_personalized': up_next['personalized'],

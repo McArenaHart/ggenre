@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import Case, F, IntegerField, Q, Sum, When
 from django.utils import timezone
 from datetime import timedelta
 
@@ -183,6 +183,19 @@ def users_can_peer_chat(first_user, second_user):
         user_one=user_one,
         user_two=user_two,
     ).exists()
+
+
+def peer_unread_total(user):
+    """Apply the same chat access rules once in SQL instead of once per thread."""
+    if not user or not user.is_authenticated or user.has_role(Role.ADMIN) or not user.is_active or user.is_suspended_by_admin:
+        return 0
+    eligible = PeerChatThread.objects.filter(
+        Q(user_one=user) | Q(user_two=user),
+        Q(admin_approved=True) | Q(unlocked_until__gt=timezone.now()),
+        user_one__is_active=True, user_two__is_active=True,
+        user_one__is_suspended_by_admin=False, user_two__is_suspended_by_admin=False,
+    ).exclude(user_one__role=Role.ADMIN).exclude(user_two__role=Role.ADMIN).exclude(user_one=F("user_two"))
+    return eligible.aggregate(total=Sum(Case(When(user_one=user, then=F("unread_count_user_one")), default=F("unread_count_user_two"), output_field=IntegerField())))["total"] or 0
 
 
 def admin_has_allowed_peer_chat(first_user, second_user):

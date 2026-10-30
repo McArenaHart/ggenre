@@ -1,0 +1,24 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Studio synthetic audio checks</title><style>body{font:16px system-ui;padding:30px;background:#101827;color:#fff}button{padding:12px}pre{white-space:pre-wrap}</style><h1>Studio synthetic audio checks</h1><p>Uses generated audio, no microphone permission or real recordings. Output is muted.</p><button id="run">Run shared-clock checks</button><pre id="result">Ready</pre><script src="/static/js/studio-audio.js?v=4"></script><script>
+document.getElementById('run').onclick = async () => {
+ const log=document.getElementById('result'); log.textContent='Running…';
+ let ctx, input, streamSource, backing;
+ const assert=(condition,message)=>{if(!condition) throw new Error(message); log.textContent+='\nPASS '+message;};
+ try {
+  ctx=new AudioContext({latencyHint:'interactive'}); await ctx.resume();
+  const output=ctx.createGain(); output.gain.value=0; output.connect(ctx.destination);
+  input=ctx.createMediaStreamDestination(); streamSource=ctx.createConstantSource(); streamSource.offset.value=.25; streamSource.connect(input); streamSource.start();
+  backing=ctx.createBuffer(1,ctx.sampleRate*3,ctx.sampleRate); backing.getChannelData(0).fill(.75);
+  let peak=0;
+  const run=async options=>new Promise((resolve,reject)=>{
+   StudioAudio.begin({context:ctx,stream:input.stream.clone(),tracks:[{name:'Backing',gain:1,offset:298,trim_start:0,trim_end:0,muted:false}],load:async()=>backing,position:299,bpm:240,countIn:4,workletURL:'/static/js/studio-capture-worklet.js?v=4',destination:output,onMeter:value=>peak=Math.max(peak,value),onProgress:()=>{},onDone:resolve,onError:reject,captureTail:0,...options}).then(session=>{if(options.cancelEarly) session.stop();}).catch(reject);
+  });
+  const take=await run({});
+  assert(Math.abs(take.samples.length-ctx.sampleRate)<=1,'count-in excluded; automatic timeline end records exactly one second');
+  assert(take.samples.length>0&&take.samples.every(value=>Math.abs(value-.25)<.001),'raw vocal stays separate from backing audio');
+  assert(peak>.2&&peak<.3,'input meter measures the microphone stream only');
+  const cancelled=await run({position:0,cancelEarly:true});
+  assert(cancelled.samples.length===0,'Stop during count-in cancels without creating a take');
+  log.textContent+='\nALL BROWSER AUDIO CHECKS PASSED';
+ }catch(error){log.textContent+='\nFAIL '+error.stack;}finally{streamSource?.stop(); input?.stream.getTracks().forEach(track=>track.stop()); await ctx?.close();}
+};
+</script></html>

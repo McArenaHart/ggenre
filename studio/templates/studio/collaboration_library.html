@@ -1,0 +1,16 @@
+{% extends "studio/base.html" %}{% load static %}
+{% block title %}Your vocal collaborations · GGenre{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/studio-collaboration.css' %}?v=3">{% endblock %}
+{% block content %}<div class="studio-home collaboration-library"><header class="studio-topbar"><a class="studio-brand" href="{% url 'studio:index' %}">← Studio</a><h1>Your vocal collaborations</h1><a class="studio-button studio-outline" href="{% url 'content_list' %}">Find a song</a></header><main class="studio-home-content">
+{% if messages %}{% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}{% endif %}
+{% for item in page %}<article class="studio-new-project"><h2>{% if item.content %}{{ item.content.title }}{% else %}{{ item.source_title }}{% endif %}</h2><p>{{ item.role }} · {{ item.get_status_display }} · {{ item.created_at|date:"M d, Y H:i" }}</p>
+{% if item.status == 'ready' or item.status == 'published' %}<video style="width:100%;max-height:360px" controls controlsList="nodownload" playsinline preload="metadata" src="{% url 'studio:collaboration_play' item.pk %}" aria-label="Saved collaboration preview"></video>{% endif %}
+{% if item.content %}<p><a class="studio-button studio-primary" href="{% url 'content_detail' item.content_id %}">View your post{% if not item.content.is_approved %} · awaiting review{% endif %}</a></p>
+{% elif item.status == 'ready' %}{% if item.source and item.source.allow_collaboration and item.source.is_approved and item.source.is_visible %}
+<form method="post" action="{% url 'studio:collaboration_publish' item.pk %}">{% csrf_token %}<label>New post title<input name="title" maxlength="255" value="{{ item.source_title|truncatechars:220 }} · {{ request.user.username }}" required></label><label><input name="allow_collaboration" type="checkbox" checked> Let others add their voice</label><button class="studio-button studio-primary">Submit to GGenre for review</button></form>
+{% else %}<p>The source is no longer open for collaboration. Your private preview is retained.</p>{% endif %}
+{% elif item.status == 'failed' %}<p>The preview could not be created. Open the source song and try a new take.</p>{% endif %}
+{% if item.source %}<p><a href="{% url 'content_detail' item.source_id %}">Source song</a></p>{% endif %}</article>
+{% empty %}<p>No collaborations yet. Find an open video in GGenre and choose Add your voice.</p>{% endfor %}
+<nav aria-label="Collaboration pages">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">Previous</a>{% endif %} {{ page.number }} / {{ page.paginator.num_pages }} {% if page.has_next %}<a href="?page={{ page.next_page_number }}">Next</a>{% endif %}</nav>
+</main></div>{% endblock %}
