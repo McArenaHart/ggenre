@@ -21,6 +21,9 @@ def library(request):
 @artist_only
 def workspace(request, pk=None):
     item = get_object_or_404(Instrumental, pk=pk, artist=request.user) if pk else None
+    if item and item.config.get("imported"):
+        messages.info(request, "Extracted instrumentals are audio recordings. Use one in a Studio session to trim, mix or process it.")
+        return redirect("studio:instrumentals")
     mode = request.GET.get("mode", "full")
     if mode not in ("piano", "bass", "chords", "full", "drums"):
         mode = "full"
@@ -36,6 +39,8 @@ def workspace(request, pk=None):
 def save(request, pk=None):
     with transaction.atomic():
         item = get_object_or_404(Instrumental.objects.select_for_update(), pk=pk, artist=request.user) if pk else Instrumental(artist=request.user)
+        if pk and item.config.get("imported"):
+            return JsonResponse({"error": "Extracted audio cannot be overwritten by a piano-roll arrangement. Edit a copy in Studio."}, status=400)
         if pk and request.POST.get("revision") != item.updated_at.isoformat():
             return JsonResponse({"error": "This instrumental changed in another tab. Reload the saved version before editing."}, status=409)
         try:
@@ -85,7 +90,7 @@ def use(request, pk):
             project = Project.objects.create(artist=request.user, title=item.title[:160], category=item.category, tempo=item.config["bpm"])
         with item.audio.open("rb") as source:
             snapshot = ContentFile(source.read(), name="backing.wav")
-        Track.objects.create(project=project, name=item.title[:100], kind="beat", audio=snapshot, beat_preset=item.config["preset"], beat_bpm=item.config["bpm"])
+        Track.objects.create(project=project, name=item.title[:100], kind="backing" if item.config.get("imported") else "beat", audio=snapshot, beat_preset=item.config.get("preset", ""), beat_bpm=None if item.config.get("imported") else item.config["bpm"])
         project.tempo = item.config["bpm"]
         project.mix = ""
         project.save()

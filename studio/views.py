@@ -89,6 +89,11 @@ def editor(request, pk):
     project = owned(request, pk)
     allowance, _ = ExportAllowance.objects.get_or_create(artist=request.user)
     tracks = [{"id": t.pk, "name": t.name, "url": f"/studio/track/{t.pk}/audio/", "gain": t.gain, "offset": t.offset, "trim_start": t.trim_start, "trim_end": t.trim_end, "muted": t.muted, "kind": t.kind} for t in project.tracks.all()]
+    from .models import AudioJob
+    for track in tracks:
+        job = AudioJob.objects.filter(track_id=track["id"], status__in=["queued", "running", "ready"]).order_by("-pk").first()
+        if job:
+            track.update(audio_job=job.pk, audio_operation=job.operation)
     return render(request, "studio/editor.html", {"unlimited_exports": allowance.unlimited_exports, "free_left": allowance.free_remaining, "project": project, "revision": project.updated_at.isoformat(), "profile": profile_for(project.category), "reference_notes": REFERENCE_NOTES, "beats": beats_for(project.category), "has_beat": project.tracks.filter(kind="beat").exists(), "tracks": tracks, "exports": Export.objects.filter(project=project).order_by("-created_at"), "releases": Release.objects.filter(project=project).select_related("content")})
 
 

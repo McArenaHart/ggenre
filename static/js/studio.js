@@ -122,7 +122,7 @@
       if (plan && plan.duration > 0) source.start(plan.delay, plan.start, plan.duration);
     }
     const rendered = await offline.startRendering();
-    if (voiceTools) { const result = voiceTools.protect(rendered), label = document.getElementById("acapella-mix-health"); if (label) label.textContent = result.gain < 1 ? `Peak guard reduced the mix by ${(-20 * Math.log10(result.gain)).toFixed(1)} dB to avoid digital clipping.` : "Peak guard on · mix levels are within range."; }
+    if (typeof StudioVoices !== "undefined") { const result = StudioVoices.protect(rendered), label = document.getElementById("acapella-mix-health"); if (label) label.textContent = result.gain < 1 ? `Peak guard reduced the mix by ${(-20 * Math.log10(result.gain)).toFixed(1)} dB to avoid digital clipping.` : "Peak guard on · mix levels are within range."; }
     return wav(rendered);
   }
   async function upload(blob, offset = 0, name = null, kind = "vocal", preset = "", beatBpm = null) {
@@ -172,10 +172,29 @@
     if (voiceTools) { const solo = document.createElement("button"); solo.type = "button"; solo.textContent = "Solo"; solo.className = "studio-voice-solo"; solo.dataset.voiceSolo = String(track.id); solo.setAttribute("aria-label", "Solo " + track.name); solo.setAttribute("aria-pressed", "false");
       solo.addEventListener("click", () => { if (session || preparing || busy) return; pausePlayers(); if (soloVoices.has(track.id)) soloVoices.delete(track.id); else soloVoices.add(track.id); syncSolo(); }); actions.append(solo);
     }
-    actions.append(listen, timing, remove); card.append(actions); container.append(card);
+    actions.append(listen, timing, remove); card.append(actions);
+    if (typeof StudioProcessing !== "undefined") StudioProcessing.mount(card, track, {task, post, message, root, isAcapella, canApply: () => !dirty && !pendingTake, revision: () => baseRevision});
+    container.append(card);
   }
   document.getElementById("import").addEventListener("change", event => task(async () => {
-    const file = event.target.files[0]; if (file) await upload(file, isAcapella ? Number(document.getElementById("record-position").value) || 0 : 0, null, isAcapella ? "vocal" : "backing");
+    const file = event.target.files[0];
+    try {
+      if (!file) return;
+      if (tracks.length >= 12) throw new Error("Maximum 12 tracks. Remove one before importing.");
+      if (file.size > 64 * 1024 * 1024) throw new Error("Choose an audio file under 64 MB.");
+      message("Opening imported audio…");
+      let imported = file;
+      try { await audioContext().decodeAudioData(await file.arrayBuffer()); }
+      catch (_) {
+        message("Converting audio for this browser…");
+        const data = new FormData(); data.append("audio", file);
+        const response = await fetch("/studio/audio/convert/", {method: "POST", headers: {"X-CSRFToken": csrf}, body: data});
+        if (!response.ok) { const result = await response.json(); throw new Error(result.error || "Audio conversion failed."); }
+        imported = await response.blob();
+      }
+      const kind = isAcapella ? "vocal" : document.getElementById("import-kind").value;
+      await upload(imported, Number(document.getElementById("record-position").value) || 0, file.name.replace(/\.[^.]+$/, "").slice(0, 100), kind);
+    } finally { event.target.value = ""; }
   }));
   const recordButton = document.getElementById("record"), stopButton = document.getElementById("stop");
   const review = document.getElementById("take-review"), correction = document.getElementById("delay-correction");

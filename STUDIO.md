@@ -1,5 +1,7 @@
 # GGenre Studio
 
+Audio imports, vocal pitch correction, noise reduction, instrumental extraction and worker setup are documented in [STUDIO_AUDIO.md](STUDIO_AUDIO.md).
+
 Artists open **Studio** from the navigation or `/studio/`.
 
 - Create Gospel, Acapella, or Secular projects.

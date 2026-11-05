@@ -32,11 +32,12 @@ function harness(options = {}) {
   for (const id of ["record", "stop", "preview", "save", "rewind", "cancel-recording", "keep-take", "retry-take", "discard-take", "audition-take", "publish", "export"]) new Element("button", id);
   for (const [id, value] of [["track-name", "Harmony"], ["record-position", "12.5"], ["tempo", "80"], ["count-in", "4"], ["delay-correction", "0"]]) { const element = new Element("input", id); element.value = value; }
   new Element("input", "import"); new Element("meter", "input-meter"); new Element("span", "level-label");
+  new Element("select", "import-kind").value = options.importKind || "backing";
   new Element("audio", "mix-preview"); new Element("audio", "take-preview");
   new Element("div", "take-review").hidden = true; byId.stop.disabled = true; byId["cancel-recording"].hidden = true; byId["cancel-recording"].disabled = true;
   const tracks = options.tracks || [{id: 1, name: "Beat", url: "private.wav", gain: 1, offset: 0, trim_start: 0, trim_end: 0, muted: false}];
   new Element("script", "studio-tracks").textContent = JSON.stringify(tracks);
-  let inputConstraints;
+  let inputConstraints, decodeCalls = 0;
   let recordingOptions, failUpload = false, reloads = 0, cancelled = 0, micStops = 0, beginCalls = 0; const drafts = [];
   if (options.recovery) { for (const id of ["recovery-panel", "recovery-info", "recovery-status"]) new Element("div", id); byId["recovery-panel"].hidden = true; for (const id of ["restore-draft", "discard-draft"]) new Element("button", id); }
   function buffer(channels = 1, length = 4410, sampleRate = 44100) {
@@ -45,11 +46,11 @@ function harness(options = {}) {
   }
   const stream = {getTracks: () => [{stop() { micStops++; }}], getAudioTracks: () => [{getSettings: () => ({})}]};
   const sandbox = {StudioInputs:require("../static/js/studio-inputs.js"), StudioVoices: require("../static/js/studio-voices.js"), sessionStorage: {getItem: () => null, setItem(){}}, setTimeout, clearTimeout, document: {getElementById: id => byId[id], createElement: tag => new Element(tag)}, window: {AudioWorkletNode: class {}, addEventListener: (name, callback) => windowEvents[name] = callback},
-    navigator: {mediaDevices: {getUserMedia: async constraints => {inputConstraints=constraints;return options.microphone || stream;}}}, AudioContext: class {constructor() { this.sampleRate = 44100; } async resume() {} createBuffer(...args) { return buffer(...args); } async decodeAudioData() { return buffer(); }},
+    navigator: {mediaDevices: {getUserMedia: async constraints => {inputConstraints=constraints;return options.microphone || stream;}}}, AudioContext: class {constructor() { this.sampleRate = 44100; } async resume() {} createBuffer(...args) { return buffer(...args); } async decodeAudioData() { if (++decodeCalls <= (options.decodeRejects || 0)) throw new Error("Unsupported browser codec"); return buffer(); }},
     StudioAudio: {...helpers, async begin(given) { beginCalls++; recordingOptions = given; if (options.preparation) await options.preparation; return {stop() { recordingOptions.onDone({samples: new Float32Array(4410), sampleRate: 44100, position: given.position}); }, cancel() { cancelled++; }}; }},
     OfflineAudioContext: class {createBufferSource() { return {connect(node) { return node; }, start() {}}; } createGain() { return {gain: {value: 1}, connect() {}}; } async startRendering() { return buffer(2); }},
     location: {reload() { reloads++; }}, URL: {createObjectURL: () => "blob:test", revokeObjectURL() {}}, Blob, FormData, Float32Array, DataView, ArrayBuffer, Number, Math, JSON, confirm: () => true,
-    fetch: async (url, request) => { if (!request) return {ok: true, arrayBuffer: async () => new ArrayBuffer(44)}; posted.push({url, body: request.body}); return {ok: !failUpload, json: async () => failUpload ? {error: "Upload failed; retry"} : {ok: true}}; }};
+    fetch: async (url, request) => { if (!request) return {ok: true, arrayBuffer: async () => new ArrayBuffer(44)}; posted.push({url, body: request.body}); if (url === "/studio/audio/convert/") return {ok: !options.convertFail, blob: async () => new Blob(["converted"]), json: async () => ({error: "Audio conversion failed"})}; return {ok: !failUpload, json: async () => failUpload ? {error: "Upload failed; retry"} : {ok: true}}; }};
   if (options.recovery) sandbox.StudioDrafts = class {
     async read() { return options.snapshot; }
     async write(value) { if (options.failRecovery) throw new Error("Quota exceeded"); drafts.push(structuredClone(value)); }
@@ -58,6 +59,50 @@ function harness(options = {}) {
   vm.createContext(sandbox); vm.runInContext(fs.readFileSync(require.resolve("../static/js/studio.js"), "utf8"), sandbox);
   return {constraints:()=>inputConstraints, byId, elements, posted, windowEvents, options: () => recordingOptions, drafts, stream, cancelled: () => cancelled, micStops: () => micStops, beginCalls: () => beginCalls, ready: () => new Promise(resolve => setImmediate(resolve)), fail() { failUpload = true; }, succeed() { failUpload = false; }, reloads: () => reloads};
 }
+test("import preserves filename, selected vocal kind, timeline position and existing edits", async () => {
+  const h = harness({importKind: "vocal"});
+  h.byId.import.files = [Object.assign(new Blob(["audio"]), {name: "My harmony.mp3"})];
+  await h.byId.import.trigger("change");
+  assert.equal(h.posted.length, 1);
+  const data = h.posted[0].body;
+  assert.equal(data.get("name"), "My harmony");
+  assert.equal(data.get("kind"), "vocal");
+  assert.equal(data.get("offset"), "12.5");
+  assert.equal(data.get("revision"), "rev1");
+  assert.equal(JSON.parse(data.get("tracks"))[0].id, 1);
+  assert.equal(data.get("audio").type, "audio/wav");
+  assert.equal(h.reloads(), 1);
+});
+
+test("unsupported browser codecs use server conversion before importing", async () => {
+  const h = harness({decodeRejects: 1});
+  h.byId.import.files = [Object.assign(new Blob(["audio"]), {name: "Backing.flac"})];
+  await h.byId.import.trigger("change");
+  assert.equal(h.posted.length, 2);
+  assert.equal(h.posted[0].url, "/studio/audio/convert/");
+  assert.equal(h.posted[1].body.get("kind"), "backing");
+  assert.equal(h.reloads(), 1);
+});
+
+test("failed conversion permits selecting the same file again without changing the project", async () => {
+  const h = harness({decodeRejects: 1, convertFail: true});
+  h.byId.import.files = [Object.assign(new Blob(["audio"]), {name: "Bad.m4a"})];
+  h.byId.import.value = "selected-file";
+  await h.byId.import.trigger("change");
+  assert.match(h.byId.status.textContent, /conversion failed/);
+  assert.equal(h.byId.import.value, "");
+  assert.equal(h.byId.import.disabled, false);
+  assert.equal(h.posted.length, 1);
+  assert.equal(h.reloads(), 0);
+});
+
+test("Acapella forces imported files to vocal tracks", async () => {
+  const h = harness({category: "acapella", importKind: "backing"});
+  h.byId.import.files = [Object.assign(new Blob(["audio"]), {name: "Bass.wav"})];
+  await h.byId.import.trigger("change");
+  assert.equal(h.posted[0].body.get("kind"), "vocal");
+});
+
 test("recording locks controls, preserves the timeline, and unlocks take review", async () => {
   const h = harness(); await h.byId.record.trigger();
   assert.equal(h.options().position, 12.5); assert.equal(h.options().countIn, 4);

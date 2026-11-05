@@ -1,0 +1,7 @@
+# Install in the audio worker environment, in addition to requirements.txt.
+numpy>=1.26,<3
+scipy>=1.12,<2
+pyworld>=0.3.5,<0.4
+demucs==4.0.1
+torch==2.8.0
+torchaudio==2.8.0

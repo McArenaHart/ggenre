@@ -39,6 +39,17 @@ class Track(models.Model):
     trim_end = models.FloatField(default=0)
     muted = models.BooleanField(default=False)
 
+class AudioJob(models.Model):
+    track = models.ForeignKey(Track, on_delete=models.CASCADE, related_name="audio_jobs")
+    operation = models.CharField(max_length=16)
+    options = models.JSONField(default=dict)
+    status = models.CharField(max_length=12, default="queued")
+    source = models.FileField(storage=private_storage, upload_to=audio_path)
+    result = models.FileField(storage=private_storage, upload_to=audio_path, blank=True)
+    error = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class ExportAllowance(models.Model):
     artist = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     free_used = models.PositiveIntegerField(default=0, help_text="Free exports consumed since the last reset; repeat downloads do not count.")

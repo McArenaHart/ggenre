@@ -1,7 +1,12 @@
 from django.urls import path
-from . import views, instrumentals, collaborations
+from . import views, instrumentals, collaborations, audio_processing
 app_name = "studio"
 urlpatterns = [
+    path("audio/convert/", audio_processing.convert, name="audio_convert"),
+    path("track/<int:pk>/process/", audio_processing.queue, name="audio_queue"),
+    path("audio-jobs/<int:pk>/", audio_processing.job_status, name="audio_job"),
+    path("audio-jobs/<int:pk>/audio/", audio_processing.job_audio, name="audio_job_audio"),
+    path("audio-jobs/<int:pk>/apply/", audio_processing.apply, name="audio_apply"),
     path("collaborations/", collaborations.library, name="collaboration_library"),
     path("collaborate/<int:pk>/", collaborations.workspace, name="collaborate"),
     path("collaborate/<int:pk>/permission/", collaborations.permission, name="collaboration_permission"),
