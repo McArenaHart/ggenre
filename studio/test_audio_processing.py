@@ -46,6 +46,23 @@ class AudioProcessingTests(TestCase):
     def queue(self, operation='denoise', **options):
         return self.client.post(reverse('studio:audio_queue', args=[self.track.pk]), {'operation': operation, **options})
 
+    def test_auto_master_previews_audio_without_saving_project(self):
+        url = reverse('studio:audio_master', args=[self.project.pk])
+        original = recording().read()
+        response = self.client.post(url, {'audio': ContentFile(original, name='mix.wav')})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'audio/wav')
+        mastered = b''.join(response.streaming_content)
+        response.close()
+        with wave.open(io.BytesIO(mastered), 'rb') as result:
+            self.assertEqual(result.getnframes(), 44100)
+            self.assertNotEqual(result.readframes(44100), original[44:])
+        self.project.refresh_from_db()
+        self.assertFalse(self.project.mix)
+        self.assertEqual(self.client.post(url).status_code, 400)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.post(url, {'audio': recording()}).status_code, 404)
+
     def test_ownership_and_queue_limit(self):
         self.assertEqual(self.queue().status_code, 200)
         self.assertEqual(self.queue().status_code, 200)
@@ -115,11 +132,14 @@ class AudioProcessingTests(TestCase):
         call_command('process_studio_audio', once=True)
         job.refresh_from_db()
         self.assertEqual(job.status, 'ready')
-        job.status = 'queued'
-        job.save()
+        job.status = 'running'
+        job.save(update_fields=["status"])
+        call_command('process_studio_audio', once=True)
+        job.refresh_from_db()
+        self.assertEqual(job.status, 'running')
         with patch('studio.management.commands.process_studio_audio.process', side_effect=RuntimeError('engine failed')):
             with self.assertLogs('studio.management.commands.process_studio_audio', level='ERROR'):
-                call_command('process_studio_audio', once=True)
+                call_command('process_studio_audio', once=True, retry_interrupted=True)
         job.refresh_from_db()
         self.assertEqual(job.status, 'failed')
         self.assertNotIn('engine failed', job.error)
@@ -247,10 +267,36 @@ class AudioProcessingTests(TestCase):
         source = io.BytesIO()
         with wave.open(source, 'wb') as audio:
             audio.setparams((1, 2, 8000, 0, 'NONE', 'not compressed'))
-            audio.writeframes(b'\x00\x00' * (8000 * 301))
+            audio.writeframes(b'\x00\x00' * (8000 * 361))
         response = self.client.post(reverse('studio:audio_convert'), {'audio': ContentFile(source.getvalue(), name='long.wav')})
         self.assertEqual(response.status_code, 400)
-        self.assertIn('five minutes', response.json()['error'])
+        self.assertIn('six minutes', response.json()['error'])
+
+    def test_songs_longer_than_five_minutes_import_without_truncation(self):
+        source = io.BytesIO()
+        with wave.open(source, 'wb') as audio:
+            audio.setparams((1, 2, 8000, 0, 'NONE', 'not compressed'))
+            audio.writeframes(b'\x00\x00' * (8000 * 333))
+        response = self.client.post(reverse('studio:audio_convert'), {'audio': ContentFile(source.getvalue(), name='song.mpeg')})
+        self.assertEqual(response.status_code, 200)
+        with wave.open(io.BytesIO(b''.join(response.streaming_content)), 'rb') as audio:
+            self.assertEqual(audio.getnframes(), 44100 * 333)
+        response.close()
+
+    def test_six_minute_audio_limit_accepts_boundary_and_rejects_extra_frame(self):
+        from studio.views import validate_audio
+        from django.core.exceptions import ValidationError
+        for extra in (0, 1):
+            source = io.BytesIO()
+            with wave.open(source, 'wb') as audio:
+                audio.setparams((1, 2, 8000, 0, 'NONE', 'not compressed'))
+                audio.writeframes(b'\x00\x00' * (8000 * 360 + extra))
+            data = ContentFile(source.getvalue(), name='boundary.wav')
+            if extra:
+                with self.assertRaises(ValidationError):
+                    validate_audio(data)
+            else:
+                self.assertIs(validate_audio(data), data)
 
     @skipUnless(importlib.util.find_spec('numpy'), 'Optional NumPy is not installed')
     def test_real_noise_reduction_attenuates_hum_and_preserves_voice(self):

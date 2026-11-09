@@ -5,7 +5,7 @@ Audio imports, vocal pitch correction, noise reduction, instrumental extraction 
 Artists open **Studio** from the navigation or `/studio/`.
 
 - Create Gospel, Acapella, or Secular projects.
-- Record or import up to 12 audio tracks, each up to five minutes and 64 MB. The browser processes at 44.1 kHz so a full-length stereo WAV fits within this upload limit.
+- Record or import up to 12 audio tracks, each up to six minutes and 64 MB. The browser processes at 44.1 kHz so a full-length stereo WAV fits within this upload limit.
 - Adjust volume, mute, timeline offset, and trim times; preview and save the mix.
 - Submit a saved mix to GGenre content. Existing content approval, visibility, quota, comments, and voting rules still apply. Ordinary ratings use the existing competition/OTP system and its approval rules.
 - Export 16-bit stereo WAV. The first two export requests per artist are free for the account lifetime. Re-downloading the same export does not spend another allowance. Later requests wait for manual payment verification.

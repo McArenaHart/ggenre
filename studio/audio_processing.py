@@ -16,7 +16,8 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 
 from .models import AudioJob, Project, Track, Instrumental
-from .views import artist_only, validate_audio
+from .limits import MAX_AUDIO_SECONDS, MAX_AUDIO_BYTES
+from .views import artist_only, owned, validate_audio
 from .video_render import run_ffmpeg
 
 
@@ -52,7 +53,7 @@ def options_for(operation, raw):
 @require_POST
 def convert(request):
     upload = request.FILES.get("audio")
-    if not upload or upload.size > 64 * 1024 * 1024:
+    if not upload or upload.size > MAX_AUDIO_BYTES:
         return JsonResponse({"error": "Choose an audio file under 64 MB."}, status=400)
     try:
         with tempfile.TemporaryDirectory() as folder:
@@ -61,12 +62,35 @@ def convert(request):
                 for chunk in upload.chunks():
                     stream.write(chunk)
             # Decode one second beyond the limit so long files are rejected, never silently truncated.
-            run_ffmpeg(["-protocol_whitelist", "file,pipe", "-format_whitelist", "wav,mp3,mov,flac,ogg,aac,matroska,webm,aiff", "-i", str(source), "-map", "0:a:0", "-vn", "-t", "301", "-ac", "2", "-ar", "44100", "-c:a", "pcm_s16le", str(output)])
+            run_ffmpeg(["-protocol_whitelist", "file,pipe", "-format_whitelist", "wav,mp3,mov,flac,ogg,aac,matroska,webm,aiff", "-i", str(source), "-map", "0:a:0", "-vn", "-t", str(MAX_AUDIO_SECONDS + 1), "-ac", "2", "-ar", "44100", "-c:a", "pcm_s16le", str(output)])
             data = ContentFile(output.read_bytes(), name="import.wav")
             validate_audio(data)
             return FileResponse(data, content_type="audio/wav")
     except ValidationError:
-        return JsonResponse({"error": "Could not import this audio. Use an unprotected MP3, WAV, M4A, FLAC or OGG file up to five minutes."}, status=400)
+        return JsonResponse({"error": "Could not import this audio. Use an unprotected MP3, WAV, M4A, FLAC or OGG file up to six minutes."}, status=400)
+
+
+@artist_only
+@require_POST
+def master(request, pk):
+    owned(request, pk)
+    try:
+        audio = validate_audio(request.FILES.get("audio"))
+    except ValidationError as exc:
+        return JsonResponse({"error": exc.messages[0]}, status=400)
+
+    try:
+        with tempfile.TemporaryDirectory() as folder:
+            source, output = Path(folder) / "mix.wav", Path(folder) / "master.wav"
+            with source.open("wb") as stream:
+                for chunk in audio.chunks():
+                    stream.write(chunk)
+            filters = "highpass=f=25,acompressor=threshold=0.125:ratio=2:attack=20:release=150,loudnorm=I=-14:TP=-1.5:LRA=11"
+            run_ffmpeg(["-f", "wav", "-i", str(source), "-af", filters, "-ar", "44100", "-c:a", "pcm_s16le", str(output)])
+            result = validate_audio(ContentFile(output.read_bytes(), name="master.wav"))
+            return FileResponse(result, content_type="audio/wav")
+    except ValidationError:
+        return JsonResponse({"error": "Auto Master could not process this mix. Try again."}, status=422)
 
 
 @artist_only

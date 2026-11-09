@@ -11,6 +11,7 @@ This project includes a local bootstrap command and script for repeatable testin
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+pip install -r requirements-audio.txt
 ```
 
 ## 2. Quick start (recommended)
@@ -28,6 +29,7 @@ What it does:
 - Seeds local users/content/OTP data
 - Runs tests (because `-RunTests` is passed)
 - Starts the development server
+- Starts the Studio audio worker using the same project `.venv` Python as the server, and stops it when the server exits
 
 Useful options:
 
@@ -37,6 +39,8 @@ Useful options:
 .\scripts\start_local.ps1 -ListenHost 0.0.0.0 -Port 8080
 ```
 
+If the audio worker stopped during processing, stop any other Studio audio workers and restart with `.\scripts\start_local.ps1 -RetryInterruptedAudio` to resume interrupted jobs.
+
 ## 3. Manual commands (if preferred)
 
 ```powershell
@@ -45,6 +49,12 @@ $env:LOCAL_CONSOLE_EMAIL="True"
 python manage.py migrate
 python manage.py setup_local_testing --reset --fan-votes 10
 python manage.py runserver
+```
+
+In a second terminal, activate the same `.venv` and start the audio worker:
+
+```powershell
+python manage.py process_studio_audio
 ```
 
 ## 4. Seeded local accounts

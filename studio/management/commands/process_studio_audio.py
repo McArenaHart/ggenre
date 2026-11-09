@@ -1,4 +1,5 @@
 import logging
+import subprocess
 import time
 from django.core.management.base import BaseCommand
 from studio.models import AudioJob
@@ -28,6 +29,9 @@ class Command(BaseCommand):
                 continue
             try:
                 process(job)
-            except Exception:
-                logger.exception("Studio audio job %s failed", job.pk)
+            except Exception as exc:
+                logger.exception("Studio audio job %s (%s) failed", job.pk, job.operation)
+                if isinstance(exc, subprocess.CalledProcessError) and exc.stderr:
+                    detail = exc.stderr.decode(errors="replace")[-4000:]
+                    logger.error("Audio engine output for job %s: %s", job.pk, detail)
                 AudioJob.objects.filter(pk=job.pk).update(status="failed", error="Processing failed. Try a cleaner recording or ask the administrator to check the audio worker.")

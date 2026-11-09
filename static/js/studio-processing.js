@@ -26,30 +26,50 @@ window.StudioProcessing = {
     const permission = document.createElement("label"), consent = document.createElement("input"); consent.type = "checkbox";
     permission.append(consent, " I have permission to reuse this recording."); body.append(permission);
     const note = document.createElement("p"); note.textContent = "Process after recording. Noise reduction targets steady hiss, rumble and hum. Strong settings may affect the voice. Tune one voice at a time; skip vocal percussion. Extraction may leave vocal bleed."; body.append(note);
+    const run = document.createElement("button"); run.type = "button";
     function update() {
       for (const control of [strength, cutoff, hum]) control.parentElement.hidden = operation.value !== "denoise";
       for (const control of [key, scale, amount, speed]) control.parentElement.hidden = operation.value !== "tune";
       permission.hidden = operation.value !== "separate";
+      run.textContent = operation.value === "separate" ? "Extract instrumental" : "Process a copy";
     }
     operation.addEventListener("change", update); update();
-    const run = document.createElement("button"); run.type = "button"; run.textContent = "Process a copy";
     const status = document.createElement("p"); status.setAttribute("role", "status");
+    const progress = document.createElement("progress");
+    progress.max = 100;
+    progress.hidden = true;
+    progress.style.width = "100%";
+    progress.setAttribute("aria-label", "Instrumental extraction progress");
     const preview = document.createElement("audio"); preview.controls = true; preview.hidden = true;
     preview.addEventListener("play", () => card.querySelectorAll("audio").forEach(p => { if (p !== preview) p.pause(); }));
     const apply = document.createElement("button"); apply.type = "button"; apply.textContent = "Use processed track"; apply.hidden = true;
     const library = document.createElement("button"); library.type = "button"; library.textContent = "Save to instrumental library"; library.hidden = true;
-    body.append(run, status, preview, apply, library);
+    body.append(run, status, progress, preview, apply, library);
+    const close = document.createElement("button"); close.type = "button";
+    close.className = "studio-audio-tools-close"; close.textContent = "Close audio tools";
+    close.addEventListener("click", () => { panel.open = false; }); body.append(close);
     let jobId = track.audio_job || null, timer, jobOperation = track.audio_operation;
+    function updateProgress(jobStatus) {
+      progress.hidden = jobOperation !== "separate" || !["queued", "running", "ready"].includes(jobStatus);
+      if (jobStatus === "running") progress.removeAttribute("value");
+      else progress.value = jobStatus === "ready" ? 100 : 0;
+    }
     async function poll() {
       if (document.hidden) { timer = setTimeout(poll, 5000); return; }
       const requestedJob = jobId;
       try {
-        const response = await fetch(`/studio/audio-jobs/${requestedJob}/`);
+        const response = await fetch(`/studio/audio-jobs/${requestedJob}/`, {cache: "no-store"});
         if (requestedJob !== jobId) return;
         if (!response.ok) throw new Error("Unable to read processing status. Reload to reconnect.");
         const job = await response.json();
         if (requestedJob !== jobId) return;
-        status.textContent = job.error || `Audio task: ${job.status}.`;
+        updateProgress(job.status);
+        status.textContent = job.error || {
+          queued: "Waiting for the audio worker. You can close these tools and return later.",
+          running: jobOperation === "separate"
+            ? "Extracting the instrumental. Full songs can take several minutes on this server."
+            : "Processing the recording. You can close these tools and return later.",
+        }[job.status] || `Audio task: ${job.status}.`;
         if (job.status === "ready") {
           preview.src = job.url; preview.hidden = apply.hidden = false;
           library.hidden = jobOperation !== "separate";
@@ -58,24 +78,37 @@ window.StudioProcessing = {
         }
         if (["failed", "applied"].includes(job.status)) { run.disabled = false; return; }
         timer = setTimeout(poll, 3000);
-      } catch (error) { if (requestedJob === jobId) { status.textContent = error.message; run.disabled = false; } }
+      } catch (error) { if (requestedJob === jobId) { updateProgress(null); status.textContent = error.message; run.disabled = false; } }
     }
-    run.addEventListener("click", () => api.task(async () => {
-      if (operation.value === "separate" && !consent.checked) throw new Error("Confirm you have permission to reuse this recording.");
-      const data = new FormData(); data.append("operation", operation.value);
-      data.append("strength", operation.value === "tune" ? amount.value : strength.value);
+    const runTask = action => api.task(async () => {
+      try { await action(); }
+      catch (error) { status.textContent = error.message; throw error; }
+    });
+    run.addEventListener("click", () => runTask(async () => {
+      const selectedOperation = operation.value;
+      if (selectedOperation === "separate" && !consent.checked) throw new Error("Confirm you have permission to reuse this recording.");
+      const data = new FormData(); data.append("operation", selectedOperation);
+      data.append("strength", selectedOperation === "tune" ? amount.value : strength.value);
       for (const [name, value] of Object.entries({key: key.value, scale: scale.value, speed: speed.value, cutoff: cutoff.value, hum: hum.value, permission: consent.checked ? "yes" : "no"})) data.append(name, value);
-      const job = await api.post(`/studio/track/${track.id}/process/`, data); jobId = job.id; jobOperation = operation.value;
+      const job = await api.post(`/studio/track/${track.id}/process/`, data); jobId = job.id; jobOperation = selectedOperation;
       clearTimeout(timer); preview.hidden = apply.hidden = library.hidden = true;
+      updateProgress("queued");
       status.textContent = "Queued. You may continue editing; save edits before applying the result. Processing requires the audio worker.";
       timer = setTimeout(poll, 3000);
     }));
-    for (const button of [apply, library]) button.addEventListener("click", () => api.task(async () => {
+    for (const button of [apply, library]) button.addEventListener("click", () => runTask(async () => {
       if (!api.canApply()) throw new Error("Save your mix and keep or discard the pending take before applying audio processing.");
       const data = new FormData(); data.append("revision", api.revision()); data.append("library", button === library ? "yes" : "no");
       await api.post(`/studio/audio-jobs/${jobId}/apply/`, data); location.reload();
     }));
     if (jobId) { panel.open = true; poll(); }
     window.addEventListener("pagehide", () => clearTimeout(timer), {once: true});
+    return {
+      open(tool) {
+        if (!operations.some(([value]) => value === tool)) return false;
+        operation.value = tool; update(); panel.open = true;
+        return true;
+      }
+    };
   }
 };

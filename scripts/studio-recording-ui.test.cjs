@@ -13,10 +13,11 @@ function harness(options = {}) {
     setAttribute(name, value) { this[name] = value; }
     append(...children) { this.children.push(...children); }
     addEventListener(name, handler) { this.events[name] = handler; }
-    async trigger(name = "click") { if (name === "click" && this.disabled) return; return this.events[name]?.({target: this}); }
+    async trigger(name = "click") { if (name === "click" && this.disabled) return; return this.events[name]?.({target: this, preventDefault: () => { this.prevented = true; }}); }
     matches(selector) { return selector === "audio" && this.tagName === "AUDIO"; }
     querySelector() { return {value: "csrf"}; }
     querySelectorAll(selector) {
+      if (selector === 'label[for="import"]') return elements.filter(e => e.tagName === "LABEL" && e.htmlFor === "import");
       if (selector === "[data-saved-action]") return [byId.publish, byId.export];
       if (selector === "[data-track-remove]") return elements.filter(e => e.dataset.trackRemove !== undefined);
       if (selector === "[data-voice-part]") return elements.filter(e => e.dataset.voicePart !== undefined);
@@ -32,8 +33,12 @@ function harness(options = {}) {
   for (const id of ["record", "stop", "preview", "save", "rewind", "cancel-recording", "keep-take", "retry-take", "discard-take", "audition-take", "publish", "export"]) new Element("button", id);
   for (const [id, value] of [["track-name", "Harmony"], ["record-position", "12.5"], ["tempo", "80"], ["count-in", "4"], ["delay-correction", "0"]]) { const element = new Element("input", id); element.value = value; }
   new Element("input", "import"); new Element("meter", "input-meter"); new Element("span", "level-label");
+  for (const id of ["import-track-label", "import-zone-label"]) new Element("label", id).htmlFor = "import";
   new Element("select", "import-kind").value = options.importKind || "backing";
   new Element("audio", "mix-preview"); new Element("audio", "take-preview");
+  new Element("button", "auto-master").dataset.url = "/studio/project/7/master/";
+  new Element("audio", "master-preview").hidden = true;
+  new Element("button", "save-master").hidden = true;
   new Element("div", "take-review").hidden = true; byId.stop.disabled = true; byId["cancel-recording"].hidden = true; byId["cancel-recording"].disabled = true;
   const tracks = options.tracks || [{id: 1, name: "Beat", url: "private.wav", gain: 1, offset: 0, trim_start: 0, trim_end: 0, muted: false}];
   new Element("script", "studio-tracks").textContent = JSON.stringify(tracks);
@@ -45,19 +50,19 @@ function harness(options = {}) {
     return {numberOfChannels: channels, length, sampleRate, duration: length / sampleRate, getChannelData: c => samples[c], copyToChannel: (data, c) => samples[c].set(data)};
   }
   const stream = {getTracks: () => [{stop() { micStops++; }}], getAudioTracks: () => [{getSettings: () => ({})}]};
-  const sandbox = {StudioInputs:require("../static/js/studio-inputs.js"), StudioVoices: require("../static/js/studio-voices.js"), sessionStorage: {getItem: () => null, setItem(){}}, setTimeout, clearTimeout, document: {getElementById: id => byId[id], createElement: tag => new Element(tag)}, window: {AudioWorkletNode: class {}, addEventListener: (name, callback) => windowEvents[name] = callback},
+  const sandbox = {StudioInputs:require("../static/js/studio-inputs.js"), StudioVoices: require("../static/js/studio-voices.js"), sessionStorage: {getItem: () => null, setItem(){}}, setTimeout: (fn, ms) => setTimeout(fn, options.decodeHangOnce && ms === 20000 ? 5 : ms), clearTimeout, document: {getElementById: id => byId[id], createElement: tag => new Element(tag)}, window: {AudioWorkletNode: class {}, addEventListener: (name, callback) => windowEvents[name] = callback},
     navigator: {mediaDevices: {getUserMedia: async constraints => {inputConstraints=constraints;return options.microphone || stream;}}}, AudioContext: class {constructor() { this.sampleRate = 44100; } async resume() {} createBuffer(...args) { return buffer(...args); } async decodeAudioData() { if (++decodeCalls <= (options.decodeRejects || 0)) throw new Error("Unsupported browser codec"); return buffer(); }},
     StudioAudio: {...helpers, async begin(given) { beginCalls++; recordingOptions = given; if (options.preparation) await options.preparation; return {stop() { recordingOptions.onDone({samples: new Float32Array(4410), sampleRate: 44100, position: given.position}); }, cancel() { cancelled++; }}; }},
-    OfflineAudioContext: class {createBufferSource() { return {connect(node) { return node; }, start() {}}; } createGain() { return {gain: {value: 1}, connect() {}}; } async startRendering() { return buffer(2); }},
+    OfflineAudioContext: class {async decodeAudioData() { decodeCalls++; if (options.decodeHangOnce && decodeCalls === 1) return new Promise(() => {}); if (decodeCalls <= (options.decodeRejects || 0)) throw new Error("Unsupported browser codec"); return buffer(); } createBufferSource() { return {connect(node) { return node; }, start() {}}; } createGain() { return {gain: {value: 1}, connect() {}}; } async startRendering() { return buffer(2); }},
     location: {reload() { reloads++; }}, URL: {createObjectURL: () => "blob:test", revokeObjectURL() {}}, Blob, FormData, Float32Array, DataView, ArrayBuffer, Number, Math, JSON, confirm: () => true,
-    fetch: async (url, request) => { if (!request) return {ok: true, arrayBuffer: async () => new ArrayBuffer(44)}; posted.push({url, body: request.body}); if (url === "/studio/audio/convert/") return {ok: !options.convertFail, blob: async () => new Blob(["converted"]), json: async () => ({error: "Audio conversion failed"})}; return {ok: !failUpload, json: async () => failUpload ? {error: "Upload failed; retry"} : {ok: true}}; }};
+    fetch: async (url, request) => { if (!request) return {ok: true, arrayBuffer: async () => new ArrayBuffer(44)}; posted.push({url, body: request.body}); if (url === "/studio/project/7/master/") return {ok: true, headers: {get: () => "audio/wav"}, blob: async () => new Blob(["mastered"], {type: "audio/wav"})}; if (url === "/studio/audio/convert/") return {ok: !options.convertFail, blob: async () => new Blob(["converted"]), json: async () => ({error: "Audio conversion failed"})}; return {ok: !failUpload, json: async () => failUpload ? {error: "Upload failed; retry"} : {ok: true}}; }};
   if (options.recovery) sandbox.StudioDrafts = class {
     async read() { return options.snapshot; }
     async write(value) { if (options.failRecovery) throw new Error("Quota exceeded"); drafts.push(structuredClone(value)); }
     async clear() { drafts.push(null); }
   };
   vm.createContext(sandbox); vm.runInContext(fs.readFileSync(require.resolve("../static/js/studio.js"), "utf8"), sandbox);
-  return {constraints:()=>inputConstraints, byId, elements, posted, windowEvents, options: () => recordingOptions, drafts, stream, cancelled: () => cancelled, micStops: () => micStops, beginCalls: () => beginCalls, ready: () => new Promise(resolve => setImmediate(resolve)), fail() { failUpload = true; }, succeed() { failUpload = false; }, reloads: () => reloads};
+  return {constraints:()=>inputConstraints, decodeCalls:()=>decodeCalls, byId, elements, posted, windowEvents, options: () => recordingOptions, drafts, stream, cancelled: () => cancelled, micStops: () => micStops, beginCalls: () => beginCalls, ready: () => new Promise(resolve => setImmediate(resolve)), fail() { failUpload = true; }, succeed() { failUpload = false; }, reloads: () => reloads};
 }
 test("import preserves filename, selected vocal kind, timeline position and existing edits", async () => {
   const h = harness({importKind: "vocal"});
@@ -72,6 +77,18 @@ test("import preserves filename, selected vocal kind, timeline position and exis
   assert.equal(JSON.parse(data.get("tracks"))[0].id, 1);
   assert.equal(data.get("audio").type, "audio/wav");
   assert.equal(h.reloads(), 1);
+  assert.equal(h.decodeCalls(), 1, "Import reuses its decoded audio instead of decoding the song twice");
+});
+
+test("a stalled import decoder falls back to conversion and releases editing controls", async () => {
+  const h = harness({decodeHangOnce:true});
+  h.byId.import.files = [Object.assign(new Blob(["song"]), {name:"Song.mp3"})];
+  await h.byId.import.trigger("change");
+  assert.equal(h.posted[0].url,"/studio/audio/convert/");
+  assert.equal(h.posted.length,2);
+  assert.equal(h.reloads(),1);
+  assert.equal(h.byId.preview.disabled,false);
+  assert.equal(h.byId.import.disabled,false);
 });
 
 test("unsupported browser codecs use server conversion before importing", async () => {
@@ -112,6 +129,25 @@ test("recording locks controls, preserves the timeline, and unlocks take review"
   assert.equal(h.byId["take-review"].hidden, false); assert.equal(h.byId["keep-take"].disabled, false);
   assert.equal(h.byId.save.disabled, true); assert.equal(h.posted.length, 0);
   assert.equal(h.byId["mix-preview"].controls, true);
+});
+
+test("import labels explain unfinished takes instead of silently ignoring clicks", async () => {
+  const h = harness(); await h.byId.record.trigger(); await h.byId.stop.trigger();
+  assert.equal(h.byId.import.disabled, true);
+  await h.byId["import-track-label"].trigger();
+  assert.equal(h.byId["import-track-label"].prevented, true);
+  assert.match(h.byId.status.textContent, /Keep or discard the unfinished take/);
+});
+
+test("import labels explain pending recovery and allow the picker once resolved", async () => {
+  const h = harness({recovery: true, snapshot: recoverySnapshot()}); await h.ready();
+  await h.byId["import-zone-label"].trigger();
+  assert.match(h.byId.status.textContent, /Restore or Discard/);
+  await h.byId["restore-draft"].trigger();
+  h.byId["import-zone-label"].prevented = false;
+  await h.byId["import-zone-label"].trigger();
+  assert.equal(h.byId["import-zone-label"].prevented, false);
+  assert.equal(h.byId.import.disabled, false);
 });
 test("keeping the vocal sends its offset and current backing-track edits", async () => {
   const h = harness();
@@ -263,4 +299,16 @@ test("keyboard audio chooses exact interface and channel and saves as backing",a
 });
 test("Acapella retains vocal-only capture even with keyboard source selected",async()=>{
  const h=harness({category:"acapella",inputMode:"keyboard"});await h.byId.record.trigger();assert.equal(h.constraints().audio.channelCount,1);await h.byId.stop.trigger();await h.byId["keep-take"].trigger();assert.equal(h.posted[0].body.get("kind"),"vocal");
+});
+
+test("Auto Master previews the mix and saves the mastered WAV only on request", async () => {
+  const h = harness();
+  await h.byId["auto-master"].trigger();
+  assert.equal(h.posted.length, 1);
+  assert.equal(h.posted[0].url, "/studio/project/7/master/");
+  assert.equal(h.byId["master-preview"].hidden, false);
+  await h.byId["save-master"].trigger();
+  assert.equal(h.posted[1].url, "/studio/project/7/save/");
+  assert.equal(await h.posted[1].body.get("audio").text(), "mastered");
+  assert.equal(h.posted[1].body.get("revision"), "rev1");
 });

@@ -161,7 +161,7 @@ class StudioTests(TestCase):
 
     def test_overdub_rejects_invalid_position_without_changing_saved_mix(self):
         original_mix = self.project.mix.name
-        for offset in ("NaN", "-1", "300", "infinity"):
+        for offset in ("NaN", "-1", "360", "infinity"):
             response = self.client.post(self.url("add_track"), {"audio": wav_upload(), "offset": offset})
             self.assertEqual(response.status_code, 400)
         self.assertEqual(self.project.tracks.count(), 0)

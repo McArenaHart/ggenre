@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST
 from content.models import Content, ArtistUploadLimit
 from content.views import can_view_content
 from .models import Project, Track, ExportAllowance, Export, Release
+from .limits import MAX_AUDIO_SECONDS, MAX_AUDIO_BYTES
 from .catalog import PROFILES, profile_for, beats_for, REFERENCE_NOTES
 
 
@@ -32,16 +33,16 @@ def owned(request, pk):
 
 
 def validate_audio(upload):
-    if not upload or upload.size > 64 * 1024 * 1024:
+    if not upload or upload.size > MAX_AUDIO_BYTES:
         raise ValidationError("Choose a WAV recording under 64 MB.")
     try:
         with wave.open(upload, "rb") as audio:
-            if audio.getnchannels() not in (1, 2) or audio.getsampwidth() != 2 or not 8000 <= audio.getframerate() <= 96000 or not 0 < audio.getnframes() / audio.getframerate() <= 300:
+            if audio.getnchannels() not in (1, 2) or audio.getsampwidth() != 2 or not 8000 <= audio.getframerate() <= 96000 or not 0 < audio.getnframes() / audio.getframerate() <= MAX_AUDIO_SECONDS:
                 raise ValueError()
             if len(audio.readframes(audio.getnframes())) != audio.getnframes() * audio.getnchannels() * 2:
                 raise ValueError()
     except (wave.Error, EOFError, ValueError):
-        raise ValidationError("Use a valid 16-bit PCM WAV recording up to five minutes.")
+        raise ValidationError("Use a valid 16-bit PCM WAV recording up to six minutes.")
     finally:
         upload.seek(0)
     return upload
@@ -60,7 +61,7 @@ def parse_track_settings(project, raw):
             if not isinstance(name, str) or not name.strip() or len(name.strip()) > 100:
                 raise ValueError()
             track.name = name.strip()
-        for key, maximum in [("gain", 2), ("offset", 300), ("trim_start", 300), ("trim_end", 300)]:
+        for key, maximum in [("gain", 2), ("offset", MAX_AUDIO_SECONDS), ("trim_start", MAX_AUDIO_SECONDS), ("trim_end", MAX_AUDIO_SECONDS)]:
             value = float(item[key])
             if not math.isfinite(value) or not 0 <= value <= maximum:
                 raise ValueError()
@@ -137,11 +138,11 @@ def add_track(request, pk):
             with wave.open(audio, "rb") as recording:
                 duration = recording.getnframes() / recording.getframerate()
             audio.seek(0)
-            if not math.isfinite(offset) or offset < 0 or offset + duration > 300.001:
+            if not math.isfinite(offset) or offset < 0 or offset + duration > MAX_AUDIO_SECONDS + .001:
                 raise ValueError()
             edits = parse_track_settings(project, request.POST["tracks"]) if "tracks" in request.POST else []
         except (ValidationError, ValueError, KeyError, TypeError) as exc:
-            return JsonResponse({"error": exc.messages[0] if isinstance(exc, ValidationError) else "Invalid track settings or recording position. Keep the take within five minutes."}, status=400)
+            return JsonResponse({"error": exc.messages[0] if isinstance(exc, ValidationError) else "Invalid track settings or recording position. Keep the take within six minutes."}, status=400)
         for track in edits:
             track.save()
         Track.objects.create(project=project, name=request.POST.get("name", "Vocal")[:100], audio=audio, offset=offset, kind=kind, beat_preset=preset_id, beat_bpm=beat_bpm)

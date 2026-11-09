@@ -6,9 +6,10 @@ const fs = require('node:fs');
 function harness(track, acapella = false) {
   const elements = [], requests = [], tasks = [], timers = [];
   class Element {
-    constructor(tag) { this.tag = tag; this.children = []; this.events = {}; this.hidden = false; this.value = ''; elements.push(this); }
+    constructor(tag) { this.tag = tag; this.children = []; this.events = {}; this.style = {}; this.hidden = false; this.value = ''; elements.push(this); }
     append(...children) { for (const child of children) { this.children.push(child); if (typeof child === 'object') child.parentElement = this; if (this.tag === 'select' && !this.value) this.value = child.value; } }
     setAttribute() {}
+    removeAttribute(name) { delete this[name]; }
     addEventListener(event, fn) { this.events[event] = fn; }
     querySelector() { return this; }
     querySelectorAll() { return []; }
@@ -48,6 +49,7 @@ test('instrumental extraction requires permission and Acapella only offers voice
   operation.value = 'separate'; operation.events.change();
   h.elements.find(e => e.tag === 'button').events.click();
   await assert.rejects(h.tasks.pop(), /permission/);
+  assert.ok(h.elements.some(e => e.textContent === 'Confirm you have permission to reuse this recording.'));
   assert.equal(h.requests.length, 0);
   const a = harness({id: 3, kind: 'vocal'}, true);
   assert.deepEqual(a.elements.find(e => e.tag === 'select').children.map(e => e.value), ['denoise', 'tune']);
@@ -76,4 +78,24 @@ test('an unfinished task reports errors and allows a new processing attempt', as
   assert.equal(h.elements.find(e => e.tag === 'audio').hidden, true);
   run.events.click(); await h.tasks.pop();
   assert.equal(h.requests.length, 2);
+});
+
+test('extraction shows an empty bar while queued, animates while running, and fills when ready', async () => {
+  const h = harness({id: 2, kind: 'backing'});
+  const operation = h.elements.find(e => e.tag === 'select');
+  const consent = h.elements.find(e => e.type === 'checkbox');
+  const progress = h.elements.find(e => e.tag === 'progress');
+  operation.value = 'separate';
+  consent.checked = true;
+  h.elements.find(e => e.tag === 'button').events.click();
+  await h.tasks.pop();
+  assert.equal(progress.hidden, false);
+  assert.equal(progress.value, 0);
+  h.scope.fetch = async () => ({ok: true, json: async () => ({status: 'running'})});
+  await h.timers.shift()();
+  assert.equal(progress.hidden, false);
+  assert.equal(progress.value, undefined);
+  h.scope.fetch = async () => ({ok: true, json: async () => ({status: 'ready', url: '/private-result/'})});
+  await h.timers.shift()();
+  assert.equal(progress.value, 100);
 });

@@ -11,13 +11,13 @@ MAX_SECONDS = 300
 
 
 def run_ffmpeg(arguments, timeout=120):
-    import imageio_ffmpeg
     try:
+        import imageio_ffmpeg
         result = subprocess.run(
             [imageio_ffmpeg.get_ffmpeg_exe(), "-nostdin", "-hide_banner", "-y", *arguments],
             capture_output=True, timeout=timeout, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+    except (ImportError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         raise ValidationError("Video processing is unavailable or took too long. Please try again.") from exc
     if result.returncode:
         raise ValidationError("This video could not be processed. Use an uploaded MP4 with an audio track.")

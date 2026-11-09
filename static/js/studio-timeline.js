@@ -5,11 +5,11 @@
     const start = Number(track.trim_start), end = Number(track.trim_end) || duration, offset = Number(track.offset);
     if (![duration, delta, start, end, offset].every(Number.isFinite) || duration <= 0 || start < 0 || end <= start || end > duration + .02 || offset < 0) throw new Error("Fix the numeric trim settings before dragging this track.");
     const length = end - start, result = {...track};
-    if (kind === "move") result.offset = clamp(offset + delta, 0, Math.max(0, 300 - length));
+    if (kind === "move") result.offset = clamp(offset + delta, 0, Math.max(0, 360 - length));
     else if (kind === "left") {
       const change = clamp(delta, Math.max(-start, -offset), length - .05);
       result.trim_start = start + change; result.offset = offset + change;
-    } else if (kind === "right") result.trim_end = clamp(end + delta, start + .05, Math.min(duration, 300 - offset + start));
+    } else if (kind === "right") result.trim_end = clamp(end + delta, start + .05, Math.min(duration, 360 - offset + start));
     else throw new Error("Unknown timeline edit.");
     for (const key of ["offset", "trim_start", "trim_end"]) result[key] = Math.round(result[key] * 1000) / 1000;
     return result;
@@ -25,8 +25,8 @@
     return output;
   }
   class Timeline {
-    constructor({container, tracks, load, onChange, onSeek, locked, onError, category = ""}) {
-      Object.assign(this, {container, tracks, load, onChange, onSeek, locked, onError, category});
+    constructor({container, tracks, load, onDelete, onChange, onSeek, locked, onError, category = ""}) {
+      Object.assign(this, {container, tracks, load, onDelete, onChange, onSeek, locked, onError, category});
       this.zoom = 16; this.rows = new Map(); this.position = 0;
       const header = document.createElement("div"); header.className = "studio-timeline-header";
       const heading = document.createElement("h2"); heading.textContent = "Arrangement";
@@ -41,7 +41,7 @@
       tools.append(tips, label); header.append(heading, tools);
       this.scroll = document.createElement("div"); this.scroll.className = "studio-timeline-scroll"; this.scroll.tabIndex = 0;
       this.ruler = document.createElement("div"); this.ruler.className = "studio-ruler";
-      this.ruler.addEventListener("click", event => { if (!this.locked()) this.onSeek(clamp((event.clientX - this.ruler.getBoundingClientRect().left) / this.zoom, 0, 299)); });
+      this.ruler.addEventListener("click", event => { if (!this.locked()) this.onSeek(clamp((event.clientX - this.ruler.getBoundingClientRect().left) / this.zoom, 0, 359)); });
       this.scroll.append(this.ruler); container.append(header, this.scroll);
       this.playheads = [];
       if (!tracks.length) {
@@ -65,7 +65,18 @@
       const left = document.createElement("span"), right = document.createElement("span");
       left.className = "studio-trim studio-trim-left"; right.className = "studio-trim studio-trim-right";
       left.title = "Drag to trim the beginning"; right.title = "Drag to trim the end";
-      clip.append(canvas, title, left, right); row.append(clip); this.scroll.append(row);
+      clip.append(canvas, title, left, right); row.append(clip);
+      if (this.onDelete) {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "studio-wave-delete";
+        remove.dataset.trackRemove = "true";
+        remove.textContent = "Delete track";
+        remove.setAttribute("aria-label", "Delete track: " + track.name);
+        remove.addEventListener("click", () => { if (!this.locked()) this.onDelete(track); });
+        row.append(remove);
+      }
+      this.scroll.append(row);
       const state = {track, row, clip, canvas, title}; this.rows.set(track.id, state);
       clip.addEventListener("pointerdown", event => {
         if (this.locked() || !state.buffer || event.button !== 0) return;
@@ -89,7 +100,7 @@
     render() {
       let duration = Math.max(30, this.position + 3, (this.scroll.clientWidth || 0) / this.zoom);
       for (const {track, buffer} of this.rows.values()) if (buffer) duration = Math.max(duration, Number(track.offset) + (Number(track.trim_end) || buffer.duration) - Number(track.trim_start) + 3);
-      duration = Math.min(300, Math.ceil(duration / 5) * 5);
+      duration = Math.min(360, Math.ceil(duration / 5) * 5);
       const width = duration * this.zoom;
       this.playheads = []; this.ruler.style.width = width + "px"; this.ruler.replaceChildren();
       const step = this.zoom >= 16 ? 5 : 15;

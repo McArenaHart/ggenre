@@ -26,6 +26,7 @@ urlpatterns = [
     path("exports/controls/", views.export_controls, name="export_controls"),
     path("exports/", views.export_reviews, name="export_reviews"),
     path("project/<int:pk>/", views.editor, name="editor"),
+    path("project/<int:pk>/master/", audio_processing.master, name="audio_master"),
     path("project/<int:pk>/save/", views.save, name="save"),
     path("project/<int:pk>/track/", views.add_track, name="add_track"),
     path("track/<int:pk>/audio/", views.track_audio, name="track_audio"),

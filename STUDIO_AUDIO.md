@@ -1,6 +1,6 @@
 # Studio audio tools
 
-Import a local file in the recording inspector. Select **Solo vocal** for isolated voices or **Instrumental / complete song** for backing. Acapella remains vocal-only. Imports use the timeline cursor, retain the filename, and convert to private 44.1 kHz PCM WAV. Browser decoding is tried first; server FFmpeg conversion handles browser codec gaps. Protected, malformed, oversized and over-five-minute inputs are rejected. Original external files on the artist's device are never modified.
+Import a local file in the recording inspector. Select **Solo vocal** for isolated voices or **Instrumental / complete song** for backing. Acapella remains vocal-only. Imports use the timeline cursor, retain the filename, and convert to private 44.1 kHz PCM WAV. Browser decoding is tried first; server FFmpeg conversion handles browser codec gaps. Protected, malformed, oversized and over-six-minute inputs are rejected. Original external files on the artist's device are never modified.
 
 Open **Audio tools** on a track. Reduce steady hiss, low rumble and optional 50/60 Hz electrical hum; start gently. This cannot reliably erase overlapping speech, loud transients, reverb or distortion. Choose the rumble cutoff carefully for bass voices.
 
@@ -11,6 +11,8 @@ Instrumental extraction is available in Gospel and Secular sessions. It separate
 Preview with the result player and compare with the original track player. Save existing edits and keep/discard pending takes before applying. Applying adds a separate track with matching timeline/trim/gain and mutes the source, so Save mix, publishing and exports use the processed audio. Unmute the source and mute/remove the processed track to undo. Save mix again after applying. Processing does not publish or consume export allowances.
 
 ## Deployment
+
+For local Windows development, install both requirements files in `.venv`, then use `scripts/start_local.ps1`. The launcher uses the project virtual environment for both Django and the audio worker, checks that the audio engines are installed, and runs the worker for the lifetime of the server. Starting Django alone with `runserver` still requires a separate worker using the same Python executable.
 
 Apply `python manage.py migrate studio`, install `requirements-audio.txt` in the Python environment used by the worker and web process, and run `python manage.py process_studio_audio` as a supervised background service alongside Django. FFmpeg comes from the existing imageio-ffmpeg dependency. PyWORLD needs NumPy/SciPy. Demucs also installs PyTorch/Torchaudio and downloads its model on first use; allow time, disk, memory and model-download access. CPU processing works but can be slow. Missing optional engines return a setup error instead of accepting unusable jobs.
 

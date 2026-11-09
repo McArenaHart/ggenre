@@ -4,12 +4,12 @@
   function segment(track, duration, position) {
     const start = Number(track.trim_start || 0), end = Number(track.trim_end) || duration;
     const offset = Number(track.offset || 0), gain = Number(track.gain);
-    if (![start, end, offset, gain, position].every(Number.isFinite) || start < 0 || end <= start || end > duration + 0.02 || offset < 0 || gain < 0 || gain > 2 || position < 0 || position >= 300) {
+    if (![start, end, offset, gain, position].every(Number.isFinite) || start < 0 || end <= start || end > duration + 0.02 || offset < 0 || gain < 0 || gain > 2 || position < 0 || position >= 360) {
       throw new Error("Check trim times, volume, and position for " + track.name);
     }
     const skipped = Math.max(0, position - offset);
     const length = Math.min(end, duration) - start - skipped;
-    return track.muted || length <= 0 ? null : {delay: Math.max(0, offset - position), start: start + skipped, duration: Math.min(length, 300 - Math.max(position, offset)), gain};
+    return track.muted || length <= 0 ? null : {delay: Math.max(0, offset - position), start: start + skipped, duration: Math.min(length, 360 - Math.max(position, offset)), gain};
   }
   function compensate(samples, sampleRate, milliseconds) {
     const frames = Math.round(milliseconds * sampleRate / 1000);
@@ -38,7 +38,7 @@
     const startTime = countStart + countIn * 60 / bpm;
     // Continue capture briefly after backing stops so delayed mic samples are retained.
     const tail = Math.max(0, Math.min(1, captureTail));
-    const maxEnd = startTime + 300 - position + tail;
+    const maxEnd = startTime + 360 - position + tail;
     function stopSources() { for (const source of sources) { try { source.stop(); } catch (_) {} source.disconnect(); } }
     function cleanup() {
       clearInterval(progress); stopSources(); microphone.disconnect(); node.disconnect(); silent.disconnect();

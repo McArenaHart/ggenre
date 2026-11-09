@@ -24,6 +24,11 @@
   let takeEstimate = 0, timeline, draftStore, draftTimer, checkpoint, recoveryWaiting = false, recovering = false;
   let baseRevision = root.dataset.revision || JSON.stringify(tracks);
   const trackInputs = new Map();
+  const autoMaster = document.getElementById("auto-master");
+  const masterPreview = document.getElementById("master-preview");
+  const saveMaster = document.getElementById("save-master");
+  let masterBlob, masterURL, masterSignature;
+  const mixSignature = () => JSON.stringify(tracks);
   function recoveryMessage(text) { const label = document.getElementById("recovery-status"); if (label) label.textContent = text; }
   function persistDraft() {
     if (!draftStore || recoveryWaiting || recovering) return;
@@ -36,7 +41,7 @@
   function scheduleDraft() { if (!draftStore) return; clearTimeout(draftTimer); draftTimer = setTimeout(persistDraft, 500); }
   async function clearDraft() {
     clearTimeout(draftTimer); checkpoint = null;
-    if (draftStore) { try { await draftStore.clear(); recoveryMessage("Saved to GGenre. No local recovery copy pending."); } catch (_) { recoveryMessage("Saved to GGenre, but the older local recovery copy could not be removed."); } }
+    if (draftStore) { try { await deadline(draftStore.clear(), 3000, "Local recovery did not respond."); recoveryMessage("Saved to GGenre. No local recovery copy pending."); } catch (_) { recoveryMessage("Saved to GGenre, but the older local recovery copy could not be removed."); } }
   }
   function syncTrackInputs(track) {
     const fields = trackInputs.get(track.id);
@@ -44,6 +49,18 @@
   }
   const buffers = new Map();
   const audioContext = () => context || (context = new AudioContext({latencyHint: "interactive", sampleRate: 44100}));
+  async function deadline(promise, milliseconds, explanation) {
+    let timer;
+    try {
+      return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(explanation)), milliseconds); })]);
+    } finally { clearTimeout(timer); }
+  }
+  async function decodeImport(blob) {
+    const bytes = await deadline(blob.arrayBuffer(), 30000, "Could not read this file. Download a local copy first, then import it again.");
+    // File decoding does not need a live speaker/microphone device.
+    const decoder = new OfflineAudioContext(1, 1, 44100);
+    return deadline(decoder.decodeAudioData(bytes), 20000, "Audio decoding stalled. Trying server conversion may help.");
+  }
   let playbackOrigin = 0, previewSignature = "";
   function transportTime(seconds) {
     const clock = document.getElementById("session-clock");
@@ -61,11 +78,15 @@
     player.addEventListener("play", playbackState); player.addEventListener("pause", playbackState); player.addEventListener("ended", playbackState);
     player.addEventListener("timeupdate", () => { if (player.paused === false) transportTime(origin() + player.currentTime); });
   }
-  function message(text) { status.textContent = text; }
+  function message(text) {
+    status.textContent = text;
+    const toolStatus = document.getElementById("audio-tool-status");
+    if (toolStatus) toolStatus.textContent = text;
+  }
   function changed() { dirty = true; root.querySelectorAll("[data-saved-action]").forEach(b => b.disabled = true); timeline?.render(); scheduleDraft(); }
   async function post(url, data) {
     const response = await fetch(url, {method: "POST", headers: {"X-CSRFToken": csrf}, body: data});
-    const result = await response.json();
+    const result = await response.json().catch(() => { throw new Error("The server could not save this audio. Reload the project to check whether it was saved before trying again."); });
     if (!response.ok) throw new Error(result.error || "Unable to save. Please try again.");
     return result;
   }
@@ -110,7 +131,7 @@
       return {track, buffer, start, duration: Math.min(end, buffer.duration) - start};
     }));
     const fullDuration = Math.max(...parts.map(p => Number(p.track.offset) + p.duration));
-    if (fullDuration > 300) throw new Error("The final mix must be five minutes or shorter.");
+    if (fullDuration > 360) throw new Error("The final mix must be six minutes or shorter.");
     const duration = fullDuration - position;
     if (duration <= 0) throw new Error("There is no audio after that position.");
     const offline = new OfflineAudioContext(2, Math.ceil(duration * 44100), 44100);
@@ -125,20 +146,33 @@
     if (typeof StudioVoices !== "undefined") { const result = StudioVoices.protect(rendered), label = document.getElementById("acapella-mix-health"); if (label) label.textContent = result.gain < 1 ? `Peak guard reduced the mix by ${(-20 * Math.log10(result.gain)).toFixed(1)} dB to avoid digital clipping.` : "Peak guard on · mix levels are within range."; }
     return wav(rendered);
   }
-  async function upload(blob, offset = 0, name = null, kind = "vocal", preset = "", beatBpm = null) {
+  async function upload(blob, offset = 0, name = null, kind = "vocal", preset = "", beatBpm = null, decoded = null) {
     if (blob.size > 64 * 1024 * 1024) throw new Error("Choose audio under 64 MB.");
-    const buffer = await audioContext().decodeAudioData(await blob.arrayBuffer());
-    if (!Number.isFinite(offset) || offset < 0 || offset + buffer.duration > 300.001) throw new Error("Keep the voice and its starting position within the five-minute project.");
+    const buffer = decoded || await decodeImport(blob);
+    if (!Number.isFinite(offset) || offset < 0 || offset + buffer.duration > 360.001) throw new Error("Keep the voice and its starting position within the six-minute project.");
     const data = new FormData(); data.append("audio", wav(buffer), "track.wav");
     data.append("name", name || document.getElementById("track-name").value || "Vocal");
     data.append("offset", String(offset)); data.append("kind", kind); data.append("beat_preset", preset);
     data.append("tempo", document.getElementById("tempo").value); if (beatBpm !== null) data.append("beat_bpm", String(beatBpm));
     data.append("tracks", JSON.stringify(tracks)); data.append("revision", baseRevision); rememberVoiceSettings();
     message("Saving track…");
-    await post(`/studio/project/${root.dataset.project}/track/`, data);
+    await deadline(post(`/studio/project/${root.dataset.project}/track/`, data), 120000, "The upload has not finished. Reload this project to check whether the track was saved before trying again.");
     dirty = false; pendingTake = null; await clearDraft(); location.reload();
   }
   const container = document.getElementById("tracks");
+  const processingTools = new Map();
+  function deleteTrack(track) {
+    return task(async () => {
+      if (pendingTake || !confirm(`Delete "${track.name}" from this project?`)) return;
+      const data = new FormData();
+      data.append("tracks", JSON.stringify(tracks));
+      data.append("revision", baseRevision);
+      await post(`/studio/track/${track.id}/delete/`, data);
+      dirty = false;
+      await clearDraft();
+      location.reload();
+    });
+  }
   for (const [index, track] of tracks.entries()) {
     const fields = {}; trackInputs.set(track.id, fields);
     const card = document.createElement("section"); card.className = "studio-track-strip";
@@ -153,7 +187,7 @@
     const timing = document.createElement("details"); timing.className = "studio-track-edit";
     const timingLabel = document.createElement("summary"); timingLabel.textContent = "Timing ▾";
     const timingPanel = document.createElement("div"); timingPanel.className = "studio-track-edit-panel"; timing.append(timingLabel, timingPanel);
-    for (const [key, label, max] of [["gain", "VOL", 2], ["offset", "Start on timeline (seconds)", 300], ["trim_start", "Trim from (seconds)", 300], ["trim_end", "Trim to (0 = track end)", 300]]) {
+    for (const [key, label, max] of [["gain", "VOL", 2], ["offset", "Start on timeline (seconds)", 360], ["trim_start", "Trim from (seconds)", 360], ["trim_end", "Trim to (0 = track end)", 360]]) {
       const wrapper = document.createElement(key === "gain" ? "div" : "label"); wrapper.className = key === "gain" ? "studio-track-fader" : "studio-timing-field";
       const text = document.createElement("label"); text.textContent = label;
       const input = document.createElement("input"); input.type = key === "gain" ? "range" : "number"; input.min = 0; input.max = max; input.step = "0.01"; input.value = track[key]; input.dataset.trackField = key; input.setAttribute("aria-label", track.name + " " + (key === "gain" ? "volume" : label));
@@ -167,14 +201,42 @@
     const listen = document.createElement("button"); listen.type = "button"; listen.textContent = "▶"; listen.setAttribute("aria-label", "Listen to " + track.name); listen.title = "Audition original take";
     listen.addEventListener("click", () => task(async () => { pausePlayers(); await player.play(); }));
     const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "×"; remove.title = "Remove " + track.name; remove.setAttribute("aria-label", "Remove " + track.name); remove.dataset.trackRemove = "true";
-    remove.addEventListener("click", () => task(async () => { if (confirm("Remove this track?")) { const data = new FormData(); data.append("tracks", JSON.stringify(tracks)); data.append("revision", baseRevision); await post(`/studio/track/${track.id}/delete/`, data); dirty = false; await clearDraft(); location.reload(); } }));
+    remove.addEventListener("click", () => deleteTrack(track));
     actions.append(label);
     if (voiceTools) { const solo = document.createElement("button"); solo.type = "button"; solo.textContent = "Solo"; solo.className = "studio-voice-solo"; solo.dataset.voiceSolo = String(track.id); solo.setAttribute("aria-label", "Solo " + track.name); solo.setAttribute("aria-pressed", "false");
       solo.addEventListener("click", () => { if (session || preparing || busy) return; pausePlayers(); if (soloVoices.has(track.id)) soloVoices.delete(track.id); else soloVoices.add(track.id); syncSolo(); }); actions.append(solo);
     }
     actions.append(listen, timing, remove); card.append(actions);
-    if (typeof StudioProcessing !== "undefined") StudioProcessing.mount(card, track, {task, post, message, root, isAcapella, canApply: () => !dirty && !pendingTake, revision: () => baseRevision});
+    if (typeof StudioProcessing !== "undefined") processingTools.set(track.id, StudioProcessing.mount(card, track, {task, post, message, root, isAcapella, canApply: () => !dirty && !pendingTake, revision: () => baseRevision}));
     container.append(card);
+  }
+  for (const [id, operation] of [["extract-instrumental", "separate"], ["autotune-vocal", "tune"]]) {
+    document.getElementById(id)?.addEventListener("click", () => {
+      const selected = document.getElementById("audio-tool-track");
+      const track = tracks.find(item => item.id === Number(selected?.value));
+      if (!track) { message("Import an audio track first, then select it here."); return; }
+      const reason = importBlockedReason();
+      if (reason) { message(reason); return; }
+      if (!processingTools.get(track.id)?.open(operation)) {
+        message(operation === "tune" ? "Select a solo vocal track for autotune. Import voices using the Solo vocal audio type." : "This audio tool is unavailable. Reload the project and try again.");
+        return;
+      }
+      message(operation === "separate" ? "Extraction settings opened on the selected track. Confirm permission, then choose Extract instrumental." : "Autotune settings opened on the selected vocal. Set the key and strength, then choose Process a copy.");
+    });
+  }
+  function importBlockedReason() {
+    if (recoveryWaiting) return "Choose Restore or Discard in the recovery notice before importing audio.";
+    if (recovering) return "Checking your local recovery copy. Please wait before importing audio.";
+    if (pendingTake) return "Keep or discard the unfinished take before importing audio.";
+    if (session || preparing) return "Stop recording and review your take before importing audio.";
+    if (busy) return "Wait for the current audio task to finish before importing audio.";
+    return "";
+  }
+  for (const trigger of root.querySelectorAll('label[for="import"]')) {
+    trigger.addEventListener("click", event => {
+      const reason = importBlockedReason();
+      if (reason) { event.preventDefault(); message(reason); }
+    });
   }
   document.getElementById("import").addEventListener("change", event => task(async () => {
     const file = event.target.files[0];
@@ -183,17 +245,18 @@
       if (tracks.length >= 12) throw new Error("Maximum 12 tracks. Remove one before importing.");
       if (file.size > 64 * 1024 * 1024) throw new Error("Choose an audio file under 64 MB.");
       message("Opening imported audio…");
-      let imported = file;
-      try { await audioContext().decodeAudioData(await file.arrayBuffer()); }
+      let imported = file, decoded;
+      try { decoded = await decodeImport(file); }
       catch (_) {
         message("Converting audio for this browser…");
         const data = new FormData(); data.append("audio", file);
-        const response = await fetch("/studio/audio/convert/", {method: "POST", headers: {"X-CSRFToken": csrf}, body: data});
-        if (!response.ok) { const result = await response.json(); throw new Error(result.error || "Audio conversion failed."); }
-        imported = await response.blob();
+        const response = await deadline(fetch("/studio/audio/convert/", {method: "POST", headers: {"X-CSRFToken": csrf}, body: data}), 120000, "Audio conversion took too long. Try a local MP3 or WAV file and check that the server is running.");
+        if (!response.ok) { const result = await response.json().catch(() => ({})); throw new Error(result.error || "Audio conversion is unavailable. Please try a local MP3 or WAV file, or ask the administrator to check audio processing."); }
+        imported = await deadline(response.blob(), 30000, "Could not download the converted audio. Please try again.");
+        decoded = await decodeImport(imported);
       }
       const kind = isAcapella ? "vocal" : document.getElementById("import-kind").value;
-      await upload(imported, Number(document.getElementById("record-position").value) || 0, file.name.replace(/\.[^.]+$/, "").slice(0, 100), kind);
+      await upload(imported, Number(document.getElementById("record-position").value) || 0, file.name.replace(/\.[^.]+$/, "").slice(0, 100), kind, "", null, decoded);
     } finally { event.target.value = ""; }
   }));
   const recordButton = document.getElementById("record"), stopButton = document.getElementById("stop");
@@ -218,6 +281,8 @@
     root.dataset.state = session ? "recording" : pendingTake ? "review" : locked ? "busy" : "ready";
     root.querySelectorAll("[data-track-remove]").forEach(b => b.disabled = locked || !!pendingTake);
     document.getElementById("save").disabled = locked || !!pendingTake;
+    if (autoMaster) autoMaster.disabled = locked || !!pendingTake;
+    if (saveMaster) saveMaster.disabled = locked || !!pendingTake;
     root.querySelectorAll("[data-saved-action]").forEach(b => {
       b.disabled = locked || !!pendingTake || dirty || !root.dataset.hasMix;
     });
@@ -227,7 +292,7 @@
     const milliseconds = Number(correction.value);
     if (!Number.isFinite(milliseconds) || milliseconds < -1000 || milliseconds > 1000) throw new Error("Delay correction must be between -1000 and 1000 ms.");
     let samples = StudioAudio.compensate(pendingTake.samples, pendingTake.sampleRate, milliseconds);
-    const remaining = Math.floor((300 - pendingTake.position) * pendingTake.sampleRate);
+    const remaining = Math.floor((360 - pendingTake.position) * pendingTake.sampleRate);
     samples = samples.subarray(0, remaining);
     const buffer = audioContext().createBuffer(1, samples.length, pendingTake.sampleRate);
     buffer.copyToChannel(samples, 0); return buffer;
@@ -253,7 +318,7 @@
     if (tracks.length >= 12) { message("Maximum 12 tracks. Remove one before recording."); return; }
     const position = Number(document.getElementById("record-position").value);
     const bpm = Number(document.getElementById("tempo").value), countIn = Number(document.getElementById("count-in").value);
-    if (!Number.isFinite(position) || position < 0 || position > 299 || !Number.isFinite(bpm) || bpm < 40 || bpm > 240 || ![0, 4, 8].includes(countIn)) { message("Choose a start position from 0–299 seconds and a tempo from 40–240 BPM."); return; }
+    if (!Number.isFinite(position) || position < 0 || position > 359 || !Number.isFinite(bpm) || bpm < 40 || bpm > 240 || ![0, 4, 8].includes(countIn)) { message("Choose a start position from 0–359 seconds and a tempo from 40–240 BPM."); return; }
     rememberVoiceSettings();
     const keyboardInput=selectedInputMode()==="keyboard",takeKind=keyboardInput?"backing":"vocal";
     const attempt = ++recordingToken;
@@ -365,11 +430,54 @@
       player.src = previewURL; await player.play(); playbackState(); message("Playing mix.");
     });
   });
+  async function saveMix(audio, mastered = false) {
+    const data = new FormData();
+    data.append("audio", audio, mastered ? "master.wav" : "mix.wav");
+    data.append("tracks", JSON.stringify(tracks));
+    data.append("tempo", document.getElementById("tempo").value);
+    data.append("revision", baseRevision);
+    const result = await post(`/studio/project/${root.dataset.project}/save/`, data);
+    baseRevision = result.revision || baseRevision;
+    await clearDraft();
+    dirty = false;
+    root.dataset.hasMix = "true";
+    root.querySelectorAll("[data-saved-action]").forEach(b => b.disabled = false);
+    message(mastered ? "Mastered mix saved. Ready to publish or export." : "Mix and edits saved. Ready to publish or export.");
+  }
   document.getElementById("save").addEventListener("click", () => task(async () => {
-    if (session || pendingTake) throw new Error("Finish reviewing your take before saving the mix.");
-    message("Saving mix and edits…"); const data = new FormData(); data.append("audio", await mix(), "mix.wav"); data.append("tracks", JSON.stringify(tracks)); data.append("tempo", document.getElementById("tempo").value); data.append("revision", baseRevision);
-    const result = await post(`/studio/project/${root.dataset.project}/save/`, data); baseRevision = result.revision || baseRevision; await clearDraft(); dirty = false; root.dataset.hasMix = "true";
-    root.querySelectorAll("[data-saved-action]").forEach(b => b.disabled = false); message("Mix and edits saved. Ready to publish or export.");
+    if (pendingTake) throw new Error("Finish reviewing your take before saving the mix.");
+    message("Saving mix and edits…");
+    await saveMix(await mix());
+  }));
+  autoMaster?.addEventListener("click", () => task(async () => {
+    if (pendingTake) throw new Error("Finish reviewing your take before mastering.");
+    pausePlayers();
+    const signature = mixSignature();
+    message("Mastering the full mix…");
+    const data = new FormData();
+    data.append("audio", await mix(), "mix.wav");
+    const response = await fetch(autoMaster.dataset.url, {method: "POST", headers: {"X-CSRFToken": csrf}, body: data});
+    if (!response.ok || !response.headers.get("Content-Type")?.startsWith("audio/wav")) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || "Auto Master could not process this mix. Try again.");
+    }
+    masterBlob = await response.blob();
+    masterSignature = signature;
+    if (masterURL) URL.revokeObjectURL(masterURL);
+    masterURL = URL.createObjectURL(masterBlob);
+    masterPreview.src = masterURL;
+    masterPreview.hidden = saveMaster.hidden = false;
+    message("Master ready. Listen to the preview, then save the mastered mix to publish or export it.");
+  }));
+  masterPreview?.addEventListener("play", () => {
+    root.querySelectorAll("audio").forEach(player => { if (player !== masterPreview) player.pause(); });
+  });
+  saveMaster?.addEventListener("click", () => task(async () => {
+    if (pendingTake || !masterBlob || masterSignature !== mixSignature()) {
+      throw new Error("The mix has changed. Run Auto Master again before saving.");
+    }
+    message("Saving mastered mix…");
+    await saveMix(masterBlob, true);
   }));
   root.querySelectorAll("[data-voice-part]").forEach(button => button.addEventListener("click", () => {
     if (session || preparing || busy) return;
@@ -409,7 +517,7 @@
       const prefs = JSON.parse(sessionStorage.getItem(preferenceKey) || "null");
       if (prefs) { if (typeof prefs.part === "string" && prefs.part.trim()) selectedVoicePart = prefs.part.trim();
         if (["0", "4", "8"].includes(prefs.countIn)) { const input = document.getElementById("count-in"); input.value = prefs.countIn; input.dispatchEvent?.(new Event("change", {bubbles:true})); }
-        if (Number.isFinite(prefs.position) && prefs.position >= 0 && prefs.position <= 299) document.getElementById("record-position").value = prefs.position;
+        if (Number.isFinite(prefs.position) && prefs.position >= 0 && prefs.position <= 359) document.getElementById("record-position").value = prefs.position;
         if (prefs.revision === baseRevision && Number.isInteger(prefs.tempo) && prefs.tempo >= 40 && prefs.tempo <= 240) document.getElementById("tempo").value = prefs.tempo;
         const pitch = document.getElementById("reference-pitch"); if (pitch && Number(prefs.pitch) >= 48 && Number(prefs.pitch) <= 72) { pitch.value = prefs.pitch; pitch.dispatchEvent?.(new Event("change", {bubbles:true})); }
       }
@@ -432,6 +540,7 @@
   }
   if (typeof StudioTimeline !== "undefined" && document.getElementById("studio-timeline")) {
     timeline = new StudioTimeline.Timeline({container: document.getElementById("studio-timeline"), category: root.dataset.category, tracks, load,
+      onDelete: deleteTrack,
       onChange(track) { syncTrackInputs(track); changed(); },
       onSeek(value) { const input = document.getElementById("record-position"); input.value = value.toFixed(2); timeline.setPosition(value); transportTime(value); },
       locked: () => !!session || preparing || busy || recovering || recoveryWaiting,
@@ -444,12 +553,12 @@
     draftStore = new StudioDrafts(`${root.dataset.user}:${root.dataset.project}`);
     recovering = true; controls();
     try {
-      const saved = await draftStore.read();
+      const saved = await deadline(draftStore.read(), 3000, "Local recovery did not respond.");
       if (!saved) { recoveryMessage("Local recovery is ready. Edits save here automatically; active recordings checkpoint every five seconds."); return; }
       const take = saved.take;
-      const validTake = take && take.samples instanceof Float32Array && Number.isFinite(take.sampleRate) && take.sampleRate >= 8000 && take.sampleRate <= 96000 && Number.isFinite(take.position) && take.position >= 0 && take.position <= 299 && take.samples.length > 0 && take.samples.length <= 301 * take.sampleRate;
+      const validTake = take && take.samples instanceof Float32Array && Number.isFinite(take.sampleRate) && take.sampleRate >= 8000 && take.sampleRate <= 96000 && Number.isFinite(take.position) && take.position >= 0 && take.position <= 359 && take.samples.length > 0 && take.samples.length <= 361 * take.sampleRate;
       const matching = saved.schema === 1 && saved.base === baseRevision;
-      const validEdits = Array.isArray(saved.tracks) && saved.tracks.length === tracks.length && new Set(saved.tracks.map(item => item.id)).size === tracks.length && saved.tracks.every(item => tracks.some(track => track.id === item.id) && ["gain", "offset", "trim_start", "trim_end"].every(key => Number.isFinite(item[key]) && item[key] >= 0 && item[key] <= (key === "gain" ? 2 : 300)) && typeof item.muted === "boolean");
+      const validEdits = Array.isArray(saved.tracks) && saved.tracks.length === tracks.length && new Set(saved.tracks.map(item => item.id)).size === tracks.length && saved.tracks.every(item => tracks.some(track => track.id === item.id) && ["gain", "offset", "trim_start", "trim_end"].every(key => Number.isFinite(item[key]) && item[key] >= 0 && item[key] <= (key === "gain" ? 2 : 360)) && typeof item.muted === "boolean");
       if (!take && !saved.tracks?.length) return;
       recoveryWaiting = true; recoveryMessage("Recovery copy found. Choose Restore or Discard to continue."); document.getElementById("recovery-panel").hidden = false;
       const info = document.getElementById("recovery-info");
@@ -479,6 +588,6 @@
   const inputModeSelect=document.getElementById("studio-input-mode"),audioDeviceSelect=document.getElementById("studio-audio-device"),findInputs=document.getElementById("studio-find-inputs");
   if(inputModeSelect){try{if(!isAcapella&&new URLSearchParams(location.search||"").get("input")==="keyboard"){inputModeSelect.value="keyboard";inputModeSelect.dispatchEvent?.(new Event("change",{bubbles:true}));}}catch(_){}inputModeSelect.addEventListener("change",updateInputMode);updateInputMode();}
   if(audioDeviceSelect&&findInputs&&typeof StudioInputs!=="undefined")audioDevicePicker=StudioInputs.mount({media:navigator.mediaDevices,select:audioDeviceSelect,scan:findInputs,status:text=>{const label=document.getElementById("studio-input-status");if(label)label.textContent=text;},enabled:()=>!session&&!preparing&&!busy&&!pendingTake});
-  window.addEventListener("pagehide", () => { audioDevicePicker?.dispose(); referenceGuide?.stop(); session?.cancel(); });
+  window.addEventListener("pagehide", () => { audioDevicePicker?.dispose(); referenceGuide?.stop(); session?.cancel(); if (masterURL) URL.revokeObjectURL(masterURL); });
   window.addEventListener("beforeunload", event => { if (dirty || session || preparing || pendingTake) { event.preventDefault(); event.returnValue = ""; } });
 })();

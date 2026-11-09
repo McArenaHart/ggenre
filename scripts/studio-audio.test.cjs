@@ -12,9 +12,16 @@ test("backing starts on shared timeline and seeks inside a trimmed track", () =>
   assert.equal(audio.segment({...base, muted: true}, 10, 0), null);
 });
 test("timeline limits and malformed trims are handled", () => {
-  assert.equal(audio.segment({...base, offset: 298}, 10, 0).duration, 2);
+  assert.equal(audio.segment({...base, offset: 358}, 10, 0).duration, 2);
   assert.throws(() => audio.segment({...base, trim_start: 10}, 10, 0));
   assert.throws(() => audio.segment({...base, gain: NaN}, 10, 0));
+});
+
+test("full songs can play through six minutes while later starts are rejected", () => {
+  const song = {...base, trim_start: 0, trim_end: 0, offset: 0};
+  assert.equal(audio.segment(song, 333, 0).duration, 333);
+  assert.equal(audio.segment(song, 360, 0).duration, 360);
+  assert.throws(() => audio.segment(song, 361, 360));
 });
 test("positive and negative delay corrections move a known vocal impulse", () => {
   const samples = new Float32Array([0, 0, 1, 0, 0]);

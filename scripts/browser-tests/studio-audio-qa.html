@@ -10,7 +10,7 @@ document.getElementById('run').onclick = async () => {
   backing=ctx.createBuffer(1,ctx.sampleRate*3,ctx.sampleRate); backing.getChannelData(0).fill(.75);
   let peak=0;
   const run=async options=>new Promise((resolve,reject)=>{
-   StudioAudio.begin({context:ctx,stream:input.stream.clone(),tracks:[{name:'Backing',gain:1,offset:298,trim_start:0,trim_end:0,muted:false}],load:async()=>backing,position:299,bpm:240,countIn:4,workletURL:'/static/js/studio-capture-worklet.js?v=4',destination:output,onMeter:value=>peak=Math.max(peak,value),onProgress:()=>{},onDone:resolve,onError:reject,captureTail:0,...options}).then(session=>{if(options.cancelEarly) session.stop();}).catch(reject);
+   StudioAudio.begin({context:ctx,stream:input.stream.clone(),tracks:[{name:'Backing',gain:1,offset:358,trim_start:0,trim_end:0,muted:false}],load:async()=>backing,position:359,bpm:240,countIn:4,workletURL:'/static/js/studio-capture-worklet.js?v=4',destination:output,onMeter:value=>peak=Math.max(peak,value),onProgress:()=>{},onDone:resolve,onError:reject,captureTail:0,...options}).then(session=>{if(options.cancelEarly) session.stop();}).catch(reject);
   });
   const take=await run({});
   assert(Math.abs(take.samples.length-ctx.sampleRate)<=1,'count-in excluded; automatic timeline end records exactly one second');
