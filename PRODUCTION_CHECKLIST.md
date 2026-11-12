@@ -8,6 +8,7 @@
 ## 2) Install dependencies
 ```bash
 pip install -r requirements.txt
+pip install -r requirements-audio.txt
 ```
 
 ## 3) Run database and static setup
@@ -38,6 +39,28 @@ daphne -b 0.0.0.0 -p 8000 ggenre.asgi:application
 If you use systemd, the service `ExecStart` should point at Daphne:
 ```ini
 ExecStart=/path/to/venv/bin/daphne -b 127.0.0.1 -p 8000 ggenre.asgi:application
+```
+
+### Studio audio worker
+
+Run the audio worker as a separate supervised service using the same virtual
+environment, database, settings and persistent private Studio storage as Daphne.
+
+```bash
+python manage.py check_studio_audio
+python -u manage.py process_studio_audio
+```
+
+The setup check downloads the official extraction model and runs real inference.
+Configure the worker service to restart after failures and server reboots.
+Daphne serves the website while this worker processes extraction, autotune and
+noise reduction jobs. Both processes need the audio dependencies installed.
+
+If the worker was interrupted during processing, stop all audio workers before
+running the recovery command, then resume the supervised service.
+
+```bash
+python manage.py process_studio_audio --retry-interrupted --once
 ```
 
 ## 6) Reverse proxy and TLS
