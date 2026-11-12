@@ -4,21 +4,25 @@ import time
 from django.core.management.base import BaseCommand
 from studio.models import AudioJob
 from studio.audio_processing import process
+from studio.maintenance import AudioMaintenance
 
 logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Process private Studio audio jobs. Run as a supervised background worker."
+    help = "Process private Studio audio jobs and run automatic daily cleanup in the same worker."
 
     def add_arguments(self, parser):
         parser.add_argument("--once", action="store_true", help="Drain queued jobs and exit.")
         parser.add_argument("--retry-interrupted", action="store_true", help="Requeue running jobs; stop all other workers first.")
 
     def handle(self, *args, **options):
+        maintenance = None if options['once'] else AudioMaintenance()
         if options["retry_interrupted"]:
             AudioJob.objects.filter(status="running").update(status="queued")
         while True:
+            if maintenance:
+                maintenance.tick()
             job = AudioJob.objects.filter(status="queued").order_by("pk").first()
             if not job:
                 if options["once"]:

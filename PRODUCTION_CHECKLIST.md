@@ -56,6 +56,13 @@ Configure the worker service to restart after failures and server reboots.
 Daphne serves the website while this worker processes extraction, autotune and
 noise reduction jobs. Both processes need the audio dependencies installed.
 
+The same continuous worker also schedules private-audio cleanup automatically,
+due daily at 01:00 UTC (03:00 Africa/Harare), between audio jobs. Apply Studio
+migration 0008 and restart this worker when deploying. No extra cleanup timer
+or cron job is needed. Disable the old `ggenre-audio-cleanup.timer` if previously
+installed. The app persists the schedule, renews a database lease to prevent
+duplicate runs, catches up after restarts, and logs/retries cleanup failures.
+
 If the worker was interrupted during processing, stop all audio workers before
 running the recovery command, then resume the supervised service.
 

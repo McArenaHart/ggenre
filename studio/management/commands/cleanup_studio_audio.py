@@ -15,6 +15,9 @@ from studio.storage import private_storage
 class Command(BaseCommand):
     help = 'Preview private audio cleanup; --apply expires old processing snapshots and removes unreferenced generated WAVs.'
 
+    def heartbeat(self):
+        """The in-app scheduler replaces this hook to renew its database lease."""
+
     def add_arguments(self, parser):
         parser.add_argument('--apply', action='store_true', help='Perform cleanup; without this flag nothing changes.')
         parser.add_argument('--dry-run', action='store_true', help='Explicit preview (the default).')
@@ -39,6 +42,7 @@ class Command(BaseCommand):
         # Apply and worker completion also lock/claim these records. Never touch
         # queued or running jobs, and give recently completed results full grace.
         for pk in AudioJob.objects.filter(status__in=['applied', 'failed', 'ready']).values_list('pk', flat=True).iterator():
+            self.heartbeat()
             with transaction.atomic():
                 job = AudioJob.objects.select_for_update().filter(pk=pk, status__in=['applied', 'failed', 'ready']).first()
                 if not job:
@@ -57,6 +61,7 @@ class Command(BaseCommand):
                     continue
                 jobs_expired += 1
                 if options['apply']:
+                    self.heartbeat()
                     job.source = job.result = ''
                     if job.status == 'ready':
                         job.status = 'expired'
@@ -74,6 +79,7 @@ class Command(BaseCommand):
         count = total = errors = 0
         if directory.is_dir():
             for path in directory.iterdir():
+                self.heartbeat()
                 if not re.fullmatch(r'[0-9a-f]{32}(?:_[A-Za-z0-9]{7})?\.wav', path.name):
                     continue
                 if path.is_symlink() or path.resolve().parent != directory.resolve():
@@ -88,6 +94,7 @@ class Command(BaseCommand):
                     if options['apply']:
                         if is_referenced(name, fields):
                             continue
+                        self.heartbeat()
                         path.unlink()
                     count += 1
                     total += stat.st_size

@@ -47,33 +47,27 @@ Default retention:
 
 Flags `--orphan-days`, `--job-days`, and `--preview-days` customize those periods; all must be at least one day. A dry run is the default; `--dry-run` is also accepted. `--apply` is required for any mutation. The command only considers generated UUID WAVs directly under `studio_private/audio`, rejects symlinked audio directories, skips symlink files and unknown filenames, and checks database references again before deletion. It reports file count and MiB reclaimed.
 
-On Ubuntu, schedule daily cleanup with the deployment's actual virtualenv Python and project paths, for example after confirming them on the server:
+### Automatic scheduling inside GGenre
 
-### Recommended: supervised systemd timer
-
-From the deployed repository with its virtualenv activated, install using the existing application account (replace `ggenre` if the web service uses another account):
+The existing continuous `python manage.py process_studio_audio` worker runs cleanup automatically. No separate cleanup timer, cron entry or installer is required. Apply migration 0008 and restart the existing audio worker during deployment:
 
 ```bash
-sudo "$(command -v python)" scripts/install_audio_cleanup.py --project "$PWD" --python "$(command -v python)" --user ggenre
+python manage.py migrate studio --noinput
 ```
 
-The installer first previews cleanup using the chosen account and Python, validates the systemd units, installs them, enables the timer and runs cleanup once. The timer runs daily between 03:00 and 03:15 Africa/Harare (01:00 UTC plus jitter), resumes after reboots, catches missed schedules, and prevents overlapping scheduled runs. CPU and memory limits reduce impact on a small Droplet. Logs go to the system journal. It loads the same project `.env` through Django settings; no secrets are copied into unit files.
+On its first startup the worker checks for overdue cleanup immediately. After a successful run, the next cleanup is due at 01:00 UTC (03:00 Africa/Harare). It checks at most once per minute between audio jobs; a long-running extraction can delay cleanup until that job finishes. The schedule survives worker/server restarts, and missed runs execute when a worker returns. The worker must remain running, as it already needs to for extraction, autotune and noise reduction.
 
-Use `--preview` to print the unit definitions without changing the server. Verify or disable the installation with:
+A renewable database lease prevents concurrent scheduled runs across workers. Cleanup checks that lease while processing records and immediately before deleting files; a worker that loses ownership stops. A crashed worker's lease expires after ten minutes. Cleanup errors are logged to the audio worker's existing logs and retried in an hour without stopping audio processing. The `StudioMaintenance` record stores next due time, last success and last error. `--once` remains an audio-only batch mode and does not run scheduled maintenance.
+
+Scheduling is enabled by default. Optional `.env` settings: `STUDIO_AUTO_CLEANUP_ENABLED=False` disables it, and `STUDIO_CLEANUP_HOUR_UTC=1` chooses its UTC hour (0–23). Normal uploads/page requests never run cleanup.
+
+If the previous separate timer was installed, disable it once to avoid running both systems:
 
 ```bash
-systemctl list-timers --all ggenre-audio-cleanup.timer
-journalctl -u ggenre-audio-cleanup.service -n 50 --no-pager
 sudo systemctl disable --now ggenre-audio-cleanup.timer
 ```
 
-### Alternative: cron (do not enable both)
-
-```cron
-0 3 * * * cd /home/ggenre/ggenre/ggenre && /path/to/venv/bin/python manage.py cleanup_studio_audio --apply >> /var/log/ggenre-audio-cleanup.log 2>&1
-```
-
-Use an account with access to private storage and its database; keep the log writable. Guide caches have their own command: `python manage.py cleanup_studio_guides --days 7`. The audio cleanup command does not touch collaboration videos or the extraction model cache. No migration is required. Deploy the updated worker/web code together so all new writes use shared immutable references. Cleanup reclaims temporary/unreferenced storage; it does not impose a quota on active projects.
+If that unit was never installed, no timer command is needed. Remove any old audio cleanup cron entry as well. Manual preview/apply commands remain available. Guide caches have their own command: `python manage.py cleanup_studio_guides --days 7`. Audio cleanup does not touch collaboration videos or the extraction model cache. Cleanup reclaims temporary/unreferenced storage; it does not impose a quota on active projects.
 
 ## Checks
 

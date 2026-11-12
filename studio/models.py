@@ -2,6 +2,7 @@ import uuid
 from django.conf import settings
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
 from .storage import private_storage
 
 
@@ -48,6 +49,15 @@ class AudioJob(models.Model):
     result = models.FileField(storage=private_storage, upload_to=audio_path, blank=True)
     error = models.CharField(max_length=240, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class StudioMaintenance(models.Model):
+    key = models.CharField(max_length=48, primary_key=True)
+    next_run_at = models.DateTimeField(default=timezone.now)
+    lease_until = models.DateTimeField(default=timezone.now)
+    lease_token = models.CharField(max_length=32, blank=True)
+    last_success_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
 
 
 class ExportAllowance(models.Model):

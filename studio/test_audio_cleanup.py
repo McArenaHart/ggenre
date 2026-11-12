@@ -160,6 +160,16 @@ class AudioCleanupTests(TestCase):
         self.cleanup(apply=True)
         self.assertFalse(self.exists(name))
 
+    def test_in_app_schedule_reclaims_orphans_and_preserves_active_audio(self):
+        from studio.maintenance import AudioMaintenance
+        from studio.models import StudioMaintenance
+        orphan = self.file()
+        self.assertTrue(AudioMaintenance().run_due())
+        self.assertFalse(self.exists(orphan))
+        self.assertTrue(self.exists(self.track.audio.name))
+        self.assertIsNotNone(StudioMaintenance.objects.get().last_success_at)
+        self.assertFalse(AudioMaintenance().run_due())
+
     def test_final_reference_recheck_protects_newly_referenced_files(self):
         name = self.file()
         with patch('studio.management.commands.cleanup_studio_audio.is_referenced', return_value=True):

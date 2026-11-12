@@ -301,3 +301,7 @@ LOGGING = {
 
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Daily retention runs inside the existing Studio audio worker.
+STUDIO_AUTO_CLEANUP_ENABLED = env_bool('STUDIO_AUTO_CLEANUP_ENABLED', True)
+STUDIO_CLEANUP_HOUR_UTC = env_int('STUDIO_CLEANUP_HOUR_UTC', 1)
