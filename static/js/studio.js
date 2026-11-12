@@ -146,17 +146,23 @@
     if (typeof StudioVoices !== "undefined") { const result = StudioVoices.protect(rendered), label = document.getElementById("acapella-mix-health"); if (label) label.textContent = result.gain < 1 ? `Peak guard reduced the mix by ${(-20 * Math.log10(result.gain)).toFixed(1)} dB to avoid digital clipping.` : "Peak guard on · mix levels are within range."; }
     return wav(rendered);
   }
-  async function upload(blob, offset = 0, name = null, kind = "vocal", preset = "", beatBpm = null, decoded = null) {
+  async function upload(blob, offset = 0, name = null, kind = "vocal", preset = "", beatBpm = null, originalFile = false) {
     if (blob.size > 64 * 1024 * 1024) throw new Error("Choose audio under 64 MB.");
-    const buffer = decoded || await decodeImport(blob);
-    if (!Number.isFinite(offset) || offset < 0 || offset + buffer.duration > 360.001) throw new Error("Keep the voice and its starting position within the six-minute project.");
-    const data = new FormData(); data.append("audio", wav(buffer), "track.wav");
+    const buffer = originalFile ? null : await decodeImport(blob);
+    if (!Number.isFinite(offset) || offset < 0 || offset >= 360 || (buffer && offset + buffer.duration > 360.001)) throw new Error("Keep the voice and its starting position within the six-minute project.");
+    const data = new FormData(); data.append("audio", originalFile ? blob : wav(buffer), originalFile ? blob.name || "import.audio" : "track.wav");
+    if (originalFile) data.append("original_file", "1");
     data.append("name", name || document.getElementById("track-name").value || "Vocal");
     data.append("offset", String(offset)); data.append("kind", kind); data.append("beat_preset", preset);
     data.append("tempo", document.getElementById("tempo").value); if (beatBpm !== null) data.append("beat_bpm", String(beatBpm));
     data.append("tracks", JSON.stringify(tracks)); data.append("revision", baseRevision); rememberVoiceSettings();
-    message("Saving track…");
-    await deadline(post(`/studio/project/${root.dataset.project}/track/`, data), 120000, "The upload has not finished. Reload this project to check whether the track was saved before trying again.");
+    message(originalFile ? `Uploading original file (${(blob.size / 1024 / 1024).toFixed(1)} MB). Preparing it for editing on the server…` : "Saving track…");
+    // A slow POST may still commit successfully. Keep awaiting its result so
+    // late success reloads the project and cannot unlock a duplicate upload.
+    const waitingNotice = setTimeout(() => message("Still uploading. Keep this tab open; larger files or a slow connection can take longer. The project will reload when saving finishes."), 120000);
+    try {
+      await post(`/studio/project/${root.dataset.project}/track/`, data);
+    } finally { clearTimeout(waitingNotice); }
     dirty = false; pendingTake = null; await clearDraft(); location.reload();
   }
   const container = document.getElementById("tracks");
@@ -244,19 +250,8 @@
       if (!file) return;
       if (tracks.length >= 12) throw new Error("Maximum 12 tracks. Remove one before importing.");
       if (file.size > 64 * 1024 * 1024) throw new Error("Choose an audio file under 64 MB.");
-      message("Opening imported audio…");
-      let imported = file, decoded;
-      try { decoded = await decodeImport(file); }
-      catch (_) {
-        message("Converting audio for this browser…");
-        const data = new FormData(); data.append("audio", file);
-        const response = await deadline(fetch("/studio/audio/convert/", {method: "POST", headers: {"X-CSRFToken": csrf}, body: data}), 120000, "Audio conversion took too long. Try a local MP3 or WAV file and check that the server is running.");
-        if (!response.ok) { const result = await response.json().catch(() => ({})); throw new Error(result.error || "Audio conversion is unavailable. Please try a local MP3 or WAV file, or ask the administrator to check audio processing."); }
-        imported = await deadline(response.blob(), 30000, "Could not download the converted audio. Please try again.");
-        decoded = await decodeImport(imported);
-      }
       const kind = isAcapella ? "vocal" : document.getElementById("import-kind").value;
-      await upload(imported, Number(document.getElementById("record-position").value) || 0, file.name.replace(/\.[^.]+$/, "").slice(0, 100), kind, "", null, decoded);
+      await upload(file, Number(document.getElementById("record-position").value) || 0, file.name.replace(/\.[^.]+$/, "").slice(0, 100), kind, "", null, true);
     } finally { event.target.value = ""; }
   }));
   const recordButton = document.getElementById("record"), stopButton = document.getElementById("stop");

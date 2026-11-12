@@ -80,6 +80,19 @@ test('an unfinished task reports errors and allows a new processing attempt', as
   assert.equal(h.requests.length, 2);
 });
 
+test('expired previews stop polling and allow processing the original again', async () => {
+  const h = harness({id: 1, kind: 'vocal'});
+  const run = h.elements.find(e => e.tag === 'button');
+  run.events.click(); await h.tasks.pop();
+  h.scope.fetch = async () => ({ok: true, json: async () => ({status: 'expired', error: 'This temporary result expired. Process the original track again.'})});
+  await h.timers.shift()();
+  assert.ok(h.elements.some(e => /temporary result expired/.test(e.textContent)));
+  assert.equal(h.elements.find(e => e.tag === 'audio').hidden, true);
+  assert.equal(h.timers.length, 0);
+  run.events.click(); await h.tasks.pop();
+  assert.equal(h.requests.length, 2);
+});
+
 test('extraction shows an empty bar while queued, animates while running, and fills when ready', async () => {
   const h = harness({id: 2, kind: 'backing'});
   const operation = h.elements.find(e => e.tag === 'select');

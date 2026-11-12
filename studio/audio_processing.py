@@ -52,22 +52,11 @@ def options_for(operation, raw):
 @artist_only
 @require_POST
 def convert(request):
-    upload = request.FILES.get("audio")
-    if not upload or upload.size > MAX_AUDIO_BYTES:
-        return JsonResponse({"error": "Choose an audio file under 64 MB."}, status=400)
     try:
-        with tempfile.TemporaryDirectory() as folder:
-            source, output = Path(folder) / "input", Path(folder) / "output.wav"
-            with source.open("wb") as stream:
-                for chunk in upload.chunks():
-                    stream.write(chunk)
-            # Decode one second beyond the limit so long files are rejected, never silently truncated.
-            run_ffmpeg(["-protocol_whitelist", "file,pipe", "-format_whitelist", "wav,mp3,mov,flac,ogg,aac,matroska,webm,aiff", "-i", str(source), "-map", "0:a:0", "-vn", "-t", str(MAX_AUDIO_SECONDS + 1), "-ac", "2", "-ar", "44100", "-c:a", "pcm_s16le", str(output)])
-            data = ContentFile(output.read_bytes(), name="import.wav")
-            validate_audio(data)
-            return FileResponse(data, content_type="audio/wav")
-    except ValidationError:
-        return JsonResponse({"error": "Could not import this audio. Use an unprotected MP3, WAV, M4A, FLAC or OGG file up to six minutes."}, status=400)
+        from .audio_import import normalize_upload
+        return FileResponse(normalize_upload(request.FILES.get("audio"), force_conversion=True), content_type="audio/wav")
+    except ValidationError as exc:
+        return JsonResponse({"error": exc.messages[0]}, status=400)
 
 
 @artist_only
@@ -113,8 +102,9 @@ def queue(request, pk):
             Project.objects.select_for_update().get(pk=track.project_id)
             if AudioJob.objects.filter(track__project__artist=request.user, status__in=["queued", "running"]).count() >= 2:
                 return JsonResponse({"error": "Two audio tasks are already pending. Wait for them to finish."}, status=409)
-            with track.audio.open("rb") as source:
-                job = AudioJob.objects.create(track=track, operation=operation, options=options, source=ContentFile(source.read(), name="original.wav"))
+            # Studio files have immutable UUID names: pin the existing source
+            # instead of storing another full WAV for every processing request.
+            job = AudioJob.objects.create(track=track, operation=operation, options=options, source=track.audio.name)
         return JsonResponse({"id": job.pk, "status": job.status})
     except (ValueError, TypeError, OverflowError) as exc:
         return JsonResponse({"error": str(exc)}, status=400)
@@ -144,18 +134,16 @@ def apply(request, pk):
         if request.POST.get("library") == "yes":
             if job.operation != "separate":
                 return JsonResponse({"error": "Only extracted instrumentals belong in this library."}, status=400)
-            with job.result.open("rb") as source:
-                Instrumental.objects.create(artist=request.user, title=(job.track.name + " instrumental")[:160], category=project.category,
-                    config={"imported": True, "bpm": project.tempo}, audio=ContentFile(source.read(), name="instrumental.wav"))
+            Instrumental.objects.create(artist=request.user, title=(job.track.name + " instrumental")[:160], category=project.category,
+                config={"imported": True, "bpm": project.tempo}, audio=job.result.name)
         else:
             if project.tracks.count() >= 12:
                 return JsonResponse({"error": "Make room for a processed track first (maximum 12)."}, status=409)
             old = job.track
-            with job.result.open("rb") as source:
-                Track.objects.create(project=project, name=(old.name + " · " + job.operation)[:100],
-                    kind="backing" if job.operation == "separate" or old.kind == "beat" else old.kind,
-                    audio=ContentFile(source.read(), name="processed.wav"), gain=old.gain,
-                    offset=old.offset, trim_start=old.trim_start, trim_end=old.trim_end)
+            Track.objects.create(project=project, name=(old.name + " · " + job.operation)[:100],
+                kind="backing" if job.operation == "separate" or old.kind == "beat" else old.kind,
+                audio=job.result.name, gain=old.gain,
+                offset=old.offset, trim_start=old.trim_start, trim_end=old.trim_end)
             old.muted = True
             old.save(update_fields=["muted"])
             project.mix = ""

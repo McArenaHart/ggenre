@@ -1,6 +1,10 @@
 # Studio audio tools
 
-Import a local file in the recording inspector. Select **Solo vocal** for isolated voices or **Instrumental / complete song** for backing. Acapella remains vocal-only. Imports use the timeline cursor, retain the filename, and convert to private 44.1 kHz PCM WAV. Browser decoding is tried first; server FFmpeg conversion handles browser codec gaps. Protected, malformed, oversized and over-six-minute inputs are rejected. Original external files on the artist's device are never modified.
+Import a local file in the recording inspector. Select **Solo vocal** for isolated voices or **Instrumental / complete song** for backing. Acapella remains vocal-only. Imports use the timeline cursor and retain the filename. The browser uploads the original compressed file once, without decoding it or expanding it into WAV. The server converts compressed imports to private 44.1 kHz PCM WAV before taking a project database lock; existing valid PCM recordings bypass conversion. Protected, malformed, oversized and over-six-minute inputs are rejected. Original external files on the artist's device are never modified.
+
+A three-minute 44.1 kHz stereo 16-bit WAV is about 31.8 MB, regardless of whether its original MP3 was 2 MB or 7 MB. Sending the original file avoids that upload expansion and avoids the old conversion-download-reupload fallback. Editable audio is still stored as PCM, and the editor downloads it for waveform editing. WAV validation reads bounded blocks instead of duplicating the entire audio in memory. Slow uploads remain locked until the server answers, so a late successful response finishes the import instead of being discarded after two minutes.
+
+Deploy the updated backend and static JavaScript together, run `python manage.py collectstatic --noinput`, and restart the web workers. No database migration is required for this import change. The server needs the existing `imageio-ffmpeg` dependency. A browser still using the older JavaScript will continue sending WAV until its assets refresh.
 
 Open **Audio tools** on a track. Reduce steady hiss, low rumble and optional 50/60 Hz electrical hum; start gently. This cannot reliably erase overlapping speech, loud transients, reverb or distortion. Choose the rumble cutoff carefully for bass voices.
 
@@ -18,7 +22,58 @@ Apply `python manage.py migrate studio`, install `requirements-audio.txt` in the
 
 For a batch run use `python manage.py process_studio_audio --once`. If a worker is killed, stop all audio workers before running `--retry-interrupted` to requeue interrupted jobs. Atomic status claiming prevents two workers from intentionally taking the same queued task. Each artist can have two queued/running jobs. Source snapshots/results stay in private Studio storage and require owner authentication. Status polling reconnects after reopening the project and pauses in hidden tabs. Failed jobs can be submitted again.
 
-Private snapshots are retained, including originals of removed tracks. Plan storage retention and disk monitoring before large-scale use. The separation subprocess has a 30-minute limit; use process-level memory/time limits on the supervised worker for production. No public audio hosting or external audio API is used.
+Private audio uses immutable UUID filenames. Processing tasks reference the original track, and applied tracks/library entries reference the processed result; these steps no longer make additional full WAV copies. Database references protect shared files when any one owner record is deleted. The separation subprocess has a 30-minute limit; use process-level memory/time limits on the supervised worker for production. No public audio hosting or external audio API is used.
+
+## Storage cleanup
+
+Preview the cleanup plan (no files or database records change):
+
+```bash
+python manage.py cleanup_studio_audio
+```
+
+Run cleanup after reviewing the preview:
+
+```bash
+python manage.py cleanup_studio_audio --apply
+```
+
+Default retention:
+
+- Remove generated WAV files unreferenced by any database file field in private storage, after a seven-day file-age grace period. This reclaims removed-track audio, old unexported/unpublished mixes and abandoned writes.
+- Clear temporary source/result references of applied or failed processing tasks older than seven days. Shared audio survives whenever a track, project, instrumental, export, release or another task still uses it.
+- Expire unused ready processing results after 30 days. Newly produced results from old/retried tasks get their own grace based on modification time. Artists can regenerate an expired result from the original track.
+- Never expire queued/running jobs, active project tracks, current mixes, saved library items, published releases or export snapshots. Do not delete projects based solely on inactivity. Source audio still needed for editing remains stored.
+
+Flags `--orphan-days`, `--job-days`, and `--preview-days` customize those periods; all must be at least one day. A dry run is the default; `--dry-run` is also accepted. `--apply` is required for any mutation. The command only considers generated UUID WAVs directly under `studio_private/audio`, rejects symlinked audio directories, skips symlink files and unknown filenames, and checks database references again before deletion. It reports file count and MiB reclaimed.
+
+On Ubuntu, schedule daily cleanup with the deployment's actual virtualenv Python and project paths, for example after confirming them on the server:
+
+### Recommended: supervised systemd timer
+
+From the deployed repository with its virtualenv activated, install using the existing application account (replace `ggenre` if the web service uses another account):
+
+```bash
+sudo "$(command -v python)" scripts/install_audio_cleanup.py --project "$PWD" --python "$(command -v python)" --user ggenre
+```
+
+The installer first previews cleanup using the chosen account and Python, validates the systemd units, installs them, enables the timer and runs cleanup once. The timer runs daily between 03:00 and 03:15 Africa/Harare (01:00 UTC plus jitter), resumes after reboots, catches missed schedules, and prevents overlapping scheduled runs. CPU and memory limits reduce impact on a small Droplet. Logs go to the system journal. It loads the same project `.env` through Django settings; no secrets are copied into unit files.
+
+Use `--preview` to print the unit definitions without changing the server. Verify or disable the installation with:
+
+```bash
+systemctl list-timers --all ggenre-audio-cleanup.timer
+journalctl -u ggenre-audio-cleanup.service -n 50 --no-pager
+sudo systemctl disable --now ggenre-audio-cleanup.timer
+```
+
+### Alternative: cron (do not enable both)
+
+```cron
+0 3 * * * cd /home/ggenre/ggenre/ggenre && /path/to/venv/bin/python manage.py cleanup_studio_audio --apply >> /var/log/ggenre-audio-cleanup.log 2>&1
+```
+
+Use an account with access to private storage and its database; keep the log writable. Guide caches have their own command: `python manage.py cleanup_studio_guides --days 7`. The audio cleanup command does not touch collaboration videos or the extraction model cache. No migration is required. Deploy the updated worker/web code together so all new writes use shared immutable references. Cleanup reclaims temporary/unreferenced storage; it does not impose a quota on active projects.
 
 ## Checks
 

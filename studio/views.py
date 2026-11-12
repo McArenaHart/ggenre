@@ -39,8 +39,12 @@ def validate_audio(upload):
         with wave.open(upload, "rb") as audio:
             if audio.getnchannels() not in (1, 2) or audio.getsampwidth() != 2 or not 8000 <= audio.getframerate() <= 96000 or not 0 < audio.getnframes() / audio.getframerate() <= MAX_AUDIO_SECONDS:
                 raise ValueError()
-            if len(audio.readframes(audio.getnframes())) != audio.getnframes() * audio.getnchannels() * 2:
-                raise ValueError()
+            remaining = audio.getnframes()
+            while remaining:
+                count = min(remaining, 16384)
+                if len(audio.readframes(count)) != count * audio.getnchannels() * 2:
+                    raise ValueError()
+                remaining -= count
     except (wave.Error, EOFError, ValueError):
         raise ValidationError("Use a valid 16-bit PCM WAV recording up to six minutes.")
     finally:
@@ -102,6 +106,17 @@ def editor(request, pk):
 @require_POST
 def add_track(request, pk):
     project = owned(request, pk)
+    # Convert compressed imports before locking the project. Recheck revision,
+    # quota and edits inside the transaction after conversion completes.
+    if request.POST.get("revision") and request.POST["revision"] != project.updated_at.isoformat():
+        return JsonResponse({"error": "This project changed in another tab. Reopen it before uploading."}, status=409)
+    if project.tracks.count() >= 12:
+        return JsonResponse({"error": "Maximum 12 tracks per project."}, status=400)
+    try:
+        from .audio_import import normalize_upload
+        audio = normalize_upload(request.FILES.get("audio"), force_conversion=request.POST.get("original_file") == "1")
+    except ValidationError as exc:
+        return JsonResponse({"error": exc.messages[0]}, status=400)
     with transaction.atomic():
         project = Project.objects.select_for_update().get(pk=project.pk)
         if request.POST.get("revision") and request.POST["revision"] != project.updated_at.isoformat():
@@ -133,7 +148,6 @@ def add_track(request, pk):
         if project.tracks.count() >= 12:
             return JsonResponse({"error": "Maximum 12 tracks per project."}, status=400)
         try:
-            audio = validate_audio(request.FILES.get("audio"))
             offset = float(request.POST.get("offset", 0))
             with wave.open(audio, "rb") as recording:
                 duration = recording.getnframes() / recording.getframerate()

@@ -25,7 +25,7 @@ window.StudioProcessing = {
     const speed = select("Retune speed", [["100", "Smooth · 100 ms"], ["40", "Fast · 40 ms"], ["0", "Immediate effect"]]);
     const permission = document.createElement("label"), consent = document.createElement("input"); consent.type = "checkbox";
     permission.append(consent, " I have permission to reuse this recording."); body.append(permission);
-    const note = document.createElement("p"); note.textContent = "Process after recording. Noise reduction targets steady hiss, rumble and hum. Strong settings may affect the voice. Tune one voice at a time; skip vocal percussion. Extraction may leave vocal bleed."; body.append(note);
+    const note = document.createElement("p"); note.textContent = "Process after recording. Noise reduction targets steady hiss, rumble and hum. Strong settings may affect the voice. Tune one voice at a time; skip vocal percussion. Extraction may leave vocal bleed. Unused processing previews may expire after 30 days; apply or save a result to keep it."; body.append(note);
     const run = document.createElement("button"); run.type = "button";
     function update() {
       for (const control of [strength, cutoff, hum]) control.parentElement.hidden = operation.value !== "denoise";
@@ -76,7 +76,7 @@ window.StudioProcessing = {
           status.textContent = "Ready. Compare using the original track's play button. Applying mutes the original and adds a separate track.";
           return;
         }
-        if (["failed", "applied"].includes(job.status)) { run.disabled = false; return; }
+        if (["failed", "applied", "expired"].includes(job.status)) { run.disabled = false; return; }
         timer = setTimeout(poll, 3000);
       } catch (error) { if (requestedJob === jobId) { updateProgress(null); status.textContent = error.message; run.disabled = false; } }
     }

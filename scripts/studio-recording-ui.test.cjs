@@ -50,12 +50,12 @@ function harness(options = {}) {
     return {numberOfChannels: channels, length, sampleRate, duration: length / sampleRate, getChannelData: c => samples[c], copyToChannel: (data, c) => samples[c].set(data)};
   }
   const stream = {getTracks: () => [{stop() { micStops++; }}], getAudioTracks: () => [{getSettings: () => ({})}]};
-  const sandbox = {StudioInputs:require("../static/js/studio-inputs.js"), StudioVoices: require("../static/js/studio-voices.js"), sessionStorage: {getItem: () => null, setItem(){}}, setTimeout: (fn, ms) => setTimeout(fn, options.decodeHangOnce && ms === 20000 ? 5 : ms), clearTimeout, document: {getElementById: id => byId[id], createElement: tag => new Element(tag)}, window: {AudioWorkletNode: class {}, addEventListener: (name, callback) => windowEvents[name] = callback},
+  const sandbox = {StudioInputs:require("../static/js/studio-inputs.js"), StudioVoices: require("../static/js/studio-voices.js"), sessionStorage: {getItem: () => null, setItem(){}}, setTimeout: (fn, ms) => { if (options.onUploadWait && ms === 120000) { options.onUploadWait(fn); return undefined; } return setTimeout(fn, options.decodeHangOnce && ms === 20000 ? 5 : ms); }, clearTimeout, document: {getElementById: id => byId[id], createElement: tag => new Element(tag)}, window: {AudioWorkletNode: class {}, addEventListener: (name, callback) => windowEvents[name] = callback},
     navigator: {mediaDevices: {getUserMedia: async constraints => {inputConstraints=constraints;return options.microphone || stream;}}}, AudioContext: class {constructor() { this.sampleRate = 44100; } async resume() {} createBuffer(...args) { return buffer(...args); } async decodeAudioData() { if (++decodeCalls <= (options.decodeRejects || 0)) throw new Error("Unsupported browser codec"); return buffer(); }},
     StudioAudio: {...helpers, async begin(given) { beginCalls++; recordingOptions = given; if (options.preparation) await options.preparation; return {stop() { recordingOptions.onDone({samples: new Float32Array(4410), sampleRate: 44100, position: given.position}); }, cancel() { cancelled++; }}; }},
     OfflineAudioContext: class {async decodeAudioData() { decodeCalls++; if (options.decodeHangOnce && decodeCalls === 1) return new Promise(() => {}); if (decodeCalls <= (options.decodeRejects || 0)) throw new Error("Unsupported browser codec"); return buffer(); } createBufferSource() { return {connect(node) { return node; }, start() {}}; } createGain() { return {gain: {value: 1}, connect() {}}; } async startRendering() { return buffer(2); }},
     location: {reload() { reloads++; }}, URL: {createObjectURL: () => "blob:test", revokeObjectURL() {}}, Blob, FormData, Float32Array, DataView, ArrayBuffer, Number, Math, JSON, confirm: () => true,
-    fetch: async (url, request) => { if (!request) return {ok: true, arrayBuffer: async () => new ArrayBuffer(44)}; posted.push({url, body: request.body}); if (url === "/studio/project/7/master/") return {ok: true, headers: {get: () => "audio/wav"}, blob: async () => new Blob(["mastered"], {type: "audio/wav"})}; if (url === "/studio/audio/convert/") return {ok: !options.convertFail, blob: async () => new Blob(["converted"]), json: async () => ({error: "Audio conversion failed"})}; return {ok: !failUpload, json: async () => failUpload ? {error: "Upload failed; retry"} : {ok: true}}; }};
+    fetch: async (url, request) => { if (!request) return {ok: true, arrayBuffer: async () => new ArrayBuffer(44)}; posted.push({url, body: request.body}); if (url === "/studio/project/7/master/") return {ok: true, headers: {get: () => "audio/wav"}, blob: async () => new Blob(["mastered"], {type: "audio/wav"})}; if (url === "/studio/audio/convert/") return {ok: !options.convertFail, blob: async () => new Blob(["converted"]), json: async () => ({error: "Audio conversion failed"})}; if (options.trackResponse && url === "/studio/project/7/track/") return options.trackResponse; return {ok: !failUpload, json: async () => failUpload ? {error: "Upload failed; retry"} : {ok: true}}; }};
   if (options.recovery) sandbox.StudioDrafts = class {
     async read() { return options.snapshot; }
     async write(value) { if (options.failRecovery) throw new Error("Quota exceeded"); drafts.push(structuredClone(value)); }
@@ -66,47 +66,53 @@ function harness(options = {}) {
 }
 test("import preserves filename, selected vocal kind, timeline position and existing edits", async () => {
   const h = harness({importKind: "vocal"});
-  h.byId.import.files = [Object.assign(new Blob(["audio"]), {name: "My harmony.mp3"})];
+  const original = Object.assign(new Blob(["compressed audio"], {type: "audio/mpeg"}), {name: "My harmony.mp3"});
+  h.byId.import.files = [original];
   await h.byId.import.trigger("change");
   assert.equal(h.posted.length, 1);
   const data = h.posted[0].body;
   assert.equal(data.get("name"), "My harmony");
   assert.equal(data.get("kind"), "vocal");
+  assert.equal(data.get("original_file"), "1");
   assert.equal(data.get("offset"), "12.5");
   assert.equal(data.get("revision"), "rev1");
   assert.equal(JSON.parse(data.get("tracks"))[0].id, 1);
-  assert.equal(data.get("audio").type, "audio/wav");
+  assert.equal(data.get("audio").type, "audio/mpeg");
+  assert.equal(data.get("audio").size, original.size);
+  assert.equal(await data.get("audio").text(), "compressed audio");
   assert.equal(h.reloads(), 1);
-  assert.equal(h.decodeCalls(), 1, "Import reuses its decoded audio instead of decoding the song twice");
+  assert.equal(h.decodeCalls(), 0, "Import uploads the original without browser decoding or WAV expansion");
 });
 
-test("a stalled import decoder falls back to conversion and releases editing controls", async () => {
+test("imports avoid a stalled browser decoder and send the original file once", async () => {
   const h = harness({decodeHangOnce:true});
   h.byId.import.files = [Object.assign(new Blob(["song"]), {name:"Song.mp3"})];
   await h.byId.import.trigger("change");
-  assert.equal(h.posted[0].url,"/studio/audio/convert/");
-  assert.equal(h.posted.length,2);
+  assert.equal(h.posted[0].url,"/studio/project/7/track/");
+  assert.equal(h.posted.length,1);
+  assert.equal(h.decodeCalls(),0);
   assert.equal(h.reloads(),1);
   assert.equal(h.byId.preview.disabled,false);
   assert.equal(h.byId.import.disabled,false);
 });
 
-test("unsupported browser codecs use server conversion before importing", async () => {
+test("browser codec support does not cause a conversion download and second upload", async () => {
   const h = harness({decodeRejects: 1});
   h.byId.import.files = [Object.assign(new Blob(["audio"]), {name: "Backing.flac"})];
   await h.byId.import.trigger("change");
-  assert.equal(h.posted.length, 2);
-  assert.equal(h.posted[0].url, "/studio/audio/convert/");
-  assert.equal(h.posted[1].body.get("kind"), "backing");
+  assert.equal(h.posted.length, 1);
+  assert.equal(h.posted[0].url, "/studio/project/7/track/");
+  assert.equal(h.posted[0].body.get("kind"), "backing");
   assert.equal(h.reloads(), 1);
 });
 
-test("failed conversion permits selecting the same file again without changing the project", async () => {
+test("failed import permits selecting the same file again without changing the project", async () => {
   const h = harness({decodeRejects: 1, convertFail: true});
   h.byId.import.files = [Object.assign(new Blob(["audio"]), {name: "Bad.m4a"})];
   h.byId.import.value = "selected-file";
+  h.fail();
   await h.byId.import.trigger("change");
-  assert.match(h.byId.status.textContent, /conversion failed/);
+  assert.match(h.byId.status.textContent, /Upload failed/);
   assert.equal(h.byId.import.value, "");
   assert.equal(h.byId.import.disabled, false);
   assert.equal(h.posted.length, 1);
@@ -118,6 +124,37 @@ test("Acapella forces imported files to vocal tracks", async () => {
   h.byId.import.files = [Object.assign(new Blob(["audio"]), {name: "Bass.wav"})];
   await h.byId.import.trigger("change");
   assert.equal(h.posted[0].body.get("kind"), "vocal");
+});
+
+test("a slow upload stays locked and handles success after the two-minute notice", async () => {
+  let complete, waitingNotice;
+  const trackResponse = new Promise(resolve => { complete = resolve; });
+  const h = harness({trackResponse, onUploadWait: callback => { waitingNotice = callback; }});
+  h.byId.import.files = [Object.assign(new Blob(["audio"]), {name: "Slow.wav"})];
+  const pending = h.byId.import.trigger("change");
+  await h.ready();
+  waitingNotice(); await h.ready();
+  try {
+    assert.equal(h.byId.import.disabled, true);
+    assert.match(h.byId.status.textContent, /Still uploading/i);
+    await h.byId.import.trigger("change");
+    assert.equal(h.posted.length, 1);
+  } finally { complete({ok: true, json: async () => ({ok: true})}); await pending; }
+  assert.equal(h.reloads(), 1);
+});
+
+test("a server rejection after the slow-upload notice preserves the take for retry", async () => {
+  let complete, waitingNotice;
+  const trackResponse = new Promise(resolve => { complete = resolve; });
+  const h = harness({trackResponse, onUploadWait: callback => { waitingNotice = callback; }});
+  await h.byId.record.trigger(); await h.byId.stop.trigger();
+  const pending = h.byId["keep-take"].trigger();
+  await h.ready(); waitingNotice(); await h.ready();
+  complete({ok: false, json: async () => ({error: "Track limit reached"})}); await pending;
+  assert.match(h.byId.status.textContent, /Track limit reached/);
+  assert.equal(h.byId["take-review"].hidden, false);
+  assert.equal(h.byId["keep-take"].disabled, false);
+  assert.equal(h.reloads(), 0);
 });
 
 test("recording locks controls, preserves the timeline, and unlocks take review", async () => {

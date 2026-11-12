@@ -87,6 +87,8 @@ class AudioProcessingTests(TestCase):
         self.assertTrue(self.track.muted)
         self.assertEqual(self.track.audio.name, original)
         self.assertEqual(self.project.tracks.count(), 2)
+        self.assertEqual(job.source.name, original)
+        self.assertEqual(self.project.tracks.exclude(pk=self.track.pk).get().audio.name, job.result.name)
         self.assertEqual(self.client.post(url, {'revision': self.project.updated_at.isoformat()}).status_code, 404)
 
     def test_invalid_options_and_category_rules(self):
@@ -115,6 +117,7 @@ class AudioProcessingTests(TestCase):
         response = self.client.post(reverse('studio:audio_apply', args=[job.pk]), {'revision': self.project.updated_at.isoformat(), 'library': 'yes'})
         self.assertEqual(response.status_code, 200)
         item = Instrumental.objects.get()
+        self.assertEqual(item.audio.name, job.result.name)
         response = self.client.post(reverse('studio:instrumental_use', args=[item.pk]))
         self.assertEqual(response.status_code, 302)
         copied = Track.objects.exclude(pk=self.track.pk).get()
@@ -262,6 +265,63 @@ class AudioProcessingTests(TestCase):
                     self.assertEqual((audio.getsampwidth(), audio.getframerate(), audio.getnchannels()), (2, 44100, 2))
                     self.assertAlmostEqual(audio.getnframes() / audio.getframerate(), 1, delta=.1)
                 response.close()
+
+    def test_original_compressed_files_upload_directly_into_tracks(self):
+        from studio.video_render import run_ffmpeg
+        from django.db import connection
+        source = Path(self.folder.name) / 'direct.wav'
+        source.write_bytes(recording().read())
+        for extension, codec in [('mp3', 'libmp3lame'), ('m4a', 'aac'), ('flac', 'flac'), ('ogg', 'libvorbis')]:
+            with self.subTest(extension=extension):
+                encoded = source.with_suffix('.' + extension)
+                run_ffmpeg(['-i', str(source), '-c:a', codec, str(encoded)])
+                self.project.refresh_from_db()
+                # TestCase already wraps the test in a transaction. Conversion
+                # must not open another atomic block or lock before FFmpeg runs.
+                from studio.audio_import import run_ffmpeg as actual_ffmpeg
+                depth = len(connection.atomic_blocks)
+                def unlocked_conversion(arguments):
+                    self.assertEqual(len(connection.atomic_blocks), depth)
+                    return actual_ffmpeg(arguments)
+                with patch('studio.audio_import.run_ffmpeg', side_effect=unlocked_conversion):
+                    response = self.client.post(reverse('studio:add_track', args=[self.project.pk]), {
+                        'audio': ContentFile(encoded.read_bytes(), name=encoded.name),
+                        'name': 'Imported ' + extension, 'kind': 'backing', 'offset': '3.5', 'original_file': '1',
+                        'revision': self.project.updated_at.isoformat(),
+                    })
+                self.assertEqual(response.status_code, 200, response.content)
+                track = self.project.tracks.get(name='Imported ' + extension)
+                self.assertEqual(track.offset, 3.5)
+                self.assertEqual(track.kind, 'backing')
+                with track.audio.open('rb') as stream, wave.open(stream) as audio:
+                    self.assertEqual((audio.getsampwidth(), audio.getframerate(), audio.getnchannels()), (2, 44100, 2))
+                    self.assertAlmostEqual(audio.getnframes() / audio.getframerate(), 1, delta=.1)
+
+    def test_original_import_validation_preserves_project_on_failure(self):
+        url = reverse('studio:add_track', args=[self.project.pk])
+        original_count = self.project.tracks.count()
+        response = self.client.post(url, {'audio': ContentFile(b'bad', name='bad.mp3'), 'kind': 'backing'})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.project.tracks.count(), original_count)
+        with patch('studio.audio_import.normalize_upload') as normalize:
+            response = self.client.post(url, {'audio': recording(), 'revision': 'stale'})
+            self.assertEqual(response.status_code, 409)
+            normalize.assert_not_called()
+
+    def test_low_sample_rate_import_is_normalized_for_vocal_processing(self):
+        original = io.BytesIO()
+        with wave.open(original, 'wb') as audio:
+            audio.setparams((1, 2, 8000, 0, 'NONE', 'not compressed'))
+            audio.writeframes(b'\x00\x00' * 8000)
+        response = self.client.post(reverse('studio:add_track', args=[self.project.pk]), {
+            'audio': ContentFile(original.getvalue(), name='voice.wav'),
+            'original_file': '1', 'kind': 'vocal', 'name': 'Imported low rate',
+        })
+        self.assertEqual(response.status_code, 200)
+        track = self.project.tracks.get(name='Imported low rate')
+        with track.audio.open('rb') as stream, wave.open(stream) as audio:
+            self.assertEqual(audio.getframerate(), 44100)
+            self.assertEqual(audio.getnframes(), 44100)
 
     def test_overlong_import_is_rejected_instead_of_truncated(self):
         source = io.BytesIO()
