@@ -1,7 +1,8 @@
 from django.urls import path
-from . import views, instrumentals, collaborations, audio_processing, extract_arrangement
+from . import views, instrumentals, collaborations, audio_processing, extract_arrangement, waveforms, health
 app_name = "studio"
 urlpatterns = [
+    path('health/', health.view, name='health'),
     path('audio-jobs/<int:job_pk>/arrange/', extract_arrangement.editor, name='arrange_job'),
     path('audio-jobs/<int:job_pk>/arrange/save/', extract_arrangement.save, name='arrange_job_save'),
     path('instrumentals/<int:item_pk>/arrange/', extract_arrangement.editor, name='arrange'),
@@ -12,6 +13,7 @@ urlpatterns = [
     path("audio-jobs/<int:pk>/", audio_processing.job_status, name="audio_job"),
     path("audio-jobs/<int:pk>/audio/", audio_processing.job_audio, name="audio_job_audio"),
     path("audio-jobs/<int:pk>/apply/", audio_processing.apply, name="audio_apply"),
+    path('audio-jobs/<int:pk>/cancel/', audio_processing.cancel, name='audio_cancel'),
     path("collaborations/", collaborations.library, name="collaboration_library"),
     path("collaborate/<int:pk>/", collaborations.workspace, name="collaborate"),
     path("collaborate/<int:pk>/permission/", collaborations.permission, name="collaboration_permission"),
@@ -34,9 +36,12 @@ urlpatterns = [
     path("project/<int:pk>/", views.editor, name="editor"),
     path("project/<int:pk>/master/", audio_processing.master, name="audio_master"),
     path("project/<int:pk>/save/", views.save, name="save"),
+    path('project/<int:pk>/render/', audio_processing.queue_mix, name='queue_mix'),
     path("project/<int:pk>/track/", views.add_track, name="add_track"),
     path("track/<int:pk>/audio/", views.track_audio, name="track_audio"),
+    path('track/<int:pk>/peaks/', waveforms.track_peaks, name='track_peaks'),
     path("track/<int:pk>/delete/", views.delete_track, name="delete_track"),
+    path('track/<int:pk>/restore/', views.restore_track, name='restore_track'),
     path("project/<int:pk>/publish/", views.publish, name="publish"),
     path("project/<int:pk>/export/", views.export, name="export"),
     path("export/<int:pk>/download/", views.download, name="download"),

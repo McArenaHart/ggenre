@@ -26,6 +26,8 @@ class Command(BaseCommand):
             raise CommandError('Choose a setup test length from 1 to 60 seconds.')
         if not available()['separate']:
             raise CommandError('Install requirements-audio.txt first.')
+        if os.getenv('STUDIO_MODEL_ROOT'):
+            os.environ['TORCH_HOME'] = str(Path(os.environ['STUDIO_MODEL_ROOT']).expanduser().resolve())
         import numpy as np
         import torch
         from django.core.files.storage import FileSystemStorage

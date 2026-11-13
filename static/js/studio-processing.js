@@ -27,6 +27,7 @@ window.StudioProcessing = {
     permission.append(consent, " I have permission to reuse this recording."); body.append(permission);
     const note = document.createElement("p"); note.textContent = "Process after recording. Noise reduction targets steady hiss, rumble and hum. Strong settings may affect the voice. Tune one voice at a time; skip vocal percussion. Extraction may leave vocal bleed. Unused processing previews may expire after 30 days; apply or save a result to keep it."; body.append(note);
     const run = document.createElement("button"); run.type = "button";
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Cancel processing'; cancel.hidden = true;
     function update() {
       for (const control of [strength, cutoff, hum]) control.parentElement.hidden = operation.value !== "denoise";
       for (const control of [key, scale, amount, speed]) control.parentElement.hidden = operation.value !== "tune";
@@ -40,12 +41,12 @@ window.StudioProcessing = {
     progress.hidden = true;
     progress.style.width = "100%";
     progress.setAttribute("aria-label", "Instrumental extraction progress");
-    const preview = document.createElement("audio"); preview.controls = true; preview.controlsList = 'nodownload'; preview.hidden = true;
+    const preview = document.createElement("audio"); preview.controls = true; preview.preload = 'none'; preview.controlsList = 'nodownload'; preview.hidden = true;
     preview.addEventListener("play", () => card.querySelectorAll("audio").forEach(p => { if (p !== preview) p.pause(); }));
     const apply = document.createElement("button"); apply.type = "button"; apply.textContent = "Use processed track"; apply.hidden = true;
     const library = document.createElement("button"); library.type = "button"; library.textContent = "Save to instrumental library"; library.hidden = true;
     const arrange = document.createElement('a'); arrange.textContent = 'Edit intro / middle / outro'; arrange.className = 'studio-button studio-outline'; arrange.hidden = true;
-    body.append(run, status, progress, preview, apply, library, arrange);
+    body.append(run, cancel, status, progress, preview, apply, library, arrange);
     const close = document.createElement("button"); close.type = "button";
     close.className = "studio-audio-tools-close"; close.textContent = "Close audio tools";
     close.addEventListener("click", () => { panel.open = false; }); body.append(close);
@@ -65,8 +66,9 @@ window.StudioProcessing = {
         const job = await response.json();
         if (requestedJob !== jobId) return;
         updateProgress(job.status);
+        cancel.hidden = !['queued', 'running'].includes(job.status);
         status.textContent = job.error || {
-          queued: "Waiting for the audio worker. You can close these tools and return later.",
+          queued: `Waiting for the audio worker · queue position ${job.queue_position || 1}. You can return later.`,
           running: jobOperation === "separate"
             ? "Extracting the instrumental. Full songs can take several minutes on this server."
             : "Processing the recording. You can close these tools and return later.",
@@ -78,7 +80,7 @@ window.StudioProcessing = {
           status.textContent = "Ready. Compare using the original track's play button. Applying mutes the original and adds a separate track.";
           return;
         }
-        if (["failed", "applied", "expired"].includes(job.status)) { run.disabled = false; return; }
+        if (["failed", "applied", "expired", "cancelled"].includes(job.status)) { run.disabled = false; return; }
         timer = setTimeout(poll, 3000);
       } catch (error) { if (requestedJob === jobId) { updateProgress(null); status.textContent = error.message; run.disabled = false; } }
     }
@@ -86,6 +88,10 @@ window.StudioProcessing = {
       try { await action(); }
       catch (error) { status.textContent = error.message; throw error; }
     });
+    cancel.addEventListener('click', () => runTask(async () => {
+      await api.post(`/studio/audio-jobs/${jobId}/cancel/`, new FormData());
+      clearTimeout(timer); await poll();
+    }));
     run.addEventListener("click", () => runTask(async () => {
       const selectedOperation = operation.value;
       if (selectedOperation === "separate" && !consent.checked) throw new Error("Confirm you have permission to reuse this recording.");

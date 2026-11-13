@@ -34,8 +34,8 @@ class StreamingSeparationTests(SimpleTestCase):
                 self.assertEqual(audio.getnchannels(), 2)
                 result = np.frombuffer(audio.readframes(length), dtype='<i2').reshape(-1, 2)
             self.assertEqual(seconds, length / rate)
-            self.assertEqual(len(windows), 3)
-            self.assertLessEqual(max(windows), rate * 31)
+            self.assertEqual(len(windows), 11)
+            self.assertLessEqual(max(windows), rate * 7)
             np.testing.assert_allclose(result[:, 0], samples, atol=2)
             np.testing.assert_array_equal(result[:, 0], result[:, 1])
 

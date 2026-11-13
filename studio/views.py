@@ -22,7 +22,12 @@ def artist_only(view):
     def wrapped(request, *args, **kwargs):
         if not request.user.is_artist():
             return HttpResponseForbidden("Studio is available to artists.")
-        response = view(request, *args, **kwargs)
+        from .capacity import artist_storage
+        try:
+            with artist_storage(request.user.pk):
+                response = view(request, *args, **kwargs)
+        except ValidationError as exc:
+            response = JsonResponse({'error': exc.messages[0]}, status=409)
         response["Cache-Control"] = "private, no-store"
         return response
     return wrapped
@@ -92,11 +97,18 @@ def index(request):
 @artist_only
 def editor(request, pk):
     project = owned(request, pk)
+    project.pending_render = project.tracks.filter(audio_jobs__operation__in=['mix', 'master'], audio_jobs__status__in=['queued', 'running', 'ready']).values_list('audio_jobs__pk', flat=True).order_by('-audio_jobs__pk').first()
+    project.removed_tracks = list(Track.all_objects.filter(project=project, deleted_at__isnull=False).values('id', 'name'))
+    from .capacity import usage
+    from .storage import private_storage
+    from django.conf import settings
+    project.storage_used = round(usage(request.user.pk, private_storage) / 1024 / 1024, 1)
+    project.storage_limit = settings.STUDIO_ARTIST_STORAGE_MIB
     allowance, _ = ExportAllowance.objects.get_or_create(artist=request.user)
     tracks = [{"id": t.pk, "name": t.name, "url": f"/studio/track/{t.pk}/audio/", "gain": t.gain, "offset": t.offset, "trim_start": t.trim_start, "trim_end": t.trim_end, "muted": t.muted, "kind": t.kind} for t in project.tracks.all()]
     from .models import AudioJob
     for track in tracks:
-        job = AudioJob.objects.filter(track_id=track["id"], status__in=["queued", "running", "ready"]).order_by("-pk").first()
+        job = AudioJob.objects.filter(track_id=track["id"], operation__in=['denoise', 'tune', 'separate'], status__in=["queued", "running", "ready"]).order_by("-pk").first()
         if job:
             track.update(audio_job=job.pk, audio_operation=job.operation)
     return render(request, "studio/editor.html", {"unlimited_exports": allowance.unlimited_exports, "free_left": allowance.free_remaining, "project": project, "revision": project.updated_at.isoformat(), "profile": profile_for(project.category), "reference_notes": REFERENCE_NOTES, "beats": beats_for(project.category), "has_beat": project.tracks.filter(kind="beat").exists(), "tracks": tracks, "exports": Export.objects.filter(project=project).order_by("-created_at"), "releases": Release.objects.filter(project=project).select_related("content")})
@@ -106,6 +118,9 @@ def editor(request, pk):
 @require_POST
 def add_track(request, pk):
     project = owned(request, pk)
+    upload_key = request.POST.get('upload_key', '')[:64] or None
+    if upload_key and Track.all_objects.filter(project=project, upload_key=upload_key).exists():
+        return JsonResponse({'ok': True, 'reused': True})
     # Convert compressed imports before locking the project. Recheck revision,
     # quota and edits inside the transaction after conversion completes.
     if request.POST.get("revision") and request.POST["revision"] != project.updated_at.isoformat():
@@ -119,6 +134,8 @@ def add_track(request, pk):
         return JsonResponse({"error": exc.messages[0]}, status=400)
     with transaction.atomic():
         project = Project.objects.select_for_update().get(pk=project.pk)
+        if upload_key and Track.all_objects.filter(project=project, upload_key=upload_key).exists():
+            return JsonResponse({'ok': True, 'reused': True})
         if request.POST.get("revision") and request.POST["revision"] != project.updated_at.isoformat():
             return JsonResponse({"error": "This project changed in another tab. Your local work is retained; reopen the latest project before saving."}, status=409)
         kind = request.POST.get("kind", "vocal")
@@ -159,7 +176,7 @@ def add_track(request, pk):
             return JsonResponse({"error": exc.messages[0] if isinstance(exc, ValidationError) else "Invalid track settings or recording position. Keep the take within six minutes."}, status=400)
         for track in edits:
             track.save()
-        Track.objects.create(project=project, name=request.POST.get("name", "Vocal")[:100], audio=audio, offset=offset, kind=kind, beat_preset=preset_id, beat_bpm=beat_bpm)
+        Track.objects.create(project=project, name=request.POST.get("name", "Vocal")[:100], audio=audio, offset=offset, kind=kind, beat_preset=preset_id, beat_bpm=beat_bpm, upload_key=upload_key)
         project.tempo = tempo
         project.mix = ""
         project.save()
@@ -181,10 +198,30 @@ def delete_track(request, pk):
         for edited in edits:
             if edited.pk != track.pk:
                 edited.save()
-        track.delete()
+        from django.utils import timezone
+        track.deleted_at = timezone.now()
+        track.save(update_fields=['deleted_at'])
+        track.audio_jobs.filter(status__in=['queued', 'running']).update(status='cancelled', finished_at=timezone.now(), error='Track removed. Restore it before processing again.')
         project.mix = ""
         project.save()
     return JsonResponse({"ok": True})
+
+
+@artist_only
+@require_POST
+def restore_track(request, pk):
+    track = get_object_or_404(Track.all_objects, pk=pk, project__artist=request.user, deleted_at__isnull=False)
+    with transaction.atomic():
+        project = Project.objects.select_for_update().get(pk=track.project_id)
+        if request.POST.get('revision') != project.updated_at.isoformat():
+            return JsonResponse({'error': 'Project changed. Reload before restoring.'}, status=409)
+        if project.tracks.count() >= 12 or (track.kind == 'beat' and project.tracks.filter(kind='beat').exists()):
+            return JsonResponse({'error': 'Make room for this track before restoring it.'}, status=409)
+        track.deleted_at = None
+        track.save(update_fields=['deleted_at'])
+        project.mix = ''
+        project.save()
+    return JsonResponse({'ok': True})
 
 
 @artist_only
@@ -213,14 +250,12 @@ def save(request, pk):
 @artist_only
 def track_audio(request, pk):
     track = get_object_or_404(Track, pk=pk, project__artist=request.user)
-    return audio_response(track.audio)
+    return audio_response(track.audio, request=request)
 
 
-def audio_response(audio, attachment=False, filename=None):
-    response = FileResponse(audio.open("rb"), content_type="audio/wav", as_attachment=attachment, filename=filename)
-    response["Cache-Control"] = "private, no-store"
-    response["X-Content-Type-Options"] = "nosniff"
-    return response
+def audio_response(audio, attachment=False, filename=None, request=None):
+    from .audio_delivery import deliver
+    return deliver(audio, request, attachment, filename)
 
 
 @artist_only
@@ -252,14 +287,9 @@ def export(request, pk):
         if not project.mix:
             messages.error(request, "Save a mix before exporting.")
         else:
-            allowance, _ = ExportAllowance.objects.get_or_create(artist=request.user)
-            allowance = ExportAllowance.objects.select_for_update().get(pk=allowance.pk)
-            free = allowance.unlimited_exports or ExportAllowance.objects.filter(pk=allowance.pk, free_used__lt=F("free_limit")).update(free_used=F("free_used") + 1)
-            if not free and Export.objects.filter(project=project, status="pending", audio=project.mix.name).exists():
-                messages.info(request, "This mix already has an export awaiting approval.")
-            else:
-                Export.objects.create(project=project, audio=project.mix.name, status="free" if free else "pending", payment_reference=request.POST.get("payment_reference", "")[:160])
-                messages.success(request, "Your free export is ready." if free else "Export requested. Admin must verify payment before download.")
+            from .exports import request_export
+            item, created = request_export(request.user, project, request.POST.get('payment_reference', ''))
+            messages.success(request, 'Your download is ready. Re-downloading this saved version does not use another trial.' if item.status in ('free', 'approved') else 'Export requested. Admin must verify payment before download.')
     return redirect("studio:editor", pk=pk)
 
 

@@ -24,8 +24,11 @@
   let takeEstimate = 0, timeline, draftStore, draftTimer, checkpoint, recoveryWaiting = false, recovering = false;
   let baseRevision = root.dataset.revision || JSON.stringify(tracks);
   const trackInputs = new Map();
+  const history = typeof StudioHistory !== 'undefined' ? new StudioHistory.History(tracks) : null;
+  let historyTimer, restoringHistory = false, historyControls;
   const autoMaster = document.getElementById("auto-master");
   const masterPreview = document.getElementById("master-preview");
+  if (masterPreview) masterPreview.preload = 'none';
   const saveMaster = document.getElementById("save-master");
   let masterBlob, masterURL, masterSignature;
   const mixSignature = () => JSON.stringify(tracks);
@@ -48,6 +51,8 @@
     if (fields) for (const [key, input] of Object.entries(fields)) { if (key === "muted") input.checked = track[key]; else input.value = track[key]; }
   }
   const buffers = new Map();
+  const bufferSizes = new Map();
+  const uploadKeys = new WeakMap();
   const audioContext = () => context || (context = new AudioContext({latencyHint: "interactive", sampleRate: 44100}));
   async function deadline(promise, milliseconds, explanation) {
     let timer;
@@ -83,7 +88,7 @@
     const toolStatus = document.getElementById("audio-tool-status");
     if (toolStatus) toolStatus.textContent = text;
   }
-  function changed() { dirty = true; root.querySelectorAll("[data-saved-action]").forEach(b => b.disabled = true); timeline?.render(); scheduleDraft(); }
+  function changed() { dirty = true; root.querySelectorAll("[data-saved-action]").forEach(b => b.disabled = true); timeline?.render(); scheduleDraft(); if (!restoringHistory && history) { clearTimeout(historyTimer); historyTimer = setTimeout(() => history.record(tracks), 300); } }
   async function post(url, data) {
     const response = await fetch(url, {method: "POST", headers: {"X-CSRFToken": csrf}, body: data});
     const result = await response.json().catch(() => { throw new Error("The server could not save this audio. Reload the project to check whether it was saved before trying again."); });
@@ -116,6 +121,17 @@
     if (!buffers.has(track.id)) {
       const pending = (async () => { const response = await fetch(track.url); if (!response.ok) throw new Error("Unable to load a private track. Refresh and sign in again."); return audioContext().decodeAudioData(await response.arrayBuffer()); })();
       buffers.set(track.id, pending);
+      pending.then(buffer => {
+        if (buffers.get(track.id) !== pending) return;
+        bufferSizes.set(track.id, buffer.length * buffer.numberOfChannels * 4);
+        let bytes = [...bufferSizes.values()].reduce((a, b) => a + b, 0);
+        // Active playback owns its buffers independently. Bound only retained
+        // cache memory so removed/previously auditioned files do not accumulate.
+        for (const id of buffers.keys()) {
+          if (bytes <= 128 * 1024 * 1024) break;
+          bytes -= bufferSizes.get(id) || 0; buffers.delete(id); bufferSizes.delete(id);
+        }
+      }).catch(() => {});
       pending.catch(() => { if (buffers.get(track.id) === pending) buffers.delete(track.id); });
     }
     return buffers.get(track.id);
@@ -152,6 +168,14 @@
     if (!Number.isFinite(offset) || offset < 0 || offset >= 360 || (buffer && offset + buffer.duration > 360.001)) throw new Error("Keep the voice and its starting position within the six-minute project.");
     const data = new FormData(); data.append("audio", originalFile ? blob : wav(buffer), originalFile ? blob.name || "import.audio" : "track.wav");
     if (originalFile) data.append("original_file", "1");
+    const uploadIdentity = pendingTake || blob;
+    const importRetryKey = originalFile ? `ggenre-import:${root.dataset.user}:${root.dataset.project}:${blob.name}:${blob.size}:${blob.lastModified || 0}` : null;
+    if (importRetryKey) { try { const retry = sessionStorage.getItem(importRetryKey); if (retry) uploadKeys.set(uploadIdentity, retry); } catch (_) {} }
+    if (!uploadIdentity.uploadKey && !uploadKeys.has(uploadIdentity)) uploadKeys.set(uploadIdentity, crypto.randomUUID());
+    const uploadKey = uploadIdentity.uploadKey || uploadKeys.get(uploadIdentity);
+    if (importRetryKey) { try { sessionStorage.setItem(importRetryKey, uploadKey); } catch (_) {} }
+    if (pendingTake) { pendingTake.uploadKey = uploadKey; persistDraft(); }
+    data.append('upload_key', uploadKey);
     data.append("name", name || document.getElementById("track-name").value || "Vocal");
     data.append("offset", String(offset)); data.append("kind", kind); data.append("beat_preset", preset);
     data.append("tempo", document.getElementById("tempo").value); if (beatBpm !== null) data.append("beat_bpm", String(beatBpm));
@@ -161,8 +185,19 @@
     // late success reloads the project and cannot unlock a duplicate upload.
     const waitingNotice = setTimeout(() => message("Still uploading. Keep this tab open; larger files or a slow connection can take longer. The project will reload when saving finishes."), 120000);
     try {
-      await post(`/studio/project/${root.dataset.project}/track/`, data);
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest(); xhr.open('POST', `/studio/project/${root.dataset.project}/track/`);
+        xhr.setRequestHeader('X-CSRFToken', csrf);
+        xhr.upload.addEventListener('progress', event => { if (event.lengthComputable) message(`Uploading audio · ${Math.floor(event.loaded / event.total * 100)}%`); });
+        xhr.upload.addEventListener('load', () => message('Upload complete. Preparing audio for editing…'));
+        xhr.addEventListener('error', () => reject(new Error('Connection lost. Your take is retained. Retry to check or finish this upload.')));
+        xhr.addEventListener('load', () => {
+          try { const result = JSON.parse(xhr.responseText); if (xhr.status < 200 || xhr.status >= 300) throw new Error(result.error || 'Unable to save this audio.'); resolve(result); }
+          catch (error) { reject(new Error(error.message || 'Unable to read the upload result. Retry safely or reload to check the saved track.')); }
+        }); xhr.send(data);
+      });
     } finally { clearTimeout(waitingNotice); }
+    if (importRetryKey) { try { sessionStorage.removeItem(importRetryKey); } catch (_) {} }
     dirty = false; pendingTake = null; await clearDraft(); location.reload();
   }
   const container = document.getElementById("tracks");
@@ -188,7 +223,7 @@
       title.addEventListener("input", () => { track.name = title.value; listen.setAttribute("aria-label", "Listen to " + track.name); remove.setAttribute("aria-label", "Remove " + track.name); changed(); });
     } else title.textContent = track.name;
     title.title = track.name; card.append(number, title);
-    const player = document.createElement("audio"); player.controls = true; player.src = track.url; player.controlsList = "nodownload"; card.append(player);
+    const player = document.createElement("audio"); player.controls = true; player.preload = 'none'; player.src = track.url; player.controlsList = "nodownload"; card.append(player);
     bindTransportAudio(player, () => Number(track.offset));
     const timing = document.createElement("details"); timing.className = "studio-track-edit";
     const timingLabel = document.createElement("summary"); timingLabel.textContent = "Timing ▾";
@@ -427,11 +462,11 @@
   });
   async function saveMix(audio, mastered = false) {
     const data = new FormData();
-    data.append("audio", audio, mastered ? "master.wav" : "mix.wav");
+    if (typeof audio !== 'number') data.append("audio", audio, mastered ? "master.wav" : "mix.wav");
     data.append("tracks", JSON.stringify(tracks));
     data.append("tempo", document.getElementById("tempo").value);
     data.append("revision", baseRevision);
-    const result = await post(`/studio/project/${root.dataset.project}/save/`, data);
+    const result = await post(typeof audio === 'number' ? `/studio/audio-jobs/${audio}/apply/` : `/studio/project/${root.dataset.project}/save/`, data);
     baseRevision = result.revision || baseRevision;
     await clearDraft();
     dirty = false;
@@ -439,10 +474,31 @@
     root.querySelectorAll("[data-saved-action]").forEach(b => b.disabled = false);
     message(mastered ? "Mastered mix saved. Ready to publish or export." : "Mix and edits saved. Ready to publish or export.");
   }
+  async function renderMix(mastered = false, resumeId = null) {
+    const data = new FormData(); data.append('tracks', JSON.stringify(tracks));
+    data.append('tempo', document.getElementById('tempo').value); data.append('revision', baseRevision);
+    data.append('master', mastered ? 'yes' : 'no');
+    const job = resumeId ? {id: resumeId} : await post(`/studio/project/${root.dataset.project}/render/`, data);
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Cancel render';
+    cancel.addEventListener('click', async () => { try { await post(`/studio/audio-jobs/${job.id}/cancel/`, new FormData()); } catch (error) { message(error.message); } });
+    status.after(cancel);
+    try {
+      for (;;) {
+        const response = await fetch(`/studio/audio-jobs/${job.id}/`, {cache: 'no-store'});
+        if (!response.ok) throw new Error('Unable to read render status. Reload to reconnect; your task stays on the server.');
+        const result = await response.json();
+        if (result.status === 'ready') return {id: job.id, url: result.url};
+        if (!['queued', 'running'].includes(result.status)) throw new Error(result.error || 'This render is no longer available. Save again.');
+        message(result.status === 'queued' ? `Render queued · position ${result.queue_position}. You can return later.` : 'Rendering on the server. Your device does not need to build a WAV.');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    } finally { cancel.remove(); }
+  }
   document.getElementById("save").addEventListener("click", () => task(async () => {
     if (pendingTake) throw new Error("Finish reviewing your take before saving the mix.");
+    if (!dirty && root.dataset.hasMix === 'true') { message('This mix is already saved. Download its existing export without using another trial.'); return; }
     message("Saving mix and edits…");
-    await saveMix(await mix());
+    const rendered = await renderMix(); await saveMix(rendered.id);
   }));
   autoMaster?.addEventListener("click", () => task(async () => {
     if (pendingTake) throw new Error("Finish reviewing your take before mastering.");
@@ -450,16 +506,10 @@
     const signature = mixSignature();
     message("Mastering the full mix…");
     const data = new FormData();
-    data.append("audio", await mix(), "mix.wav");
-    const response = await fetch(autoMaster.dataset.url, {method: "POST", headers: {"X-CSRFToken": csrf}, body: data});
-    if (!response.ok || !response.headers.get("Content-Type")?.startsWith("audio/wav")) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.error || "Auto Master could not process this mix. Try again.");
-    }
-    masterBlob = await response.blob();
+    const rendered = await renderMix(true);
+    masterBlob = rendered.id;
     masterSignature = signature;
-    if (masterURL) URL.revokeObjectURL(masterURL);
-    masterURL = URL.createObjectURL(masterBlob);
+    masterURL = rendered.url;
     masterPreview.src = masterURL;
     masterPreview.hidden = saveMaster.hidden = false;
     message("Master ready. Listen to the preview, then save the mastered mix to publish or export it.");
@@ -474,6 +524,42 @@
     message("Saving mastered mix…");
     await saveMix(masterBlob, true);
   }));
+  const resumeId = Number(document.getElementById('studio-render-job')?.textContent);
+  if (resumeId) {
+    const resume = document.createElement('button'); resume.type = 'button'; resume.textContent = 'Finish and save earlier render';
+    resume.addEventListener('click', () => task(async () => {
+      if (dirty || pendingTake) throw new Error('Keep your local work first. Reload the saved project before applying an earlier render.');
+      const result = await renderMix(false, resumeId); await saveMix(result.id); resume.remove();
+    })); status.after(resume);
+  }
+  if (history) {
+    const tools = document.createElement('div'); tools.className = 'studio-timeline-tools';
+    for (const action of ['undo', 'redo']) {
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = action === 'undo' ? 'Undo edit' : 'Redo edit';
+      button.className = 'studio-button studio-outline';
+      button.addEventListener('click', () => {
+        if (busy || session || preparing || recovering || recoveryWaiting) return;
+        clearTimeout(historyTimer); history.record(tracks);
+        const state = history[action](); if (!state) return;
+        pausePlayers(); restoringHistory = true;
+        try { for (const saved of state) { const track = tracks.find(t => t.id === saved.id); if (track) { Object.assign(track, saved); syncTrackInputs(track); } } changed(); }
+        finally { restoringHistory = false; }
+      }); tools.append(button);
+    }
+    historyControls = tools;
+  }
+  const removed = JSON.parse(document.getElementById('studio-removed-tracks')?.textContent || '[]');
+  if (removed.length) {
+    const panel = document.createElement('details'), title = document.createElement('summary'); title.textContent = 'Recently removed tracks · recover within 7 days'; panel.append(title);
+    for (const track of removed) {
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Restore ' + track.name;
+      button.addEventListener('click', () => task(async () => {
+        if (dirty || pendingTake) throw new Error('Save local work before restoring a removed track.');
+        const data = new FormData(); data.append('revision', baseRevision);
+        await post(`/studio/track/${track.id}/restore/`, data); location.reload();
+      })); panel.append(button);
+    } document.getElementById('studio-timeline')?.append(panel);
+  }
   root.querySelectorAll("[data-voice-part]").forEach(button => button.addEventListener("click", () => {
     if (session || preparing || busy) return;
     selectedVoicePart = button.dataset.voicePart;
@@ -534,13 +620,15 @@
     syncSolo();
   }
   if (typeof StudioTimeline !== "undefined" && document.getElementById("studio-timeline")) {
-    timeline = new StudioTimeline.Timeline({container: document.getElementById("studio-timeline"), category: root.dataset.category, tracks, load,
+    timeline = new StudioTimeline.Timeline({container: document.getElementById("studio-timeline"), category: root.dataset.category, tracks,
+      load: async track => { const response = await fetch(`/studio/track/${track.id}/peaks/`); if (!response.ok) throw new Error('Unable to load waveform. Refresh and sign in again.'); return response.json(); },
       onDelete: deleteTrack,
       onChange(track) { syncTrackInputs(track); changed(); },
       onSeek(value) { const input = document.getElementById("record-position"); input.value = value.toFixed(2); timeline.setPosition(value); transportTime(value); },
       locked: () => !!session || preparing || busy || recovering || recoveryWaiting,
       onError: error => message(error.message),
     });
+    if (historyControls) document.querySelector('#studio-timeline .studio-timeline-tools')?.prepend(historyControls);
     document.getElementById("record-position").addEventListener("input", event => { const value = Number(event.target.value) || 0; timeline.setPosition(value); transportTime(value); });
   }
   async function initializeRecovery() {

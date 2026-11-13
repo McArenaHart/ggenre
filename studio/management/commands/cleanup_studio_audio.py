@@ -36,15 +36,27 @@ class Command(BaseCommand):
             raise CommandError('Refusing cleanup outside the private audio directory.')
         fields = list(private_file_fields())
         now = timezone.now()
+        from studio.models import Track, Project, AudioJobInput
+        trash = Track.all_objects.filter(deleted_at__lt=now - timedelta(days=7))
+        trash_ids = set(trash.values_list('pk', flat=True))
+        if options['apply']:
+            for pk, project_id in trash.values_list('pk', 'project_id').iterator():
+                self.heartbeat()
+                with transaction.atomic():
+                    Project.objects.select_for_update().filter(pk=project_id).first()
+                    removed = Track.all_objects.select_for_update().filter(pk=pk, deleted_at__lt=now - timedelta(days=7)).first()
+                    if removed:
+                        removed.delete()
         jobs_expired = 0
+        expired_ids = set()
         retained_job_names = set()
 
         # Apply and worker completion also lock/claim these records. Never touch
         # queued or running jobs, and give recently completed results full grace.
-        for pk in AudioJob.objects.filter(status__in=['applied', 'failed', 'ready']).values_list('pk', flat=True).iterator():
+        for pk in AudioJob.objects.filter(status__in=['applied', 'failed', 'ready', 'cancelled']).exclude(track_id__in=trash_ids).values_list('pk', flat=True).iterator():
             self.heartbeat()
             with transaction.atomic():
-                job = AudioJob.objects.select_for_update().filter(pk=pk, status__in=['applied', 'failed', 'ready']).first()
+                job = AudioJob.objects.select_for_update().filter(pk=pk, status__in=['applied', 'failed', 'ready', 'cancelled']).first()
                 if not job:
                     continue
                 names = {str(value) for value in (job.source, job.result) if value}
@@ -60,6 +72,7 @@ class Command(BaseCommand):
                     retained_job_names.update(names)
                     continue
                 jobs_expired += 1
+                expired_ids.add(pk)
                 if options['apply']:
                     self.heartbeat()
                     job.source = job.result = ''
@@ -67,13 +80,16 @@ class Command(BaseCommand):
                         job.status = 'expired'
                         job.error = 'This temporary result expired. Process the original track again.'
                     job.save(update_fields=['source', 'result', 'status', 'error'])
+                    job.inputs.all().delete()
 
         references = referenced_names(fields)
         if not options['apply']:
             # Model the planned reference removal without modifying the database.
-            other_fields = [(model, field) for model, field in fields if model is not AudioJob]
+            other_fields = [(model, field) for model, field in fields if model not in (AudioJob, AudioJobInput, Track)]
             references = referenced_names(other_fields) | retained_job_names
-            for source, result in AudioJob.objects.exclude(status__in=['applied', 'failed', 'ready']).values_list('source', 'result').iterator():
+            references.update(Track.all_objects.exclude(pk__in=trash_ids).values_list('audio', flat=True))
+            references.update(AudioJobInput.objects.exclude(job_id__in=expired_ids).exclude(job__track_id__in=trash_ids).values_list('audio', flat=True))
+            for source, result in AudioJob.objects.exclude(track_id__in=trash_ids).exclude(status__in=['applied', 'failed', 'ready', 'cancelled']).values_list('source', 'result').iterator():
                 references.update(name for name in (source, result) if name)
         cutoff = time.time() - options['orphan_days'] * 86400
         count = total = errors = 0
@@ -96,6 +112,8 @@ class Command(BaseCommand):
                             continue
                         self.heartbeat()
                         path.unlink()
+                        from studio.models import StudioAsset
+                        StudioAsset.objects.filter(name=name).delete()
                     count += 1
                     total += stat.st_size
                 except OSError as exc:

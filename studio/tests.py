@@ -54,6 +54,8 @@ class StudioTests(TestCase):
 
     def test_first_two_exports_free_then_payment_approval(self):
         for _ in range(3):
+            self.project.mix = wav_upload()
+            self.project.save()
             self.assertEqual(self.client.post(self.url("export"), {"payment_reference": "receipt123"}).status_code, 302)
         exports = list(Export.objects.order_by("pk"))
         self.assertEqual([e.status for e in exports], ["free", "free", "pending"])
@@ -330,7 +332,7 @@ class StudioTests(TestCase):
         self.assertRedirects(response, self.url("editor", project.pk))
         track = project.tracks.get()
         self.assertEqual((track.kind, track.beat_bpm, project.tempo), ("beat", 240, 240))
-        self.assertNotEqual(track.audio.name, item.audio.name)
+        self.assertEqual(track.audio.name, item.audio.name)
         with track.audio.open("rb") as source:
             copied = source.read()
         with item.audio.open("rb") as source:
@@ -548,12 +550,16 @@ class StudioTests(TestCase):
         allowance.free_limit = 3
         allowance.save()
         for _ in range(4):
+            self.project.mix = wav_upload()
+            self.project.save()
             self.client.post(self.url("export"))
         self.assertEqual(Export.objects.filter(status="free").count(), 3)
         allowance.refresh_from_db()
         self.assertEqual(allowance.free_used, 3)
         allowance.free_used = 0
         allowance.save()
+        self.project.mix = wav_upload()
+        self.project.save()
         self.client.post(self.url("export"))
         self.assertEqual(Export.objects.filter(status="free").count(), 4)
 
@@ -590,6 +596,8 @@ class StudioTests(TestCase):
     def test_unlimited_exports_pause_usage_and_resume_existing_limit(self):
         allowance = ExportAllowance.objects.create(artist=self.artist, free_limit=2, free_used=2, unlimited_exports=True)
         for _ in range(4):
+            self.project.mix = wav_upload()
+            self.project.save()
             self.client.post(self.url("export"))
         self.assertEqual(Export.objects.filter(status="free").count(), 4)
         allowance.refresh_from_db()
@@ -598,6 +606,8 @@ class StudioTests(TestCase):
         self.assertContains(self.client.get(self.url("editor")), "No payment approval is needed")
         allowance.unlimited_exports = False
         allowance.save()
+        self.project.mix = wav_upload()
+        self.project.save()
         self.client.post(self.url("export"))
         self.assertEqual(Export.objects.filter(status="pending").count(), 1)
         response = self.client.get(self.url("download", Export.objects.filter(status="free").first().pk))

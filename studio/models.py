@@ -27,6 +27,11 @@ class Project(models.Model):
     def __str__(self):
         return self.title
 
+class ActiveTrackManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+
 class Track(models.Model):
     project = models.ForeignKey(Project, related_name="tracks", on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
@@ -39,6 +44,14 @@ class Track(models.Model):
     trim_start = models.FloatField(default=0)
     trim_end = models.FloatField(default=0)
     muted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    upload_key = models.CharField(max_length=64, null=True, blank=True)
+    objects = ActiveTrackManager()
+    all_objects = models.Manager()
+
+    class Meta:
+        base_manager_name = 'all_objects'
+        constraints = [models.UniqueConstraint(fields=['project', 'upload_key'], name='studio_upload_once')]
 
 class AudioJob(models.Model):
     track = models.ForeignKey(Track, on_delete=models.CASCADE, related_name="audio_jobs")
@@ -49,6 +62,14 @@ class AudioJob(models.Model):
     result = models.FileField(storage=private_storage, upload_to=audio_path, blank=True)
     error = models.CharField(max_length=240, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    lease_token = models.CharField(max_length=32, blank=True)
+    lease_until = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['status', 'id'], name='studio_job_queue_idx'), models.Index(fields=['status', 'lease_until'], name='studio_job_lease_idx')]
 
 
 class StudioMaintenance(models.Model):
@@ -58,6 +79,22 @@ class StudioMaintenance(models.Model):
     lease_token = models.CharField(max_length=32, blank=True)
     last_success_at = models.DateTimeField(null=True, blank=True)
     last_error = models.TextField(blank=True)
+
+
+class AudioJobInput(models.Model):
+    job = models.ForeignKey(AudioJob, on_delete=models.CASCADE, related_name='inputs')
+    audio = models.FileField(storage=private_storage, upload_to=audio_path)
+    settings = models.JSONField(default=dict)
+
+
+class StudioStorageAccount(models.Model):
+    artist = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+
+class StudioAsset(models.Model):
+    artist = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    name = models.CharField(max_length=255, unique=True)
+    size = models.PositiveBigIntegerField()
 
 
 class ExportAllowance(models.Model):

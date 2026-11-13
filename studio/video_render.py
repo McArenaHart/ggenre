@@ -14,7 +14,7 @@ def run_ffmpeg(arguments, timeout=120):
     try:
         import imageio_ffmpeg
         result = subprocess.run(
-            [imageio_ffmpeg.get_ffmpeg_exe(), "-nostdin", "-hide_banner", "-y", *arguments],
+            [imageio_ffmpeg.get_ffmpeg_exe(), "-nostdin", "-hide_banner", "-y", '-threads', '1', '-filter_threads', '1', *arguments],
             capture_output=True, timeout=timeout, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except (ImportError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:

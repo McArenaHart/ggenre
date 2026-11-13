@@ -92,7 +92,7 @@
         const cancel = () => { Object.assign(track, original); this.render(); this.onChange(track); finish(); };
         clip.addEventListener("pointermove", move); clip.addEventListener("pointerup", finish); clip.addEventListener("pointercancel", cancel);
       });
-      try { state.buffer = await this.load(track); state.peaks = peaks(state.buffer); state.peakScale = Math.max(.001, ...state.peaks); this.render(); }
+      try { state.buffer = await this.load(track); state.peaks = state.buffer.peaks || peaks(state.buffer); state.peakScale = Math.max(.001, ...state.peaks); this.render(); }
       catch (error) { title.textContent = track.name + " — waveform unavailable"; this.onError(error); }
     }
     setPosition(value) { this.position = value; this.playhead = value; this.render(); }

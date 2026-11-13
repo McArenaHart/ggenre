@@ -17,5 +17,5 @@
 <p id="extract-status" role="status" aria-live="polite">Original ready to listen. Load the waveform to start editing.</p>
 {% csrf_token %}{{ config|json_script:'extract-config' }}
 </main></div>
-<script src="{% static 'js/studio-extract-arrange.js' %}?v=1" defer></script>
+<script src="{% static 'js/studio-extract-arrange.js' %}?v=2" defer></script>
 {% endblock %}

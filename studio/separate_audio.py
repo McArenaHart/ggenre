@@ -13,6 +13,25 @@ from demucs.pretrained import get_model
 from .separation_options import extraction_options
 
 
+def peak_memory_mib():
+    if sys.platform.startswith('linux'):
+        import resource
+        return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)
+    if os.name == 'nt':
+        import ctypes
+        from ctypes import wintypes
+        class Counters(ctypes.Structure):
+            _fields_ = [('cb', wintypes.DWORD), ('PageFaultCount', wintypes.DWORD)] + [(name, ctypes.c_size_t) for name in ('PeakWorkingSetSize', 'WorkingSetSize', 'QuotaPeakPagedPoolUsage', 'QuotaPagedPoolUsage', 'QuotaPeakNonPagedPoolUsage', 'QuotaNonPagedPoolUsage', 'PagefileUsage', 'PeakPagefileUsage')]
+        kernel, psapi = ctypes.WinDLL('kernel32'), ctypes.WinDLL('psapi')
+        kernel.GetCurrentProcess.restype = wintypes.HANDLE
+        psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+        counters = Counters()
+        counters.cb = ctypes.sizeof(counters)
+        if psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+            return round(counters.PeakWorkingSetSize / 1024 / 1024, 1)
+    return None
+
+
 def blend_overlap(current, previous):
     """Crossfade adjacent processing windows without changing their length."""
     if previous is not None:
@@ -24,7 +43,7 @@ def blend_overlap(current, previous):
 
 def stream_backing(source, output, model, options):
     rate = model.samplerate
-    hop, fade = rate * 30, rate
+    hop, fade = rate * options.get('window_seconds', 6), rate
     with wave.open(str(source), 'rb') as audio:
         channels, frames = audio.getnchannels(), audio.getnframes()
         if audio.getframerate() != rate or not frames:
@@ -74,8 +93,11 @@ def separate(source, output):
     # Demucs' official registered checkpoint contains its model class. No user
     # checkpoint path or URL is accepted by this runner.
     os.environ['TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD'] = '1'
+    if os.getenv('STUDIO_MODEL_ROOT'):
+        os.environ['TORCH_HOME'] = str(Path(os.environ['STUDIO_MODEL_ROOT']).expanduser().resolve())
     options = extraction_options(torch.cuda.is_available())
     torch.set_num_threads(options['threads'])
+    torch.set_num_interop_threads(1)
     model = get_model('htdemucs').to(options['device']).eval()
     if options['segment'] is not None:
         # HTDemucs otherwise pads every short window to its training length.
@@ -91,11 +113,7 @@ def separate(source, output):
             run_ffmpeg(['-i', str(source), '-ar', str(model.samplerate), '-ac', '2', '-c:a', 'pcm_s16le', str(normalized)])
             source = str(normalized)
         seconds = stream_backing(source, output, model, options)
-    peak_memory = None
-    if sys.platform.startswith('linux'):
-        import resource
-        peak_memory = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)
-    print(json.dumps({'engine': 'htdemucs', **options, 'audio_seconds': round(seconds, 2), 'elapsed_seconds': round(time.perf_counter() - started, 2), 'peak_memory_mib': peak_memory}), flush=True)
+    print(json.dumps({'engine': 'htdemucs', **options, 'audio_seconds': round(seconds, 2), 'elapsed_seconds': round(time.perf_counter() - started, 2), 'peak_memory_mib': peak_memory_mib()}), flush=True)
 
 
 if __name__ == '__main__':

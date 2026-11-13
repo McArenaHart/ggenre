@@ -131,7 +131,7 @@ class AudioProcessingTests(TestCase):
         self.assertEqual(response.status_code, 302)
         copied = Track.objects.exclude(pk=self.track.pk).get()
         self.assertEqual(copied.kind, 'backing')
-        self.assertNotEqual(copied.audio.name, item.audio.name)
+        self.assertEqual(copied.audio.name, item.audio.name)
 
     def test_tuning_targets_requested_scale(self):
         self.assertEqual(options_for('tune', {'key': '2', 'scale': 'minor'})['key'], 2)

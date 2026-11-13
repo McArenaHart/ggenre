@@ -36,9 +36,10 @@ test('processing previews a copy, blocks unsaved edits and sends revision on app
   await h.timers.pop()();
   const player = h.elements.find(e => e.tag === 'audio');
   assert.equal(player.src, '/private-result/'); assert.equal(player.hidden, false);
-  h.dirty(true); buttons[1].events.click();
+  const apply = h.elements.find(e => e.textContent === 'Use processed track');
+  h.dirty(true); apply.events.click();
   await assert.rejects(h.tasks.pop(), /Save your mix/);
-  h.dirty(false); buttons[1].events.click(); await h.tasks.pop();
+  h.dirty(false); apply.events.click(); await h.tasks.pop();
   assert.equal(h.requests[1].data.get('revision'), 'revision');
   assert.equal(h.scope.reloads, 1);
 });

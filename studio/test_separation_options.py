@@ -31,6 +31,8 @@ class SeparationOptionsTests(SimpleTestCase):
     def test_cpu_defaults_to_low_memory_profile(self):
         self.assertEqual(extraction_options(False)['profile'], 'fast')
         self.assertEqual(extraction_options(False)['segment'], 2)
+        self.assertEqual(extraction_options(False)['threads'], 1)
+        self.assertEqual(extraction_options(False)['window_seconds'], 6)
         self.assertEqual(extraction_options(True)['profile'], 'balanced')
 
     def test_invalid_settings_are_rejected(self):

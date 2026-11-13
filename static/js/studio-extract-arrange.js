@@ -24,6 +24,11 @@
   const status = get('extract-status'), original = get('extract-original'), preview = get('extract-preview-player');
   const rows = [], sourceUrl = root.dataset.source;
   let buffer, peaks, url, busy = false, dirty = false;
+  const draftKey = 'ggenre-extract-draft:' + sourceUrl;
+  const saveDraft = () => {
+    try { localStorage.setItem(draftKey, JSON.stringify({base: root.dataset.revision, state, title: get('extract-title').value})); }
+    catch (_) { status.textContent = 'Local recovery is unavailable. Keep this tab open until you save.'; }
+  };
   const pause = () => { original.pause(); preview.pause(); };
   original.addEventListener('play', () => preview.pause());
   preview.addEventListener('play', () => original.pause());
@@ -43,6 +48,7 @@
     if (url) { URL.revokeObjectURL(url); url = null; preview.removeAttribute('src'); }
     status.textContent = 'Edits ready. Preview the joins, then save your joined instrumental.';
     rows.forEach(draw); update();
+    saveDraft();
   }
   function draw(row) {
     const canvas = row.canvas, ctx = canvas.getContext('2d'), part = state.sections[row.index];
@@ -142,9 +148,25 @@
     const response = await fetch(root.dataset.save, {method: 'POST', headers: {'X-CSRFToken': root.querySelector('[name=csrfmiddlewaretoken]').value}, body: data});
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Could not save this arrangement.');
-    dirty = false; location.href = result.url;
+    dirty = false; try { localStorage.removeItem(draftKey); } catch (_) {} location.href = result.url;
   }));
   window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
   window.addEventListener('pagehide', () => { if (url) URL.revokeObjectURL(url); });
+  try {
+    const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
+    if (draft && draft.base === root.dataset.revision && Array.isArray(draft.state?.sections) && draft.state.sections.length === 3) {
+      const panel = document.createElement('div'), label = document.createElement('p');
+      label.textContent = 'Unsaved section edits are available on this browser.'; panel.append(label);
+      for (const restore of [true, false]) {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'studio-button studio-outline';
+        button.textContent = restore ? 'Restore section edits' : 'Discard local copy';
+        button.addEventListener('click', () => {
+          if (restore) { Object.assign(state, draft.state); get('extract-title').value = draft.title; get('extract-fade').value = String(state.crossfade_ms); changed(); }
+          else localStorage.removeItem(draftKey);
+          panel.remove();
+        }); panel.append(button);
+      } status.before(panel);
+    }
+  } catch (_) {}
   update();
 })(typeof window === 'undefined' ? globalThis : window);

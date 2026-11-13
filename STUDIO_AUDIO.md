@@ -2,9 +2,9 @@
 
 Import a local file in the recording inspector. Select **Solo vocal** for isolated voices or **Instrumental / complete song** for backing. Acapella remains vocal-only. Imports use the timeline cursor and retain the filename. The browser uploads the original compressed file once, without decoding it or expanding it into WAV. The server converts compressed imports to private 44.1 kHz PCM WAV before taking a project database lock; existing valid PCM recordings bypass conversion. Protected, malformed, oversized and over-six-minute inputs are rejected. Original external files on the artist's device are never modified.
 
-A three-minute 44.1 kHz stereo 16-bit WAV is about 31.8 MB, regardless of whether its original MP3 was 2 MB or 7 MB. Sending the original file avoids that upload expansion and avoids the old conversion-download-reupload fallback. Editable audio is still stored as PCM, and the editor downloads it for waveform editing. WAV validation reads bounded blocks instead of duplicating the entire audio in memory. Slow uploads remain locked until the server answers, so a late successful response finishes the import instead of being discarded after two minutes.
+A three-minute 44.1 kHz stereo 16-bit WAV is about 31.8 MB, regardless of whether its original MP3 was 2 MB or 7 MB. Sending the original file avoids that upload expansion and avoids the old conversion-download-reupload fallback. Editable audio is still stored as PCM, while the editor loads small waveform envelopes for timeline display; full audio is fetched when needed for listening or recording. WAV validation reads bounded blocks instead of duplicating the entire audio in memory. Slow uploads remain locked until the server answers, so a late successful response finishes the import instead of being discarded after two minutes.
 
-Deploy the updated backend and static JavaScript together, run `python manage.py collectstatic --noinput`, and restart the web workers. No database migration is required for this import change. The server needs the existing `imageio-ffmpeg` dependency. A browser still using the older JavaScript will continue sending WAV until its assets refresh.
+Deploy the updated backend and static JavaScript together, run `python manage.py collectstatic --noinput`, and restart the web workers. Apply the current Studio migrations, including upload request keys, audio leases and storage accounting. The server needs the existing `imageio-ffmpeg` dependency. A browser still using the older JavaScript will continue sending WAV until its assets refresh.
 
 Open **Audio tools** on a track. Reduce steady hiss, low rumble and optional 50/60 Hz electrical hum; start gently. This cannot reliably erase overlapping speech, loud transients, reverb or distortion. Choose the rumble cutoff carefully for bass voices.
 
@@ -14,7 +14,7 @@ Instrumental extraction is available in Gospel and Secular sessions. It separate
 
 ### Extraction on a small CPU Droplet
 
-Extraction analyzes decoded audio samples, so a small MP3 does not imply a small processing job. CPU deployments default to a fast profile: two-second model windows, 10% overlap and no random-shift augmentation. The engine processes long songs in bounded 30-second windows with one-second crossfades and spools the combined backing to temporary disk. It no longer retains all four stems of an entire song in RAM. Default CPU threads are capped at four and follow the detected CPU count below that cap. Repeated requests for an already queued/running extraction return that job instead of adding duplicate work.
+Extraction analyzes decoded audio samples, so a small MP3 does not imply a small processing job. CPU deployments default to a fast profile: two-second model windows, 10% overlap and no random-shift augmentation. The engine processes long songs in bounded six-second windows in fast mode (30 seconds in balanced mode), with one-second crossfades and spools the combined backing to temporary disk. It no longer retains all four stems of an entire song in RAM. Default CPU threads are capped at four and follow the detected CPU count below that cap. Repeated requests for an already queued/running extraction return that job instead of adding duplicate work.
 
 For the current single-vCPU Droplet, use these optional `.env` settings and restart the existing audio worker:
 
@@ -26,7 +26,7 @@ STUDIO_EXTRACTION_THREADS=1
 
 Fast mode trades analysis context and overlap for reduced CPU/RAM requirements; listen for separation artifacts before relying on it for finished music. `STUDIO_EXTRACTION_PROFILE=balanced` keeps the former per-model analysis context, 25% overlap and one random shift, with the streaming memory bound still applied. A 1 GB machine can still be constrained by the model plus web/database processes. Do not add more workers to speed up a single CPU; that can increase contention and memory pressure.
 
-`STUDIO_EXTRACTION_DEVICE=auto` (the default) uses CUDA when available and CPU otherwise. GPU hosts require a CUDA-enabled PyTorch installation. No paid resources or external audio transfer are configured by this change. The worker logs engine/device/profile/thread count, audio duration, engine runtime, total subprocess runtime and Linux process peak memory. Use these measurements on real songs to assess the Droplet; local short-clip timings do not predict full-song latency or quality. The existing 30-minute job timeout still applies.
+`STUDIO_EXTRACTION_DEVICE=auto` (the default) uses CUDA when available and CPU otherwise. GPU hosts require a CUDA-enabled PyTorch installation. No paid resources or external audio transfer are configured by this change. The worker logs engine/device/profile/thread count, audio duration, engine runtime, total subprocess runtime and Linux/Windows process peak memory. Use these measurements on real songs to assess the Droplet; local short-clip timings do not predict full-song latency or quality. The existing 30-minute job timeout still applies.
 
 Preview with the result player and compare with the original track player. Save existing edits and keep/discard pending takes before applying. Applying adds a separate track with matching timeline/trim/gain and mutes the source, so Save mix, publishing and exports use the processed audio. Unmute the source and mute/remove the processed track to undo. Save mix again after applying. Processing does not publish or consume export allowances.
 
@@ -122,3 +122,8 @@ This downloads the registered official model if needed, verifies its SHA-256 pre
 New tests cover import conversion, malformed input, permission isolation, job limits, option validation, real FFmpeg denoising, original preservation, revision conflicts, reuse of extracted library recordings, and real PyWORLD pitch correction when installed. Run the extraction setup check in each deployment environment. Synthetic fixtures cannot establish separation quality; music listening checks and browser/device visual acceptance remain necessary.
 
 Engine references: [Demucs](https://github.com/facebookresearch/demucs), [PyWORLD](https://github.com/JeremyCCHsu/Python-Wrapper-for-World-Vocoder), [FFmpeg audio filters](https://ffmpeg.org/ffmpeg-filters.html).
+
+
+## Resource and portability release
+
+See [STUDIO_PORTABILITY.md](STUDIO_PORTABILITY.md) for configurable paths, split web/worker deployments, automatic interrupted-job recovery, cancellation, account storage caps, low-disk admission, seven-day track recovery and the optional CPU container. Save Mix and Auto Master now queue server rendering without uploading a client-rendered WAV. Repeated unchanged mix export requests reuse their existing entitlement. Reusing an instrumental pins its immutable audio file instead of duplicating the WAV.

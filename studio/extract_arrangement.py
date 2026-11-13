@@ -96,7 +96,8 @@ def editor(request, item_pk=None, job_pk=None):
 @artist_only
 def source_audio(request, item_pk):
     owner, source = source_for(request, item_pk=item_pk)
-    return FileResponse(source.open('rb'), content_type='audio/wav')
+    from .audio_delivery import deliver
+    return deliver(source, request)
 
 
 @artist_only

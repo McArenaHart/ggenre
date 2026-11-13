@@ -1,0 +1,18 @@
+FROM python:3.11-slim AS web
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . /app/
+RUN useradd --create-home studio && mkdir -p /data/audio /data/models /data/tmp && chown -R studio:studio /data
+ENV STUDIO_STORAGE_ROOT=/data/audio STUDIO_MODEL_ROOT=/data/models TMPDIR=/data/tmp
+USER studio
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "ggenre.asgi:application"]
+
+FROM web AS worker
+USER root
+COPY requirements-audio.txt /app/
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential libgomp1 && pip install --no-cache-dir torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu && pip install --no-cache-dir -r requirements-audio.txt && apt-get purge -y build-essential && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+USER studio
+ENV STUDIO_EXTRACTION_DEVICE=cpu STUDIO_EXTRACTION_PROFILE=fast STUDIO_EXTRACTION_THREADS=1 STUDIO_EXTRACTION_WINDOW_SECONDS=6 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+CMD ["python", "-u", "manage.py", "process_studio_audio"]

@@ -1,0 +1,29 @@
+# Optional portable CPU worker for an existing production database/web app.
+# Set STUDIO_HOST_AUDIO to the existing private storage folder; do not start
+# against an empty volume if your database already contains saved audio.
+services:
+  studio-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.studio
+      target: worker
+    env_file: .env
+    environment:
+      STUDIO_STORAGE_ROOT: /data/audio
+      STUDIO_MODEL_ROOT: /data/models
+      TMPDIR: /data/tmp
+      STUDIO_EXTRACTION_DEVICE: cpu
+      STUDIO_EXTRACTION_PROFILE: ${STUDIO_EXTRACTION_PROFILE:-fast}
+      STUDIO_EXTRACTION_THREADS: ${STUDIO_EXTRACTION_THREADS:-1}
+      STUDIO_EXTRACTION_WINDOW_SECONDS: ${STUDIO_EXTRACTION_WINDOW_SECONDS:-6}
+    volumes:
+      - ${STUDIO_HOST_AUDIO:?Set STUDIO_HOST_AUDIO to the existing absolute private audio directory}:/data/audio
+      - studio-models:/data/models
+      - studio-temp:/data/tmp
+    cpus: ${STUDIO_WORKER_CPUS:-1.0}
+    pids_limit: 128
+    restart: unless-stopped
+    stop_grace_period: 30s
+volumes:
+  studio-models:
+  studio-temp:

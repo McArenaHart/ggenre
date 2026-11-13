@@ -6,12 +6,15 @@ const helpers = require("../static/js/studio-audio.js");
 
 function harness(options = {}) {
   const elements = [], byId = {}, windowEvents = {}, posted = [];
+  const stored = new Map();
   class Element {
     constructor(tag = "div", id = "") { this.tagName = tag.toUpperCase(); this.id = id; this.dataset = {}; this.classList = {toggle(){}}; this.events = {}; this.children = []; this.disabled = false; this.hidden = false; this.value = ""; this.textContent = ""; this.controls = true; this.paused = true; this.currentTime = 0; elements.push(this); if (id) byId[id] = this; }
     set src(value) { this.source = value; this.currentTime = 0; }
     get src() { return this.source; }
     setAttribute(name, value) { this[name] = value; }
     append(...children) { this.children.push(...children); }
+    after() {}
+    remove() {}
     addEventListener(name, handler) { this.events[name] = handler; }
     async trigger(name = "click") { if (name === "click" && this.disabled) return; return this.events[name]?.({target: this, preventDefault: () => { this.prevented = true; }}); }
     matches(selector) { return selector === "audio" && this.tagName === "AUDIO"; }
@@ -56,6 +59,28 @@ function harness(options = {}) {
     OfflineAudioContext: class {async decodeAudioData() { decodeCalls++; if (options.decodeHangOnce && decodeCalls === 1) return new Promise(() => {}); if (decodeCalls <= (options.decodeRejects || 0)) throw new Error("Unsupported browser codec"); return buffer(); } createBufferSource() { return {connect(node) { return node; }, start() {}}; } createGain() { return {gain: {value: 1}, connect() {}}; } async startRendering() { return buffer(2); }},
     location: {reload() { reloads++; }}, URL: {createObjectURL: () => "blob:test", revokeObjectURL() {}}, Blob, FormData, Float32Array, DataView, ArrayBuffer, Number, Math, JSON, confirm: () => true,
     fetch: async (url, request) => { if (!request) return {ok: true, arrayBuffer: async () => new ArrayBuffer(44)}; posted.push({url, body: request.body}); if (url === "/studio/project/7/master/") return {ok: true, headers: {get: () => "audio/wav"}, blob: async () => new Blob(["mastered"], {type: "audio/wav"})}; if (url === "/studio/audio/convert/") return {ok: !options.convertFail, blob: async () => new Blob(["converted"]), json: async () => ({error: "Audio conversion failed"})}; if (options.trackResponse && url === "/studio/project/7/track/") return options.trackResponse; return {ok: !failUpload, json: async () => failUpload ? {error: "Upload failed; retry"} : {ok: true}}; }};
+  sandbox.crypto = require('node:crypto').webcrypto;
+  sandbox.sessionStorage = {getItem: key => stored.get(key) || null, setItem: (key, value) => stored.set(key, value), removeItem: key => stored.delete(key)};
+  const defaultFetch = sandbox.fetch;
+  sandbox.fetch = async (url, request) => {
+    if (url === '/studio/project/7/render/') { posted.push({url, body: request.body}); return {ok: true, json: async () => ({id: 42, status: 'queued'})}; }
+    if (url === '/studio/audio-jobs/42/' && !request?.method) return {ok: true, json: async () => ({status: 'ready', url: '/studio/audio-jobs/42/audio/'})};
+    return defaultFetch(url, request);
+  };
+  sandbox.XMLHttpRequest = class {
+    constructor() { this.events = {}; this.upload = {events: {}, addEventListener(name, fn) { this.events[name] = fn; }}; }
+    open(method, url) { this.url = url; }
+    setRequestHeader() {}
+    addEventListener(name, fn) { this.events[name] = fn; }
+    send(body) {
+      this.upload.events.progress?.({lengthComputable: true, loaded: 1, total: 1});
+      this.upload.events.load?.();
+      sandbox.fetch(this.url, {method: 'POST', body}).then(async response => {
+        this.status = response.ok ? 200 : 400;
+        this.responseText = JSON.stringify(await response.json()); this.events.load?.();
+      }).catch(() => this.events.error?.());
+    }
+  };
   if (options.recovery) sandbox.StudioDrafts = class {
     async read() { return options.snapshot; }
     async write(value) { if (options.failRecovery) throw new Error("Quota exceeded"); drafts.push(structuredClone(value)); }
@@ -66,6 +91,7 @@ function harness(options = {}) {
 }
 test("import preserves filename, selected vocal kind, timeline position and existing edits", async () => {
   const h = harness({importKind: "vocal"});
+  assert.ok(h.elements.filter(e => e.tagName === 'AUDIO' && !e.id).every(e => e.preload === 'none'));
   const original = Object.assign(new Blob(["compressed audio"], {type: "audio/mpeg"}), {name: "My harmony.mp3"});
   h.byId.import.files = [original];
   await h.byId.import.trigger("change");
@@ -94,6 +120,17 @@ test("imports avoid a stalled browser decoder and send the original file once", 
   assert.equal(h.reloads(),1);
   assert.equal(h.byId.preview.disabled,false);
   assert.equal(h.byId.import.disabled,false);
+});
+
+test('reselecting an uncertain import reuses its request key until confirmed', async () => {
+  const h = harness();
+  const file = () => Object.assign(new Blob(['same-audio']), {name: 'same.mp3', lastModified: 123});
+  h.fail(); h.byId.import.files = [file()]; await h.byId.import.trigger('change');
+  const key = h.posted[0].body.get('upload_key');
+  h.succeed(); h.byId.import.files = [file()]; await h.byId.import.trigger('change');
+  assert.equal(h.posted[1].body.get('upload_key'), key);
+  h.byId.import.files = [file()]; await h.byId.import.trigger('change');
+  assert.notEqual(h.posted[2].body.get('upload_key'), key);
 });
 
 test("browser codec support does not cause a conversion download and second upload", async () => {
@@ -338,14 +375,16 @@ test("Acapella retains vocal-only capture even with keyboard source selected",as
  const h=harness({category:"acapella",inputMode:"keyboard"});await h.byId.record.trigger();assert.equal(h.constraints().audio.channelCount,1);await h.byId.stop.trigger();await h.byId["keep-take"].trigger();assert.equal(h.posted[0].body.get("kind"),"vocal");
 });
 
-test("Auto Master previews the mix and saves the mastered WAV only on request", async () => {
+test("Auto Master queues server rendering and applies the snapshot without uploading a WAV", async () => {
   const h = harness();
   await h.byId["auto-master"].trigger();
   assert.equal(h.posted.length, 1);
-  assert.equal(h.posted[0].url, "/studio/project/7/master/");
+  assert.equal(h.posted[0].url, "/studio/project/7/render/");
+  assert.equal(h.posted[0].body.get('master'), 'yes');
+  assert.equal(h.posted[0].body.get('audio'), null);
   assert.equal(h.byId["master-preview"].hidden, false);
   await h.byId["save-master"].trigger();
-  assert.equal(h.posted[1].url, "/studio/project/7/save/");
-  assert.equal(await h.posted[1].body.get("audio").text(), "mastered");
+  assert.equal(h.posted[1].url, "/studio/audio-jobs/42/apply/");
+  assert.equal(h.posted[1].body.get('audio'), null);
   assert.equal(h.posted[1].body.get("revision"), "rev1");
 });

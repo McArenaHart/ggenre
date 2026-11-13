@@ -1,0 +1,18 @@
+{% extends 'studio/base.html' %}
+{% block title %}Studio health · GGenre{% endblock %}
+{% block content %}
+<main class="studio-home"><h1>Studio health</h1>
+<p>{% if worker_online %}Audio worker is responding.{% else %}Audio worker needs attention. Processing and automatic cleanup may be unavailable.{% endif %}</p>
+<table><tbody>
+<tr><th scope="row">Last worker response</th><td>{{ worker_seen_seconds_ago|default_if_none:'Never' }}{% if worker_seen_seconds_ago != None %} seconds ago{% endif %}</td></tr>
+<tr><th scope="row">Waiting tasks</th><td>{{ queued }}</td></tr>
+<tr><th scope="row">Longest queue wait</th><td>{{ oldest_queue_seconds }} seconds</td></tr>
+<tr><th scope="row">Processing now</th><td>{{ running }}</td></tr>
+<tr><th scope="row">Interrupted tasks awaiting recovery</th><td>{{ stale }}</td></tr>
+<tr><th scope="row">Available storage</th><td>{{ disk_free_mib }} MiB</td></tr>
+<tr><th scope="row">Most recent processing time</th><td>{{ last_processing_seconds|default_if_none:'Not recorded' }} seconds</td></tr>
+<tr><th scope="row">Last successful cleanup</th><td>{{ cleanup_last_success|default:'Not recorded' }}</td></tr>
+</tbody></table>
+{% if cleanup_error %}<p>Cleanup needs attention: {{ cleanup_error }}</p>{% endif %}
+<p>Reload to refresh. Saved audio remains private.</p></main>
+{% endblock %}

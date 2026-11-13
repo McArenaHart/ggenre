@@ -13,10 +13,13 @@ def extraction_options(cuda_available):
     profile = os.getenv('STUDIO_EXTRACTION_PROFILE', 'fast' if device == 'cpu' else 'balanced').strip().lower()
     if profile not in ('balanced', 'fast'):
         raise ValueError('STUDIO_EXTRACTION_PROFILE must be balanced or fast.')
-    threads = int(os.getenv('STUDIO_EXTRACTION_THREADS', str(min(4, os.cpu_count() or 1))))
+    threads = int(os.getenv('STUDIO_EXTRACTION_THREADS', '1'))
     if not 1 <= threads <= 32:
         raise ValueError('STUDIO_EXTRACTION_THREADS must be between 1 and 32.')
-    return {'device': device, 'profile': profile, 'threads': threads,
+    window = int(os.getenv('STUDIO_EXTRACTION_WINDOW_SECONDS', '6' if profile == 'fast' else '30'))
+    if not 2 <= window <= 30:
+        raise ValueError('STUDIO_EXTRACTION_WINDOW_SECONDS must be between 2 and 30.')
+    return {'device': device, 'profile': profile, 'threads': threads, 'window_seconds': window,
             'shifts': 0 if profile == 'fast' else 1,
             'overlap': .1 if profile == 'fast' else .25,
             'segment': 2.0 if profile == 'fast' else None}

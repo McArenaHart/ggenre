@@ -58,13 +58,12 @@ noise reduction jobs. Both processes need the audio dependencies installed.
 
 The same continuous worker also schedules private-audio cleanup automatically,
 due daily at 01:00 UTC (03:00 Africa/Harare), between audio jobs. Apply Studio
-migration 0008 and restart this worker when deploying. No extra cleanup timer
+migrations through 0015 and restart this worker when deploying. No extra cleanup timer
 or cron job is needed. Disable the old `ggenre-audio-cleanup.timer` if previously
 installed. The app persists the schedule, renews a database lease to prevent
 duplicate runs, catches up after restarts, and logs/retries cleanup failures.
 
-If the worker was interrupted during processing, stop all audio workers before
-running the recovery command, then resume the supervised service.
+Interrupted tasks recover automatically after their worker lease expires, with bounded attempts. The following manual override is only for an administrator who has stopped all audio workers first; resume the supervised service afterward.
 
 ```bash
 python manage.py process_studio_audio --retry-interrupted --once
@@ -115,3 +114,6 @@ location / {
 - User registration is now password-based only; OTP verification/resend routes redirect to login with an informational message.
 - No email delivery is required for account activation.
 - Keep auth throttling enabled via `AUTH_THROTTLE_WINDOW_SECONDS`, `AUTH_REGISTER_MAX_ATTEMPTS`, and `AUTH_LOGIN_MAX_ATTEMPTS`.
+
+
+See STUDIO_PORTABILITY.md before moving private storage or using the optional container worker. The web and worker must share the database and immutable audio files. Validate the configured account quota and disk reserve before rollout.

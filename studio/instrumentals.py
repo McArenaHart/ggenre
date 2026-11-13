@@ -32,19 +32,14 @@ def library(request):
 @artist_only
 @require_POST
 def request_download(request, pk):
-    from django.db.models import F
+    from .exports import request_export
     with transaction.atomic():
         item = get_object_or_404(Instrumental.objects.select_for_update(), pk=pk, artist=request.user)
         if not item.audio:
             messages.error(request, 'Save this instrumental before downloading it.')
             return redirect('studio:instrumentals')
         # Re-downloading the same saved version must not spend another trial.
-        export = Export.objects.filter(instrumental=item, audio=item.audio.name, status__in=['free', 'approved', 'pending']).order_by('-created_at', '-pk').first()
-        if not export:
-            allowance, _ = ExportAllowance.objects.get_or_create(artist=request.user)
-            allowance = ExportAllowance.objects.select_for_update().get(pk=allowance.pk)
-            free = allowance.unlimited_exports or ExportAllowance.objects.filter(pk=allowance.pk, free_used__lt=F('free_limit')).update(free_used=F('free_used') + 1)
-            export = Export.objects.create(instrumental=item, audio=item.audio.name, status='free' if free else 'pending', payment_reference=request.POST.get('payment_reference', '')[:160])
+        export, _ = request_export(request.user, item, request.POST.get('payment_reference', ''))
         if export.status in ('free', 'approved'):
             messages.success(request, 'Your instrumental download is ready. Re-downloading this saved version does not use another trial.')
             from django.urls import reverse
@@ -100,7 +95,8 @@ def save(request, pk=None):
 @artist_only
 def audio(request, pk):
     item = get_object_or_404(Instrumental, pk=pk, artist=request.user)
-    return FileResponse(item.audio.open("rb"), content_type="audio/wav")
+    from .audio_delivery import deliver
+    return deliver(item.audio, request)
 
 
 @artist_only
@@ -123,9 +119,9 @@ def use(request, pk):
                 return redirect("studio:instrumentals")
         else:
             project = Project.objects.create(artist=request.user, title=item.title[:160], category=item.category, tempo=item.config["bpm"])
-        with item.audio.open("rb") as source:
-            snapshot = ContentFile(source.read(), name="backing.wav")
-        Track.objects.create(project=project, name=item.title[:100], kind="backing" if item.config.get("imported") else "beat", audio=snapshot, beat_preset=item.config.get("preset", ""), beat_bpm=None if item.config.get("imported") else item.config["bpm"])
+        # Saved audio names are immutable. Pin the version without reading or
+        # duplicating its WAV; subsequent library edits write a different name.
+        Track.objects.create(project=project, name=item.title[:100], kind="backing" if item.config.get("imported") else "beat", audio=item.audio.name, beat_preset=item.config.get("preset", ""), beat_bpm=None if item.config.get("imported") else item.config["bpm"])
         project.tempo = item.config["bpm"]
         project.mix = ""
         project.save()
