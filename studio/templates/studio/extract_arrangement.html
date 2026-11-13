@@ -8,12 +8,12 @@
 <p>Choose a range for each part. Drag the handles on its waveform, or enter exact times. The parts play in order with no inserted silence. Short crossfades smooth the joins; choose cuts on matching beats for a natural rhythm.</p>
 <p>Your original extract stays available. These starting ranges divide it into thirds; choose the musical sections yourself.</p>
 <button type="button" id="extract-load" class="studio-button studio-outline">Load waveform &amp; editing controls</button>
-<audio id="extract-original" controls preload="none" src="{{ source_url }}" aria-label="Original extracted instrumental"></audio>
+<audio id="extract-original" controls controlsList="nodownload" preload="none" src="{{ source_url }}" aria-label="Original extracted instrumental"></audio>
 <div id="extract-sections" class="extract-sections" aria-label="Intro, middle and outro"></div>
 <label for="extract-fade">Join crossfade <select id="extract-fade"><option value="0">None · direct join</option><option value="20">20 ms · remove clicks</option><option value="100">100 ms · gentle blend</option><option value="250">250 ms · longer blend</option><option value="500">500 ms · longest blend</option></select></label>
 <p id="extract-duration">Load the waveform to edit your three parts.</p>
 <div class="extract-actions"><button type="button" id="extract-preview" class="studio-button studio-outline" disabled>Preview all three joined</button><button type="button" id="extract-save" class="studio-button studio-primary" disabled>Save joined instrumental</button>{% if item_id %}<form method="post" action="{% url 'studio:instrumental_use' item_id %}">{% csrf_token %}<button id="extract-use" class="studio-button studio-outline">Use saved instrumental in Studio</button></form>{% endif %}</div>
-<audio id="extract-preview-player" controls hidden aria-label="Joined instrumental preview"></audio>
+<audio id="extract-preview-player" controls controlsList="nodownload" hidden aria-label="Joined instrumental preview"></audio>
 <p id="extract-status" role="status" aria-live="polite">Original ready to listen. Load the waveform to start editing.</p>
 {% csrf_token %}{{ config|json_script:'extract-config' }}
 </main></div>

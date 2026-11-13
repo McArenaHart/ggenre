@@ -40,7 +40,7 @@ window.StudioProcessing = {
     progress.hidden = true;
     progress.style.width = "100%";
     progress.setAttribute("aria-label", "Instrumental extraction progress");
-    const preview = document.createElement("audio"); preview.controls = true; preview.hidden = true;
+    const preview = document.createElement("audio"); preview.controls = true; preview.controlsList = 'nodownload'; preview.hidden = true;
     preview.addEventListener("play", () => card.querySelectorAll("audio").forEach(p => { if (p !== preview) p.pause(); }));
     const apply = document.createElement("button"); apply.type = "button"; apply.textContent = "Use processed track"; apply.hidden = true;
     const library = document.createElement("button"); library.type = "button"; library.textContent = "Save to instrumental library"; library.hidden = true;
@@ -101,7 +101,8 @@ window.StudioProcessing = {
     for (const button of [apply, library]) button.addEventListener("click", () => runTask(async () => {
       if (!api.canApply()) throw new Error("Save your mix and keep or discard the pending take before applying audio processing.");
       const data = new FormData(); data.append("revision", api.revision()); data.append("library", button === library ? "yes" : "no");
-      await api.post(`/studio/audio-jobs/${jobId}/apply/`, data); location.reload();
+      await api.post(`/studio/audio-jobs/${jobId}/apply/`, data);
+      if (button === library) location.href = '/studio/instrumentals/'; else location.reload();
     }));
     if (jobId) { panel.open = true; poll(); }
     window.addEventListener("pagehide", () => clearTimeout(timer), {once: true});

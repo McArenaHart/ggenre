@@ -30,6 +30,14 @@ Fast mode trades analysis context and overlap for reduced CPU/RAM requirements; 
 
 Preview with the result player and compare with the original track player. Save existing edits and keep/discard pending takes before applying. Applying adds a separate track with matching timeline/trim/gain and mutes the source, so Save mix, publishing and exports use the processed audio. Unmute the source and mute/remove the processed track to undo. Save mix again after applying. Processing does not publish or consume export allowances.
 
+## Instrumental downloads and trial allowance
+
+Instrumental-only downloads use the same account allowance as Studio mix exports: two trials by default, including downloads before any vocals are layered. This covers composed, extracted and three-part arranged instrumentals. In the library, **Prepare download · uses one trial** creates a downloadable snapshot and spends one remaining trial, just as preparing a Studio export does. The refreshed page shows the remaining shared allowance and its **Download instrumental** link. Downloads of that same saved version do not spend another trial. Saving a changed version gives it a new immutable audio filename and its first download request counts again.
+
+Once the allowance is exhausted, the next version is pending until admin payment approval. Existing allowance overrides, resets and unlimited exports apply to both mixes and instrumentals. Admin review pages and totals include both. Previous approved/free snapshots remain downloadable from the library download history after further edits. Playback, editing and copying an instrumental into a vocal session do not spend trials.
+
+Apply migration `0010_export_instrumental_alter_export_project_and_more` and restart web/audio workers during deployment. Exports now reference exactly one project or instrumental, and file cleanup protects either type of exported snapshot.
+
 ## Intro, middle and outro editing
 
 When extraction is ready, choose **Edit intro / middle / outro** in Audio tools. Saved extracted instrumentals also have that action in the instrumental library. Load the waveform, then choose a source range for each of the three parts by dragging its handles or entering precise times. Each part has volume and audition controls. Source ranges can repeat or come from different places; the output always plays intro → middle → outro.

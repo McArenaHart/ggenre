@@ -93,6 +93,15 @@ test('expired previews stop polling and allow processing the original again', as
   assert.equal(h.requests.length, 2);
 });
 
+test('saving an extracted backing for download opens the metered library flow', async () => {
+  const h = harness({id: 1, kind: 'vocal'});
+  const library = h.elements.find(e => e.textContent === 'Save to instrumental library');
+  library.events.click(); await h.tasks.pop();
+  assert.equal(h.requests[0].data.get('library'), 'yes');
+  assert.equal(h.scope.location.href, '/studio/instrumentals/');
+  assert.equal(h.scope.reloads, 0);
+});
+
 test('extraction shows an empty bar while queued, animates while running, and fills when ready', async () => {
   const h = harness({id: 2, kind: 'backing'});
   const operation = h.elements.find(e => e.tag === 'select');

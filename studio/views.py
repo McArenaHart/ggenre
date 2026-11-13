@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.http import FileResponse, HttpResponseForbidden, JsonResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -265,8 +265,8 @@ def export(request, pk):
 
 @artist_only
 def download(request, pk):
-    item = get_object_or_404(Export, pk=pk, project__artist=request.user, status__in=["free", "approved"])
-    return audio_response(item.audio, True, "ggenre-studio.wav")
+    item = get_object_or_404(Export.objects.filter(Q(project__artist=request.user) | Q(instrumental__artist=request.user)), pk=pk, status__in=["free", "approved"])
+    return audio_response(item.audio, True, "ggenre-instrumental.wav" if item.instrumental_id else "ggenre-studio.wav")
 
 
 @login_required
@@ -288,7 +288,7 @@ def export_reviews(request):
             updated = Export.objects.filter(pk=export_id, status="pending").update(status=status, reviewed_by=request.user)
             messages.success(request, "Export request reviewed." if updated else "This request has already been reviewed.")
         return redirect("studio:export_reviews")
-    return render(request, "studio/export_reviews.html", {"exports": Export.objects.filter(status="pending").select_related("project__artist").order_by("created_at")})
+    return render(request, "studio/export_reviews.html", {"exports": Export.objects.filter(status="pending").select_related("project__artist", "instrumental__artist").order_by("created_at")})
 
 
 @login_required
@@ -337,7 +337,7 @@ def export_controls(request):
                     messages.success(request, f"Export allowance updated for {artist.username}. Export history and payment decisions were preserved.")
         return redirect("studio:export_controls")
     query = request.GET.get("q", "").strip()[:150]
-    artists = get_user_model().objects.filter(role="artist").select_related("exportallowance").annotate(export_total=Count("project__export", distinct=True), pending_total=Count("project__export", filter=Q(project__export__status="pending"), distinct=True)).order_by("username")
+    artists = get_user_model().objects.filter(role="artist").select_related("exportallowance").annotate(export_total=Count("project__export", distinct=True) + Count("instrumental__export", distinct=True), pending_total=Count("project__export", filter=Q(project__export__status="pending"), distinct=True) + Count("instrumental__export", filter=Q(instrumental__export__status="pending"), distinct=True)).order_by("username")
     if query:
         artists = artists.filter(username__icontains=query)
     page = Paginator(artists, 25).get_page(request.GET.get("page"))

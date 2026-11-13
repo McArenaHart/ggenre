@@ -75,12 +75,24 @@ class ExportAllowance(models.Model):
         return f"{self.artist} — unlimited exports" if self.unlimited_exports else f"{self.artist} — {self.free_remaining} free exports remaining"
 
 class Export(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True)
+    instrumental = models.ForeignKey('Instrumental', on_delete=models.CASCADE, null=True, blank=True)
     audio = models.FileField(storage=private_storage, upload_to=audio_path)
     status = models.CharField(max_length=12, choices=[("free", "Free"), ("pending", "Awaiting payment approval"), ("approved", "Payment verified"), ("rejected", "Rejected")])
     payment_reference = models.CharField(max_length=160, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="studio_export_reviews")
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=(models.Q(project__isnull=False, instrumental__isnull=True) | models.Q(project__isnull=True, instrumental__isnull=False)), name='studio_export_one_source')]
+
+    @property
+    def artist(self):
+        return self.project.artist if self.project_id else self.instrumental.artist
+
+    @property
+    def title(self):
+        return self.project.title if self.project_id else self.instrumental.title
 
 class Release(models.Model):
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True)

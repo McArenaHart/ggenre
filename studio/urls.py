@@ -27,6 +27,7 @@ urlpatterns = [
     path("instrumentals/<int:pk>/save/", instrumentals.save, name="compose_save"),
     path("instrumentals/<int:pk>/audio/", instrumentals.audio, name="instrumental_audio"),
     path("instrumentals/<int:pk>/use/", instrumentals.use, name="instrumental_use"),
+    path('instrumentals/<int:pk>/download/', instrumentals.request_download, name='instrumental_download'),
     path("", views.index, name="index"),
     path("exports/controls/", views.export_controls, name="export_controls"),
     path("exports/", views.export_reviews, name="export_reviews"),

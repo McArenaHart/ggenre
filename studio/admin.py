@@ -3,9 +3,9 @@ from .models import Project, Export, ExportAllowance
 
 @admin.register(Export)
 class ExportAdmin(admin.ModelAdmin):
-    list_display = ("id", "project", "status", "payment_reference", "created_at", "reviewed_by")
+    list_display = ("id", "title", "artist", "status", "payment_reference", "created_at", "reviewed_by")
     list_filter = ("status",)
-    readonly_fields = ("project", "status", "payment_reference", "created_at", "reviewed_by")
+    readonly_fields = ("project", "instrumental", "status", "payment_reference", "created_at", "reviewed_by")
     exclude = ("audio",)
     actions = ("approve_payment", "reject_payment")
 

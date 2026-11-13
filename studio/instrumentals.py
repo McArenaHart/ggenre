@@ -8,14 +8,49 @@ from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from .views import artist_only, validate_audio
-from .models import Instrumental, Project, Track
+from .models import Instrumental, Project, Track, Export, ExportAllowance
 from .catalog import BEATS
 from .composition import validate_config
 
 
 @artist_only
 def library(request):
-    return render(request, "studio/instrumentals.html", {"instrumentals": Instrumental.objects.filter(artist=request.user).order_by("-updated_at"), "projects": Project.objects.filter(artist=request.user).exclude(category="acapella").order_by("-updated_at")})
+    items = list(Instrumental.objects.filter(artist=request.user).order_by('-updated_at'))
+    exports = {}
+    for export in Export.objects.filter(instrumental__artist=request.user).order_by('-created_at', '-pk'):
+        exports.setdefault((export.instrumental_id, export.audio.name), export)
+    for item in items:
+        item.download_export = exports.get((item.pk, item.audio.name))
+        item.downloadable = item.download_export and item.download_export.status in ('free', 'approved')
+        item.pending_download = item.download_export and item.download_export.status == 'pending'
+    allowance, _ = ExportAllowance.objects.get_or_create(artist=request.user)
+    return render(request, "studio/instrumentals.html", {"instrumentals": items, 'free_left': allowance.free_remaining, 'unlimited_exports': allowance.unlimited_exports,
+        'downloads': Export.objects.filter(instrumental__artist=request.user, status__in=['free', 'approved']).select_related('instrumental').order_by('-created_at'),
+        "projects": Project.objects.filter(artist=request.user).exclude(category="acapella").order_by("-updated_at")})
+
+
+@artist_only
+@require_POST
+def request_download(request, pk):
+    from django.db.models import F
+    with transaction.atomic():
+        item = get_object_or_404(Instrumental.objects.select_for_update(), pk=pk, artist=request.user)
+        if not item.audio:
+            messages.error(request, 'Save this instrumental before downloading it.')
+            return redirect('studio:instrumentals')
+        # Re-downloading the same saved version must not spend another trial.
+        export = Export.objects.filter(instrumental=item, audio=item.audio.name, status__in=['free', 'approved', 'pending']).order_by('-created_at', '-pk').first()
+        if not export:
+            allowance, _ = ExportAllowance.objects.get_or_create(artist=request.user)
+            allowance = ExportAllowance.objects.select_for_update().get(pk=allowance.pk)
+            free = allowance.unlimited_exports or ExportAllowance.objects.filter(pk=allowance.pk, free_used__lt=F('free_limit')).update(free_used=F('free_used') + 1)
+            export = Export.objects.create(instrumental=item, audio=item.audio.name, status='free' if free else 'pending', payment_reference=request.POST.get('payment_reference', '')[:160])
+        if export.status in ('free', 'approved'):
+            messages.success(request, 'Your instrumental download is ready. Re-downloading this saved version does not use another trial.')
+            from django.urls import reverse
+            return redirect(reverse('studio:instrumentals') + f'#download-{item.pk}')
+        messages.info(request, 'Your trial downloads are used. This instrumental download is awaiting admin payment approval.')
+    return redirect('studio:instrumentals')
 
 
 @artist_only
