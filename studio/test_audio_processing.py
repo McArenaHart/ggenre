@@ -72,6 +72,15 @@ class AudioProcessingTests(TestCase):
         job = AudioJob.objects.first()
         self.assertEqual(self.client.get(reverse('studio:audio_job', args=[job.pk])).status_code, 404)
 
+    def test_repeated_extraction_requests_reuse_the_active_job(self):
+        with patch('studio.audio_processing.available', return_value={'separate': True}):
+            first = self.queue('separate', permission='yes')
+            second = self.queue('separate', permission='yes')
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json()['id'], second.json()['id'])
+        self.assertTrue(second.json()['reused'])
+        self.assertEqual(AudioJob.objects.count(), 1)
+
     def test_noise_processing_preview_and_apply_preserve_source(self):
         job_id = self.queue(strength=10, cutoff=60, hum='50').json()['id']
         job = AudioJob.objects.get(pk=job_id)

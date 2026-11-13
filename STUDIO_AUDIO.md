@@ -12,6 +12,22 @@ Pitch correction is available for vocal tracks in all three categories. Set the 
 
 Instrumental extraction is available in Gospel and Secular sessions. It separates the backing from the vocal using Demucs. Confirm permission to reuse the source recording. Preview the output, then use it in this session or save it to the instrumental library. Extracted audio is reused as an audio recording, not an editable piano-roll composition. The stored BPM is the session's declared tempo; it is not automatic tempo/key detection. Vocal bleed and separation artifacts are possible.
 
+### Extraction on a small CPU Droplet
+
+Extraction analyzes decoded audio samples, so a small MP3 does not imply a small processing job. CPU deployments default to a fast profile: two-second model windows, 10% overlap and no random-shift augmentation. The engine processes long songs in bounded 30-second windows with one-second crossfades and spools the combined backing to temporary disk. It no longer retains all four stems of an entire song in RAM. Default CPU threads are capped at four and follow the detected CPU count below that cap. Repeated requests for an already queued/running extraction return that job instead of adding duplicate work.
+
+For the current single-vCPU Droplet, use these optional `.env` settings and restart the existing audio worker:
+
+```dotenv
+STUDIO_EXTRACTION_DEVICE=cpu
+STUDIO_EXTRACTION_PROFILE=fast
+STUDIO_EXTRACTION_THREADS=1
+```
+
+Fast mode trades analysis context and overlap for reduced CPU/RAM requirements; listen for separation artifacts before relying on it for finished music. `STUDIO_EXTRACTION_PROFILE=balanced` keeps the former per-model analysis context, 25% overlap and one random shift, with the streaming memory bound still applied. A 1 GB machine can still be constrained by the model plus web/database processes. Do not add more workers to speed up a single CPU; that can increase contention and memory pressure.
+
+`STUDIO_EXTRACTION_DEVICE=auto` (the default) uses CUDA when available and CPU otherwise. GPU hosts require a CUDA-enabled PyTorch installation. No paid resources or external audio transfer are configured by this change. The worker logs engine/device/profile/thread count, audio duration, engine runtime, total subprocess runtime and Linux process peak memory. Use these measurements on real songs to assess the Droplet; local short-clip timings do not predict full-song latency or quality. The existing 30-minute job timeout still applies.
+
 Preview with the result player and compare with the original track player. Save existing edits and keep/discard pending takes before applying. Applying adds a separate track with matching timeline/trim/gain and mutes the source, so Save mix, publishing and exports use the processed audio. Unmute the source and mute/remove the processed track to undo. Save mix again after applying. Processing does not publish or consume export allowances.
 
 ## Deployment
@@ -74,6 +90,10 @@ If that unit was never installed, no timer command is needed. Remove any old aud
 See [REGRESSION_AUDIO_REPORT.md](REGRESSION_AUDIO_REPORT.md) for regression results, reproduced edge cases, and remaining manual acceptance checks.
 
 `python manage.py check_studio_audio`
+
+`python manage.py check_studio_audio --seconds 32` exercises a real extraction across a streaming window boundary. Test lengths are limited to 1–60 seconds.
+
+Local validation on 13 November 2026: a 32-second generated clip, fast profile and one inference thread, completed in 76.33 seconds including subprocess startup (66.15 seconds inside the engine). The output was non-silent stereo PCM with the exact original frame count. A shorter three-second check took 8.2 engine seconds with four threads, versus 17.57 engine seconds before shortening the model windows. These are single local checks on different settings, not a benchmark of the live Droplet or a guarantee of song quality. Check actual worker timing and Linux memory logs after deployment and listen to a representative song; choose balanced mode if fast-mode artifacts are unacceptable.
 
 This downloads the registered official model if needed, verifies its SHA-256 prefix, and runs real extraction on generated audio through the same processing path used by queued jobs. It verifies stereo PCM format, duration and non-silent output without creating artists, projects or library entries. Large model downloads use bounded byte-range requests as a fallback for connections that stall on a single large response.
 

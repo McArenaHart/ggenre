@@ -1,8 +1,10 @@
 """Private, bounded offline audio processing; heavy engines load only in workers."""
 import importlib.util
 import math
+import logging
 import subprocess
 import sys
+import time
 import tempfile
 from pathlib import Path
 
@@ -19,6 +21,8 @@ from .models import AudioJob, Project, Track, Instrumental
 from .limits import MAX_AUDIO_SECONDS, MAX_AUDIO_BYTES
 from .views import artist_only, owned, validate_audio
 from .video_render import run_ffmpeg
+
+logger = logging.getLogger(__name__)
 
 
 def available():
@@ -100,6 +104,10 @@ def queue(request, pk):
             # from different projects/tabs.
             get_user_model().objects.select_for_update().get(pk=request.user.pk)
             Project.objects.select_for_update().get(pk=track.project_id)
+            if operation == 'separate':
+                pending = AudioJob.objects.filter(track=track, operation='separate', source=track.audio.name, status__in=['queued', 'running']).order_by('-pk').first()
+                if pending:
+                    return JsonResponse({'id': pending.pk, 'status': pending.status, 'reused': True})
             if AudioJob.objects.filter(track__project__artist=request.user, status__in=["queued", "running"]).count() >= 2:
                 return JsonResponse({"error": "Two audio tasks are already pending. Wait for them to finish."}, status=409)
             # Studio files have immutable UUID names: pin the existing source
@@ -211,8 +219,11 @@ def process(job):
         elif job.operation == "tune":
             tune(source, output, job.options)
         else:
-            subprocess.run([sys.executable, "-m", "studio.separate_audio", str(source), str(output)],
+            started = time.perf_counter()
+            completed = subprocess.run([sys.executable, "-m", "studio.separate_audio", str(source), str(output)],
                 cwd=settings.BASE_DIR, check=True, capture_output=True, timeout=1800, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            if completed.stdout:
+                logger.info('Extraction completed in %.2f seconds: %s', time.perf_counter() - started, completed.stdout.decode(errors='replace')[-2000:].strip())
         result = ContentFile(output.read_bytes(), name="processed.wav")
         validate_audio(result)
         job.result.save("processed.wav", result, save=False)

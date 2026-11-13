@@ -17,7 +17,13 @@ from studio.views import validate_audio
 class Command(BaseCommand):
     help = "Check extraction dependencies, cache the Demucs model, and separate generated test audio without creating user data."
 
+    def add_arguments(self, parser):
+        parser.add_argument('--seconds', type=int, default=3, help='Generated audio length, 1–60 seconds. Use 32 to exercise streaming window joins.')
+
     def handle(self, *args, **options):
+        seconds = options['seconds']
+        if not 1 <= seconds <= 60:
+            raise CommandError('Choose a setup test length from 1 to 60 seconds.')
         if not available()['separate']:
             raise CommandError('Install requirements-audio.txt first.')
         import numpy as np
@@ -71,7 +77,7 @@ class Command(BaseCommand):
             root = Path(folder)
             source = root / 'source.wav'
             rate = 44100
-            times = np.arange(rate * 3) / rate
+            times = np.arange(rate * seconds) / rate
             # Deterministic chord, rhythmic transients and a changing melodic tone.
             x = sum(.06 * np.sin(2 * np.pi * hz * times) for hz in (130.81, 164.81, 196))
             x += .1 * np.sin(2 * np.pi * (300 * times + 18 * np.sin(times * 3)))
@@ -108,7 +114,7 @@ class Command(BaseCommand):
                     samples = np.frombuffer(result.readframes(original_frames), dtype='<i2')
                     if not np.any(samples):
                         raise ValueError('The extracted instrumental is silent.')
-                self.stdout.write(self.style.SUCCESS('PASS: real extraction produced a non-silent, three-second stereo PCM WAV. Model is cached.'))
+                self.stdout.write(self.style.SUCCESS(f'PASS: real extraction produced a non-silent, {seconds}-second stereo PCM WAV. Model is cached.'))
             except Exception as exc:
                 if hasattr(exc, 'stderr') and exc.stderr:
                     self.stderr.write(exc.stderr.decode(errors='replace')[-4000:])
