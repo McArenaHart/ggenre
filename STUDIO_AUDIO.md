@@ -30,6 +30,16 @@ Fast mode trades analysis context and overlap for reduced CPU/RAM requirements; 
 
 Preview with the result player and compare with the original track player. Save existing edits and keep/discard pending takes before applying. Applying adds a separate track with matching timeline/trim/gain and mutes the source, so Save mix, publishing and exports use the processed audio. Unmute the source and mute/remove the processed track to undo. Save mix again after applying. Processing does not publish or consume export allowances.
 
+## Intro, middle and outro editing
+
+When extraction is ready, choose **Edit intro / middle / outro** in Audio tools. Saved extracted instrumentals also have that action in the instrumental library. Load the waveform, then choose a source range for each of the three parts by dragging its handles or entering precise times. Each part has volume and audition controls. Source ranges can repeat or come from different places; the output always plays intro → middle → outro.
+
+**Preview all three joined** renders a continuous preview with no inserted silence. Select a join crossfade from 0–500 ms (20 ms by default). Crossfades overlap the ends, shortening the total duration slightly and smoothing clicks. Listen and place cuts on matching beats: a crossfade cannot guarantee musical/beat alignment or remove silence already inside a selected range. Each part must be at least 0.1 seconds; the combined result must stay within six minutes.
+
+**Save joined instrumental** sends only range/volume settings to the server, which renders one WAV without rerunning extraction or uploading a browser-generated WAV. The first save creates a library copy. Reopening that copy lets the artist revise all three parts against the preserved original; subsequent saves update the copy with a new immutable audio filename. Existing Studio tracks and exports keep their earlier saved audio. Use the saved instrumental in Studio as one backing track. The retained source is protected from automatic cleanup even after the temporary extraction job expires.
+
+Deploy migration `0009_instrumental_source_audio`, collect static assets and restart both the web workers and the existing audio worker. Stop the old audio worker before deploying so its cleanup cannot overlook the new source-file references. No extra worker is required for arrangement saves. Automated checks exercise real FFmpeg joins, source preservation, owner isolation, revision conflicts and library reuse. The synthetic browser fixture `python scripts/browser-tests/studio-extract-arrange-qa.py` serves only on 127.0.0.1:8765 and never writes to the application database; it verifies handles, volume, preview and persisted UI settings with generated audio.
+
 ## Deployment
 
 For local Windows development, install both requirements files in `.venv`, then use `scripts/start_local.ps1`. The launcher uses the project virtual environment for both Django and the audio worker, checks that the audio engines are installed, and runs the worker for the lifetime of the server. Starting Django alone with `runserver` still requires a separate worker using the same Python executable.

@@ -94,6 +94,7 @@ class Instrumental(models.Model):
     category = models.CharField(max_length=16, choices=[("gospel", "Gospel"), ("secular", "Circular / Secular")])
     config = models.JSONField(default=dict)
     audio = models.FileField(storage=private_storage, upload_to=audio_path, blank=True)
+    source_audio = models.FileField(storage=private_storage, upload_to=audio_path, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

@@ -44,7 +44,8 @@ window.StudioProcessing = {
     preview.addEventListener("play", () => card.querySelectorAll("audio").forEach(p => { if (p !== preview) p.pause(); }));
     const apply = document.createElement("button"); apply.type = "button"; apply.textContent = "Use processed track"; apply.hidden = true;
     const library = document.createElement("button"); library.type = "button"; library.textContent = "Save to instrumental library"; library.hidden = true;
-    body.append(run, status, progress, preview, apply, library);
+    const arrange = document.createElement('a'); arrange.textContent = 'Edit intro / middle / outro'; arrange.className = 'studio-button studio-outline'; arrange.hidden = true;
+    body.append(run, status, progress, preview, apply, library, arrange);
     const close = document.createElement("button"); close.type = "button";
     close.className = "studio-audio-tools-close"; close.textContent = "Close audio tools";
     close.addEventListener("click", () => { panel.open = false; }); body.append(close);
@@ -73,6 +74,7 @@ window.StudioProcessing = {
         if (job.status === "ready") {
           preview.src = job.url; preview.hidden = apply.hidden = false;
           library.hidden = jobOperation !== "separate";
+          arrange.hidden = jobOperation !== 'separate'; arrange.href = `/studio/audio-jobs/${jobId}/arrange/`;
           status.textContent = "Ready. Compare using the original track's play button. Applying mutes the original and adds a separate track.";
           return;
         }
@@ -91,7 +93,7 @@ window.StudioProcessing = {
       data.append("strength", selectedOperation === "tune" ? amount.value : strength.value);
       for (const [name, value] of Object.entries({key: key.value, scale: scale.value, speed: speed.value, cutoff: cutoff.value, hum: hum.value, permission: consent.checked ? "yes" : "no"})) data.append(name, value);
       const job = await api.post(`/studio/track/${track.id}/process/`, data); jobId = job.id; jobOperation = selectedOperation;
-      clearTimeout(timer); preview.hidden = apply.hidden = library.hidden = true;
+      clearTimeout(timer); preview.hidden = apply.hidden = library.hidden = arrange.hidden = true;
       updateProgress("queued");
       status.textContent = "Queued. You may continue editing; save edits before applying the result. Processing requires the audio worker.";
       timer = setTimeout(poll, 3000);
