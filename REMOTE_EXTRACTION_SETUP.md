@@ -1,6 +1,6 @@
 # External extraction pilot (Modal)
 
-This integration is prepared but disabled. No deployment or remote inference was run during implementation. Do not treat a configuration flag as verification of a provider's billing policy.
+The remote worker is deployed and authenticated. A one-second synthetic extraction passed on Modal CPU compute; production artist-job dispatch remains disabled until the Droplet is configured. Do not treat a configuration flag as verification of a provider's billing policy.
 
 ## Verified account state on 19 November 2026
 
@@ -17,14 +17,14 @@ Keep the account's provider-enforced usage cap within the confirmed free credit 
 - Short-lived signed tokens authorize only that job's source, control and result endpoints. Tokens are action-specific, source-bound, expire after one hour, and stop working when the task is cancelled. The external worker receives no database credentials or Django secret key.
 - Source and result transfers use bounded buffers and do not pass through the artist's device again. Existing server storage is retained; no object-storage account is needed.
 - Returned WAVs are checked for size, format and original duration before they can be applied. Duplicate callbacks reuse the stored result. GPU work checks task status between streaming windows so cancelled or completed requests stop at the next boundary.
-- The worker uses an authenticated CPU submission endpoint and a T4 extraction class. It loads the model once per GPU container and can reuse it while the container remains alive. The two-second idle window and 600-second function timeout are conservative pilot settings, not a guarantee of total invoice cost.
+- The worker uses an authenticated submission endpoint and defaults to a remote CPU extraction class. T4 is an explicit optional deployment mode (`GGENRE_MODAL_ACCELERATOR=t4`) only for an account that permits GPU functions; it is never selected automatically. It loads the model once per GPU container and can reuse it while the container remains alive. The two-second idle window and 600-second function timeout are conservative pilot settings, not a guarantee of total invoice cost.
 
 ## Deploy in this order
 
 1. Back up the database and private media. Deploy the GGenre code, run migrations through 0016, collect static files and restart the existing web/audio services. Configure `STUDIO_EXTRACTION_BACKEND=modal` with remote processing disabled. This queues extraction without running it locally. Existing default `local` installations retain their previous behavior until the backend setting is changed.
 2. Verify the live HTTPS origin `https://www.ggenre.com` and the `/studio/remote-audio/...` routes are deployed. The provided worker is deliberately restricted to that exact origin; update both the worker's allowed origin and the server configuration if the production origin changes.
 3. After account-access approval, authorize the Modal client in a separate local deployment environment using `requirements-remote-worker.txt` and Modal's normal `python -m modal setup` flow. Client/proxy credentials grant access to compute and must be stored securely, never committed or pasted into chat.
-4. Verify the provider's no-charge cap before deploying. Image building, startup, CPU dispatch and GPU work can all consume credits. From the repository root, the deployment command is `python -m modal deploy -m remote_workers.modal_extract`. This command was not executed during implementation. The pinned SDK is 1.6.4; deployment definitions were imported with that SDK locally, without authentication or remote calls.
+4. Verify the provider's no-charge cap before deploying. Image building, startup, CPU dispatch and GPU work can all consume credits. From the repository root, the deployment command is `python -m modal deploy -m remote_workers.modal_extract`. The CPU deployment was executed with SDK 1.6.4 after account authorization and billing-cap verification. The T4 attempt was refused because Modal required a payment method; none was added. The default CPU image uses CPU-only PyTorch wheels and needs no GPU allocation.
 5. Create a Modal proxy token for the deployed web function. Put its ID/secret and the returned HTTPS `*.modal.run` URL in the server's private environment. Neither endpoint nor API key belongs in frontend JavaScript.
 6. Queue a short synthetic or explicitly permitted extraction in GGenre. Use `python manage.py remote_audio_check --list-jobs` to find the selected waiting job ID. Processing itself does not consume a trial download.
 7. Configure the selected job and activation flags, then restart the audio worker:
@@ -58,4 +58,15 @@ This is a one-job integration pilot, not a completed scalable free-compute servi
 
 ## Verification
 
-Automated transport tests cover scoped/expired/cancelled authorization, upload validation, callback idempotence, no local model invocation, uncertain submissions, provider-limit pauses, proxy headers, redirect rejection and the one-job activation gates. All 369 Django tests passed (one platform-dependent symlink skip), including the existing real local extraction regression; all 139 JavaScript tests passed. Migration 0016, system checks and migration consistency checks passed locally. Actual Modal image building, GPU execution and live-server deployment still require authenticated setup and were not performed by these tests.
+Automated transport tests cover scoped/expired/cancelled authorization, upload validation, callback idempotence, no local model invocation, uncertain submissions, provider-limit pauses, proxy headers, redirect rejection and the one-job activation gates. All 369 Django tests passed (one platform-dependent symlink skip), including the existing real local extraction regression; all 139 JavaScript tests passed. Migration 0016, system checks and migration consistency checks passed locally. A real remote CPU deployment and operator-only synthetic extraction were subsequently verified. GPU execution was blocked by the account payment-method requirement. Live-server setup remains incomplete because the Droplet rejected the available SSH key.
+
+
+## Connected worker verification
+
+- Workspace: mcarenahart; application: ggenre-extraction-pilot.
+- Protected endpoint: https://mcarenahart--ggenre-extraction-pilot-submit.us-east.modal.run
+- No credentials were committed. The deployment profile has a seven-day client token; the worker proxy key and paused server configuration are stored under the operator's home `.config/ggenre` directory, outside this repository.
+- Unauthenticated requests returned HTTP 401. An authenticated connection probe returned ready=true, submitted=false, accelerator=cpu. This probe does not submit extraction.
+- One operator-only synthetic extraction returned 44,100 frames, two channels and non-silent output. Engine time: 1.01 seconds; total invocation including startup: 11.29 seconds. This is a one-second test signal, not a full-song benchmark.
+- The dashboard displayed $0.99 in remaining credits afterward and zero live containers following idle shutdown. This does not establish an exact per-song cost.
+- The production-side configuration is prepared with remote dispatch disabled and no selected artist job. Connecting GGenre end-to-end still requires applying migration 0016, installing the private environment settings and restarting the existing web/audio services on the Droplet.
