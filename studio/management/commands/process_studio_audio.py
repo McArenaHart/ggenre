@@ -10,6 +10,7 @@ from studio.models import AudioJob
 from studio.audio_processing import process
 from studio.maintenance import AudioMaintenance
 from studio.job_control import claim_job, heartbeat, release, JobStopped
+from studio.remote_extraction import RemotePaused, pause
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,9 @@ class Command(BaseCommand):
                     process(job, check=check)
             except JobStopped:
                 logger.info('Audio job %s stopped after cancellation or lease expiry', job.pk)
+            except RemotePaused as exc:
+                pause(job, str(exc))
+                logger.info('Remote extraction %s paused without local fallback', job.pk)
             except Exception as exc:
                 logger.exception("Studio audio job %s (%s) failed", job.pk, job.operation)
                 if isinstance(exc, subprocess.CalledProcessError) and exc.stderr:

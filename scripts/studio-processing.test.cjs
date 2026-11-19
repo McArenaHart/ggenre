@@ -94,6 +94,15 @@ test('expired previews stop polling and allow processing the original again', as
   assert.equal(h.requests.length, 2);
 });
 
+test('paused external extraction explains that no local processing will run', async () => {
+  const h = harness({id: 1, kind: 'vocal'});
+  h.elements.find(e => e.tag === 'button').events.click(); await h.tasks.pop();
+  h.scope.fetch = async () => ({ok: true, json: async () => ({status: 'queued', paused: true, queue_position: 1})});
+  await h.timers.shift()();
+  assert.ok(h.elements.some(e => /paused.*will not run on this server/.test(e.textContent)));
+  assert.equal(h.elements.find(e => e.tag === 'audio').hidden, true);
+});
+
 test('saving an extracted backing for download opens the metered library flow', async () => {
   const h = harness({id: 1, kind: 'vocal'});
   const library = h.elements.find(e => e.textContent === 'Save to instrumental library');

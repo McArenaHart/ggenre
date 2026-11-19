@@ -37,6 +37,10 @@ def available():
 
 def processing_available():
     engines = dict(available())
+    if settings.STUDIO_EXTRACTION_BACKEND != 'local':
+        # Remote jobs may be queued while the pilot is paused. No local neural
+        # dependencies or automatic local fallback are required.
+        engines['separate'] = settings.STUDIO_EXTRACTION_BACKEND == 'modal'
     remote = set(settings.STUDIO_REMOTE_AUDIO_ENGINES) & {'tune', 'separate', 'denoise'}
     if remote:
         from datetime import timedelta
@@ -139,6 +143,7 @@ def queue(request, pk):
 def job_status(request, pk):
     job = get_object_or_404(AudioJob, pk=pk, track__project__artist=request.user)
     return JsonResponse({"id": job.pk, "status": job.status, "error": job.error,
+                         "paused": job.operation == 'separate' and settings.STUDIO_EXTRACTION_BACKEND != 'local' and (not settings.STUDIO_REMOTE_EXTRACTION_ENABLED or not settings.STUDIO_REMOTE_BILLING_VERIFIED or job.pk != settings.STUDIO_REMOTE_TEST_JOB_ID),
                          "queue_position": AudioJob.objects.filter(status='queued', pk__lte=job.pk).count() if job.status == 'queued' else None,
                          "url": f"/studio/audio-jobs/{job.pk}/audio/" if job.result else None})
 
@@ -277,6 +282,10 @@ def tune(source, output, options):
 
 def process(job, check=None):
     check = check or (lambda: None)
+    if job.operation == 'separate' and settings.STUDIO_EXTRACTION_BACKEND != 'local':
+        from .remote_extraction import extract
+        extract(job, check)
+        return
     with tempfile.TemporaryDirectory() as folder:
         root = Path(folder)
         source, output = root / "input.wav", root / "output.wav"

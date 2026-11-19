@@ -41,7 +41,7 @@ def blend_overlap(current, previous):
     return current
 
 
-def stream_backing(source, output, model, options):
+def stream_backing(source, output, model, options, check=None):
     rate = model.samplerate
     hop, fade = rate * options.get('window_seconds', 6), rate
     with wave.open(str(source), 'rb') as audio:
@@ -60,6 +60,8 @@ def stream_backing(source, output, model, options):
         pending, peak = None, 1e-8
         with tempfile.TemporaryFile() as spool:
             for start in range(0, frames, hop):
+                if check:
+                    check()
                 audio.setpos(start)
                 samples = np.frombuffer(audio.readframes(hop + fade), dtype='<i2').reshape(-1, channels).T.astype(np.float32) / 32768
                 if channels == 1:

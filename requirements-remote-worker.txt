@@ -1,0 +1,2 @@
+# Install only in an isolated deployment environment, not on the Droplet.
+modal==1.6.4

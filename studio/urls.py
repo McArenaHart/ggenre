@@ -1,7 +1,8 @@
 from django.urls import path
-from . import views, instrumentals, collaborations, audio_processing, extract_arrangement, waveforms, health
+from . import views, instrumentals, collaborations, audio_processing, extract_arrangement, waveforms, health, remote_audio
 app_name = "studio"
 urlpatterns = [
+    path('remote-audio/<int:pk>/<str:action>/', remote_audio.exchange, name='remote_audio'),
     path('health/', health.view, name='health'),
     path('audio-jobs/<int:job_pk>/arrange/', extract_arrangement.editor, name='arrange_job'),
     path('audio-jobs/<int:job_pk>/arrange/save/', extract_arrangement.save, name='arrange_job_save'),

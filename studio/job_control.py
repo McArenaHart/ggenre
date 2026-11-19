@@ -3,7 +3,7 @@ import uuid
 from datetime import timedelta
 from django.conf import settings
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 from .models import AudioJob, StudioMaintenance
 
@@ -26,7 +26,14 @@ def claim_job():
     stale = AudioJob.objects.filter(status='running', lease_until__lte=now)
     stale.filter(attempts__gte=settings.STUDIO_JOB_MAX_ATTEMPTS).update(status='failed', finished_at=now, error='Processing was interrupted repeatedly. Please try again.', lease_token='')
     stale.filter(attempts__lt=settings.STUDIO_JOB_MAX_ATTEMPTS).update(status='queued', lease_token='', error='')
-    job = AudioJob.objects.select_for_update().filter(status='queued').order_by('pk').first()
+    candidates = AudioJob.objects.select_for_update().filter(status='queued')
+    if settings.STUDIO_EXTRACTION_BACKEND != 'local':
+        from .remote_extraction import configured
+        if configured():
+            candidates = candidates.filter(~Q(operation='separate') | Q(pk=settings.STUDIO_REMOTE_TEST_JOB_ID))
+        else:
+            candidates = candidates.exclude(operation='separate')
+    job = candidates.order_by('pk').first()
     if not job:
         StudioMaintenance.objects.filter(pk=guard.pk, lease_token=token).update(lease_until=now, lease_token='')
         return None

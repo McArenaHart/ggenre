@@ -67,6 +67,8 @@ class AudioJob(models.Model):
     lease_until = models.DateTimeField(null=True, blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
+    remote_nonce = models.CharField(max_length=32, blank=True)
+    remote_dispatched_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         indexes = [models.Index(fields=['status', 'id'], name='studio_job_queue_idx'), models.Index(fields=['status', 'lease_until'], name='studio_job_lease_idx')]

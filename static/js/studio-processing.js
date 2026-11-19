@@ -73,6 +73,7 @@ window.StudioProcessing = {
             ? "Extracting the instrumental. Full songs can take several minutes on this server."
             : "Processing the recording. You can close these tools and return later.",
         }[job.status] || `Audio task: ${job.status}.`;
+        if (job.paused && job.status === 'queued') status.textContent = 'Remote extraction is paused. Your request is saved and will wait; it will not run on this server.';
         if (job.status === "ready") {
           preview.src = job.url; preview.hidden = apply.hidden = false;
           library.hidden = jobOperation !== "separate";
