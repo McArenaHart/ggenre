@@ -443,6 +443,11 @@
             }
             const seconds = Number(mission.timer_seconds || 0);
             const startedAt = mission.started_at ? new Date(mission.started_at) : null;
+            if (mission.timer_seconds === 0) {
+                if (missionTimerTrackEl) missionTimerTrackEl.hidden = true;
+                setText(missionTimerEl, "Game timer: Unlimited");
+                return;
+            }
             if (!seconds || !startedAt || Number.isNaN(startedAt.getTime())) {
                 setTimerProgress(100);
                 setText(missionTimerEl, "Game timer active.");

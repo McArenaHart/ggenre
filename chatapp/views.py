@@ -220,12 +220,10 @@ def _mission_busy_player_ids():
     return busy_player_ids
 
 
-def _online_mission_player_rows(busy_player_ids):
+def _manual_mission_player_rows(busy_player_ids):
     online_players = []
     candidate_players = CustomUser.objects.exclude(role=Role.ADMIN).exclude(is_suspended_by_admin=True).filter(is_active=True)
     for player in candidate_players:
-        if not cache.get(f"direct_chat_presence:online:{player.id}"):
-            continue
         online_players.append(
             {
                 "user": player,
@@ -312,7 +310,7 @@ def _build_pending_mission_rows(current_admin):
         .order_by("created_at")[:20]
     )
 
-    online_players = _online_mission_player_rows(_mission_busy_player_ids())
+    online_players = _manual_mission_player_rows(_mission_busy_player_ids())
     pending_mission_rows = [
         _build_mission_request_row(mission, current_admin, online_players)
         for mission in pending_mission_requests
@@ -467,7 +465,7 @@ def direct_chat(request, user_id):
             mission_request_row = _build_mission_request_row(
                 latest_user_mission,
                 request.user,
-                _online_mission_player_rows(_mission_busy_player_ids()),
+                _manual_mission_player_rows(_mission_busy_player_ids()),
             )
         mission_context = {
             "latest_for_user": latest_user_mission,
@@ -862,7 +860,7 @@ def admin_assign_mission_opponent(request, mission_id):
     try:
         opponent_id = int(request.POST.get("opponent_id"))
     except (TypeError, ValueError):
-        messages.error(request, "Choose a valid online player.")
+        messages.error(request, "Choose a valid player.")
         return redirect(_admin_mission_return(request))
 
     opponent = get_object_or_404(
@@ -876,10 +874,6 @@ def admin_assign_mission_opponent(request, mission_id):
         selected_template = _mission_template_from_admin_post(request)
     except ValueError as exc:
         messages.error(request, str(exc))
-        return redirect(_admin_mission_return(request))
-
-    if not cache.get(f"direct_chat_presence:online:{opponent.id}"):
-        messages.error(request, "Selected player is no longer online.")
         return redirect(_admin_mission_return(request))
 
     try:
@@ -1165,7 +1159,7 @@ def admin_review_center(request):
             "review_route_filter": route_filter,
             "review_sort_mode": sort_mode,
             "policy_review_route_mode": policy.get("review_route_mode", "alternate"),
-            "mission_timer_minutes": max(1, int(policy.get("mission_timer_seconds", 120)) // 60),
+            "mission_timer_minutes": max(0, int(policy.get("mission_timer_seconds", 120)) // 60),
             "route_mode_is_alternate": policy.get("review_route_mode", "alternate") == "alternate",
             "route_mode_is_manual_only": policy.get("review_route_mode", "alternate") == "manual_only",
             "route_mode_is_ai_preferred": policy.get("review_route_mode", "alternate") == "ai_preferred",
@@ -1276,13 +1270,13 @@ def admin_mission_timer_update(request):
 
     minutes_raw = request.POST.get("mission_timer_minutes")
     try:
-        minutes = max(1, min(int(minutes_raw), 60))
+        minutes = max(0, int(minutes_raw))
     except (TypeError, ValueError):
         messages.error(request, "Choose a valid mission timer.")
         return redirect("chatapp:admin_review_center")
 
     control = set_mission_timer_seconds(minutes * 60, admin_user=request.user)
-    messages.success(request, f"Mission timer set to {control.mission_timer_seconds // 60} minute(s).")
+    messages.success(request, "Mission timer set to unlimited." if control.mission_timer_seconds == 0 else f"Mission timer set to {control.mission_timer_seconds // 60} minute(s).")
     return redirect("chatapp:admin_review_center")
 
 

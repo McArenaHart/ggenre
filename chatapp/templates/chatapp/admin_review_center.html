@@ -69,11 +69,11 @@
         </div>
         <form method="post" action="{% url 'chatapp:admin_mission_timer_update' %}" class="chat-review-toolbar">
             {% csrf_token %}
-            <label for="missionTimerMinutes">Mission timer</label>
+            <label for="missionTimerMinutes">Mission timer (minutes; 0 = unlimited)</label>
             <div class="chat-review-sort-control">
                 <i class="fas fa-stopwatch" aria-hidden="true"></i>
                 <input id="missionTimerMinutes" type="number" name="mission_timer_minutes" class="form-control form-control-sm"
-                    min="1" max="60" value="{{ mission_timer_minutes|default:2 }}" required />
+                    min="0" value="{{ mission_timer_minutes }}" required />
             </div>
             <button type="submit" class="btn btn-primary btn-sm">Set</button>
         </form>
@@ -223,7 +223,7 @@
             <header class="chat-review-card-header">
                 <div>
                     <h2>Mission Requests</h2>
-                    <p>Match waiting players with online opponents.</p>
+                    <p>Match waiting players, including offline players. Requests and invitations do not expire.</p>
                 </div>
                 <span>{{ pending_mission_rows|length }} waiting</span>
             </header>
@@ -239,14 +239,14 @@
                         {% if mission_row.claimed_by_other %}
                         <p>Locked by {{ mission_row.mission.assigned_admin.username }}</p>
                         {% elif mission_row.available_count %}
-                        <p>{{ mission_row.available_count }} online opponent{{ mission_row.available_count|pluralize }} available.</p>
+                        <p>{{ mission_row.available_count }} opponent{{ mission_row.available_count|pluralize }} available.</p>
                         {% else %}
-                        <p>No free online opponents right now.</p>
+                        <p>No free opponents right now.</p>
                         {% endif %}
                     </div>
                     <div class="chat-mission-match-row">
                         <select name="opponent_id" class="form-select form-select-sm" required>
-                            <option value="">Select online opponent</option>
+                            <option value="">Select opponent</option>
                             {% for row in mission_row.available_players %}
                             <option value="{{ row.user.id }}">
                                 {{ row.user.username }} - Badge L{{ row.badge_level }} - {{ row.current_points }} pts - {{ row.homepage_wins }} wins

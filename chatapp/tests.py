@@ -504,7 +504,7 @@ class ChatAppTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Mission Requests")
         self.assertContains(response, f"Mission #{mission.id}")
-        self.assertContains(response, "Select online player")
+        self.assertContains(response, "Select player")
         self.assertContains(response, self.member.username)
 
     def test_admin_can_assign_online_player_to_mission_request(self):
@@ -1126,7 +1126,7 @@ class ChatAppTests(TestCase):
         self.assertContains(response, "Mission Requests")
         self.assertContains(response, "chat_owner wants a mission")
         self.assertContains(response, f"Mission #{mission.id}")
-        self.assertContains(response, "Select online opponent")
+        self.assertContains(response, "Select opponent")
         self.assertContains(response, self.member.username)
         self.assertContains(response, "Match Opponent")
         self.assertContains(response, "Cancel")
@@ -1325,6 +1325,40 @@ class ChatAppTests(TestCase):
         self.assertIsNotNone(control)
         self.assertEqual(control.route_mode, MissionReviewControl.RouteMode.MANUAL_ONLY)
         self.assertContains(response, "Mission review route mode updated to manual_only")
+
+    def test_old_request_can_match_offline_player_and_be_accepted_later(self):
+        from .services import accept_opponent, accept_mission, set_mission_timer_seconds
+        cache.delete(f"direct_chat_presence:online:{self.member.id}")
+        mission = MissionSession.objects.create(requester=self.owner, status=MissionSession.Status.MATCHING)
+        old = timezone.now() - timedelta(days=90)
+        MissionSession.objects.filter(pk=mission.pk).update(created_at=old, updated_at=old)
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("chatapp:admin_assign_mission_opponent", args=[mission.pk]), {"opponent_id": self.member.pk})
+        self.assertEqual(response.status_code, 302)
+        mission.refresh_from_db()
+        self.assertEqual(mission.opponent_id, self.member.pk)
+        self.assertEqual(mission.status, MissionSession.Status.OPPONENT_PROPOSED)
+        MissionSession.objects.filter(pk=mission.pk).update(updated_at=old)
+        mission.refresh_from_db()
+        accept_opponent(mission, self.owner)
+        set_mission_timer_seconds(0, admin_user=self.admin)
+        accept_mission(mission, self.owner)
+        mission.refresh_from_db()
+        self.assertEqual(mission.status, MissionSession.Status.MISSION_ACTIVE)
+        self.assertEqual(mission.timer_seconds, 0)
+        self.assertGreater(mission.started_at, old)
+
+    def test_admin_can_choose_unlimited_mission_timer(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("chatapp:admin_mission_timer_update"), {"mission_timer_minutes": "0"}, follow=True)
+        self.assertContains(response, "Mission timer set to unlimited.")
+        self.assertContains(response, 'min="0" value="0"')
+        self.assertEqual(MissionReviewControl.objects.latest("updated_at").mission_timer_seconds, 0)
+
+    def test_mission_timer_can_exceed_sixty_minutes(self):
+        self.client.force_login(self.admin)
+        self.client.post(reverse("chatapp:admin_mission_timer_update"), {"mission_timer_minutes": "180"})
+        self.assertEqual(MissionReviewControl.objects.latest("updated_at").mission_timer_seconds, 10800)
 
     def test_admin_can_set_global_mission_timer(self):
         pending_mission = MissionSession.objects.create(

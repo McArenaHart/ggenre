@@ -31,7 +31,6 @@ MISSION_AI_REVIEW_CONFIDENCE_THRESHOLD = 0.75
 MISSION_MATCH_REMATCH_COOLDOWN_HOURS = 12
 MISSION_DEFAULT_TIMER_SECONDS = 120
 MISSION_DIFFICULTY_TIMER_STEP_SECONDS = 60
-MISSION_MAX_TIMER_SECONDS = 3600
 
 
 def _mission_policy_settings():
@@ -79,7 +78,7 @@ def _mission_policy_settings():
     except (TypeError, ValueError):
         policy["bulk_review_max_items"] = 10
     try:
-        policy["mission_timer_seconds"] = max(60, min(int(policy.get("mission_timer_seconds", MISSION_DEFAULT_TIMER_SECONDS)), 3600))
+        policy["mission_timer_seconds"] = max(0, int(policy.get("mission_timer_seconds", MISSION_DEFAULT_TIMER_SECONDS)))
     except (TypeError, ValueError):
         policy["mission_timer_seconds"] = MISSION_DEFAULT_TIMER_SECONDS
     policy["prefer_online_opponent"] = _as_bool(policy.get("prefer_online_opponent", True), default=True)
@@ -116,7 +115,7 @@ def set_mission_review_route_mode(route_mode, reason=""):
 
 def set_mission_timer_seconds(timer_seconds, admin_user=None):
     try:
-        normalized = max(60, min(int(timer_seconds), 3600))
+        normalized = max(0, int(timer_seconds))
     except (TypeError, ValueError):
         raise ValueError("Choose a valid mission timer.")
 
@@ -846,9 +845,11 @@ def _mission_session_difficulty(mission):
 
 def _mission_timer_seconds_for_session(mission):
     base_seconds = _mission_policy_settings()["mission_timer_seconds"]
+    if base_seconds == 0:
+        return 0
     difficulty = _mission_session_difficulty(mission)
     scaled_seconds = base_seconds + max(0, difficulty - 1) * MISSION_DIFFICULTY_TIMER_STEP_SECONDS
-    return max(60, min(scaled_seconds, MISSION_MAX_TIMER_SECONDS))
+    return max(60, scaled_seconds)
 
 
 def get_admin_contact_user():
@@ -1236,7 +1237,7 @@ def assign_mission_opponent_by_admin(mission, admin_user, opponent_user, mission
         actor_user=admin_user,
         mission_session=mission,
         action="manual_match_assignment",
-        rationale="Admin manually selected an online opponent for mission matchmaking.",
+        rationale="Admin manually selected an opponent for mission matchmaking.",
         confidence=1,
     )
 

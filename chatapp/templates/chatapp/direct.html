@@ -239,7 +239,7 @@
           {% if mission_context and mission_context.latest_for_user %}
           Mission #{{ mission_context.latest_for_user.id }}: {{ mission_context.latest_for_user.get_status_display }}.
           {% if mission_context.latest_for_user.status == "matching" %}
-          Choose an online opponent from Mission Requests.
+          Choose an opponent from Mission Requests.
           {% elif mission_context.latest_for_user.status == "opponent_proposed" %}
           Waiting for the player to accept the opponent.
           {% elif mission_context.latest_for_user.status == "mission_proposed" %}
@@ -267,7 +267,7 @@
           {% endif %}
           <div class="chat-admin-inline chat-admin-match-form">
             <select name="opponent_id" class="form-select form-select-sm" required>
-              <option value="">Select online opponent</option>
+              <option value="">Select opponent</option>
               {% for row in mission_row.available_players %}
               <option value="{{ row.user.id }}">
                 {{ row.user.username }} - Badge L{{ row.badge_level }} - {{ row.current_points }} pts - {{ row.homepage_wins }} wins
@@ -297,7 +297,7 @@
               min="1" max="5" value="1" />
           </div>
           {% if not mission_row.available_count and not mission_row.claimed_by_other %}
-          <div class="chat-admin-status">No free online opponents right now.</div>
+          <div class="chat-admin-status">No free opponents right now.</div>
           {% endif %}
         </form>
         {% endwith %}
@@ -352,6 +352,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/pages/chatapp.js' %}?v=20261030performance1"></script>
-<script src="{% static 'js/pages/chatapp_missions.js' %}?v=20261030performance1"></script>
+<script src="{% static 'js/pages/chatapp.js' %}?v=20261119unlimited1"></script>
+<script src="{% static 'js/pages/chatapp_missions.js' %}?v=20261119unlimited1"></script>
 {% endblock %}

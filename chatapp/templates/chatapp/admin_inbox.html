@@ -116,14 +116,14 @@
               {% elif mission_row.available_count %}
               <small>{{ mission_row.available_count }} available opponent{{ mission_row.available_count|pluralize }}</small>
               {% else %}
-              <small>No free online opponents right now.</small>
+              <small>No free opponents right now.</small>
               {% endif %}
             </div>
             <form method="post" action="{% url 'chatapp:admin_assign_mission_opponent' mission_row.mission.id %}"
               id="mission-match-{{ mission_row.mission.id }}" class="chat-admin-inline chat-admin-match-form">
               {% csrf_token %}
               <select name="opponent_id" class="form-select form-select-sm" required>
-                <option value="">Select online player</option>
+                <option value="">Select player</option>
                 {% for row in mission_row.available_players %}
                 <option value="{{ row.user.id }}">
                   {{ row.user.username }} - Badge L{{ row.badge_level }} - {{ row.current_points }} pts - {{ row.homepage_wins }} wins
