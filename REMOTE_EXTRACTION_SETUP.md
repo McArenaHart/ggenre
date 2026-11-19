@@ -70,3 +70,8 @@ Automated transport tests cover scoped/expired/cancelled authorization, upload v
 - One operator-only synthetic extraction returned 44,100 frames, two channels and non-silent output. Engine time: 1.01 seconds; total invocation including startup: 11.29 seconds. This is a one-second test signal, not a full-song benchmark.
 - The dashboard displayed $0.99 in remaining credits afterward and zero live containers following idle shutdown. This does not establish an exact per-song cost.
 - The production-side configuration is prepared with remote dispatch disabled and no selected artist job. Connecting GGenre end-to-end still requires applying migration 0016, installing the private environment settings and restarting the existing web/audio services on the Droplet.
+
+
+## General artist access
+
+After the pilot, set `STUDIO_REMOTE_ALLOW_ALL_JOBS=True` and `STUDIO_REMOTE_EXTRACTION_ENABLED=True` to admit all artists to the serialized remote queue. Keep billing verification and the provider spending cap enabled. With general access off, `STUDIO_REMOTE_TEST_JOB_ID` continues to restrict processing to the selected pilot job. Provider pauses, scoped callbacks, duplicate-dispatch protection and no local fallback apply in both modes.

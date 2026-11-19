@@ -142,8 +142,9 @@ def queue(request, pk):
 @artist_only
 def job_status(request, pk):
     job = get_object_or_404(AudioJob, pk=pk, track__project__artist=request.user)
+    from .remote_extraction import configured, job_allowed
     return JsonResponse({"id": job.pk, "status": job.status, "error": job.error,
-                         "paused": job.operation == 'separate' and settings.STUDIO_EXTRACTION_BACKEND != 'local' and (not settings.STUDIO_REMOTE_EXTRACTION_ENABLED or not settings.STUDIO_REMOTE_BILLING_VERIFIED or job.pk != settings.STUDIO_REMOTE_TEST_JOB_ID),
+                         "paused": job.operation == 'separate' and settings.STUDIO_EXTRACTION_BACKEND != 'local' and (not configured() or not job_allowed(job)),
                          "queue_position": AudioJob.objects.filter(status='queued', pk__lte=job.pk).count() if job.status == 'queued' else None,
                          "url": f"/studio/audio-jobs/{job.pk}/audio/" if job.result else None})
 

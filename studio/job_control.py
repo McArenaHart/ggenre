@@ -30,7 +30,8 @@ def claim_job():
     if settings.STUDIO_EXTRACTION_BACKEND != 'local':
         from .remote_extraction import configured
         if configured():
-            candidates = candidates.filter(~Q(operation='separate') | Q(pk=settings.STUDIO_REMOTE_TEST_JOB_ID))
+            if not settings.STUDIO_REMOTE_ALLOW_ALL_JOBS:
+                candidates = candidates.filter(~Q(operation='separate') | Q(pk=settings.STUDIO_REMOTE_TEST_JOB_ID))
         else:
             candidates = candidates.exclude(operation='separate')
     job = candidates.order_by('pk').first()

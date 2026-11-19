@@ -62,6 +62,18 @@ class RemoteExtractionTests(TestCase):
         self.job.refresh_from_db()
         self.assertEqual(self.job.status, 'queued')
 
+    def test_general_access_runs_without_a_selected_pilot_job(self):
+        with self.enabled(STUDIO_REMOTE_ALLOW_ALL_JOBS=True, STUDIO_REMOTE_TEST_JOB_ID=0):
+            self.assertEqual(configuration_errors(), [])
+            self.assertEqual(claim_job().pk, self.job.pk)
+            self.client.force_login(self.artist)
+            status = self.client.get(reverse('studio:audio_job', args=[self.job.pk])).json()
+            self.assertFalse(status['paused'])
+
+    def test_general_access_preserves_disable_gate(self):
+        with self.enabled(STUDIO_REMOTE_ALLOW_ALL_JOBS=True, STUDIO_REMOTE_EXTRACTION_ENABLED=False):
+            self.assertIsNone(claim_job())
+
     def test_only_the_selected_job_can_run(self):
         other = AudioJob.objects.create(track=self.track, operation='separate', source=self.track.audio.name)
         with self.enabled(STUDIO_REMOTE_TEST_JOB_ID=other.pk):

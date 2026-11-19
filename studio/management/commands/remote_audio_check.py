@@ -1,5 +1,6 @@
 """Read configuration locally without deploying or invoking paid compute."""
 from django.core.management.base import BaseCommand
+from django.conf import settings
 from studio.models import StudioMaintenance, AudioJob
 from studio.remote_extraction import configuration_errors
 
@@ -25,4 +26,5 @@ class Command(BaseCommand):
         if paused:
             self.stdout.write('A provider pause is active: ' + paused.last_error)
         if not errors and not paused:
-            self.stdout.write('Configuration is ready for one selected job. No network request was made. Provider billing controls must be verified separately.')
+            scope = 'all artist jobs' if settings.STUDIO_REMOTE_ALLOW_ALL_JOBS else 'one selected job'
+            self.stdout.write(f'Configuration is ready for {scope}. No network request was made. Provider billing controls must be verified separately.')

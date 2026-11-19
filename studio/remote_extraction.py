@@ -1,4 +1,4 @@
-"""A disabled-by-default, one-job Modal pilot. Never falls back to local AI."""
+"""Authenticated Modal extraction with optional one-job pilot mode. Never falls back to local AI."""
 import json
 import time
 import uuid
@@ -35,7 +35,7 @@ def configuration_errors():
         errors.append('Remote processing is disabled.')
     if not settings.STUDIO_REMOTE_BILLING_VERIFIED:
         errors.append('Verify a provider-enforced zero-charge billing cap before enabling processing.')
-    if settings.STUDIO_REMOTE_TEST_JOB_ID <= 0:
+    if not settings.STUDIO_REMOTE_ALLOW_ALL_JOBS and settings.STUDIO_REMOTE_TEST_JOB_ID <= 0:
         errors.append('Select exactly one existing extraction job for the pilot.')
     if endpoint.scheme != 'https' or not (endpoint.hostname or '').endswith('.modal.run') or endpoint.username or endpoint.query or endpoint.fragment:
         errors.append('Set the authenticated HTTPS Modal web-function URL.')
@@ -44,6 +44,10 @@ def configuration_errors():
     if not settings.STUDIO_REMOTE_PROXY_KEY or not settings.STUDIO_REMOTE_PROXY_SECRET:
         errors.append('Configure Modal proxy authentication securely on the server.')
     return errors
+
+
+def job_allowed(job):
+    return settings.STUDIO_REMOTE_ALLOW_ALL_JOBS or job.pk == settings.STUDIO_REMOTE_TEST_JOB_ID
 
 
 def configured():
@@ -84,7 +88,7 @@ def pause(job, message):
 
 
 def extract(job, check):
-    if not configured() or job.pk != settings.STUDIO_REMOTE_TEST_JOB_ID:
+    if not configured() or not job_allowed(job):
         raise RemotePaused('Remote extraction is paused. No local processing was attempted.')
     with transaction.atomic():
         current = AudioJob.objects.select_for_update().get(pk=job.pk)
