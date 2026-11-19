@@ -296,6 +296,10 @@ def export(request, pk):
 @artist_only
 def download(request, pk):
     item = get_object_or_404(Export.objects.filter(Q(project__artist=request.user) | Q(instrumental__artist=request.user)), pk=pk, status__in=["free", "approved"])
+    extension = request.GET.get('format', 'wav').lower()
+    if extension != 'wav':
+        from .download_formats import converted_download
+        return converted_download(item, extension)
     return audio_response(item.audio, True, "ggenre-instrumental.wav" if item.instrumental_id else "ggenre-studio.wav")
 
 

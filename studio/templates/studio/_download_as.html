@@ -1,0 +1,12 @@
+<form method="get" action="{% url 'studio:download' download_export.pk %}" class="studio-download-as">
+  <label>Download as
+  <select name="format">
+    <option value="mp3">MP3 (.mp3) · smaller file</option>
+    <option value="wav">WAV (.wav) · uncompressed</option>
+    <option value="m4a">AAC (.m4a)</option>
+    <option value="flac">FLAC (.flac) · lossless</option>
+    <option value="ogg">Ogg Vorbis (.ogg)</option>
+  </select></label>
+  <button class="studio-button studio-primary" type="submit">Download audio</button>
+  <small>Changing format or downloading this saved version again does not use another trial.</small>
+</form>

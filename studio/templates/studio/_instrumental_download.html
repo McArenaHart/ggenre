@@ -1,6 +1,6 @@
 <section id="download-{{ item.pk }}" class="studio-instrumental-download">
 {% if item.audio %}
-{% if item.downloadable %}<a class="studio-button studio-primary" href="{% url 'studio:download' item.download_export.pk %}">Download instrumental</a><small>This saved version already counts toward your allowance. Repeat downloads do not count again.</small>
+{% if item.downloadable %}{% include 'studio/_download_as.html' with download_export=item.download_export %}<small>This saved version already counts toward your allowance. Repeat downloads do not count again.</small>
 {% elif item.pending_download %}<p>Download awaiting payment approval.</p>
 {% else %}<form method="post" action="{% url 'studio:instrumental_download' item.pk %}">{% csrf_token %}
 {% if not free_left and not unlimited_exports %}<label>Payment reference<input name="payment_reference" maxlength="160" placeholder="Payment reference, if available"></label>{% endif %}
